@@ -1,6 +1,4 @@
 
-    <script>
-        //<![CDATA[
         (function () {
             const APP_STABLE_VERSION = "5.3.2"; // আগের যেকোনো ভার্সন থেকে বড় নম্বর দিন
             const currentVersion = localStorage.getItem('metagen_version');
@@ -9767,8 +9765,6 @@ showpage
             document.getElementById('generateNicheBtn').click();
         }
 
-    </script>
-
    <!-- Vector Checklist Modal -->
     <div id="vectorChecklistModal" class="modal" style="display: none;">
         <div class="modal-content checklist-modal-content">
@@ -11203,5 +11199,4 @@ Format Example:
             });
         });
 
-        //]]>
-    </script>
+      
