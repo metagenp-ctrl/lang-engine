@@ -16131,3 +16131,5 @@ Format Example:
 
             analyzeBtn.disabled = false;
         }
+      });
+
