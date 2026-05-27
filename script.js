@@ -9904,8 +9904,7 @@ showpage
         </div>
     </div>
     </div>
-    <script>
-        //<![CDATA[
+   
         // ==========================================
         // 🔮 NICHE RESEARCH & TRANSLATION LOGIC
         // ==========================================
