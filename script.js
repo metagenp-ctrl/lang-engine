@@ -21,8 +21,6 @@
                 window.location.reload(true);
             }
         })();
-        //]]>
-        //<![CDATA[
         const firebaseConfig = {
             apiKey: "AIzaSyAXV_HbmbphGce_wbYrIuz-Yy0bZgWsebE",
             authDomain: "auth.aimetagenpro.com",
