@@ -1,4 +1,4 @@
-
+<script>
 // ===========================================
 // SECTION 1: Main App Logic
 // ===========================================
@@ -16132,4 +16132,4 @@ Format Example:
             analyzeBtn.disabled = false;
         }
       });
-
+</script>
