@@ -1,9 +1,10 @@
-<script>
-// ===========================================
-// SECTION 1: Main App Logic
-// ===========================================
+
+
+        // ===========================================
+        // SECTION 1: Main App Logic
+        // ===========================================
         (function () {
-            const APP_STABLE_VERSION = "5.3.2"; // আগের যেকোনো ভার্সন থেকে বড় নম্বর দিন
+            const APP_STABLE_VERSION = "5.3.4"; // আগের যেকোনো ভার্সন থেকে বড় নম্বর দিন
             const currentVersion = localStorage.getItem('metagen_version');
 
             if (currentVersion !== APP_STABLE_VERSION) {
@@ -148,16 +149,15 @@
                 };
 
                 // Handle Auth State Changes
-                auth.onAuthStateChanged(async (user) => {
+                auth.onAuthStateChanged((user) => {
                     authUser = user;
 
+                    hideLoadingState(); 
+
                     if (user) {
-                        // ইউজার লগইন অবস্থায় থাকলে প্রোফাইল সেভ হবে
-                        await saveUserProfile(user);
+                        saveUserProfile(user);
                     }
 
-                    hideLoadingState();
-                    // checkAuthState আপনার অ্যাপের পুরনো লজিকগুলোকে রান করবে
                     if (typeof checkAuthState === "function") {
                         checkAuthState();
                     }
@@ -173,13 +173,19 @@
                     hideLoadingState();
                 });
             } else {
+                window._fbAttempts = (window._fbAttempts || 0) + 1;
+                if (window._fbAttempts > 20) { // সর্বোচ্চ ১০ সেকেন্ড অপেক্ষা করবে
+                    hideLoadingState();
+                    console.error("Firebase SDK failed to load.");
+                    return;
+                }
                 setTimeout(initFirebase, 500);
             }
         }
         initFirebase();
 
         // --- 🛡️ Admin Dashboard Logic ---
-        const ADMIN_EMAILS = ['metagenp@gmail.com', 'pradipcob84@gmail.com'];
+        const ADMIN_EMAILS = ['metagenp@gmail.com', 'pradipgraphic@gmail.com'];
 
         function checkAdminAccess(user) {
             const adminNavLink = document.getElementById('adminNavLink');
@@ -224,13 +230,14 @@
                 const total = stats.totalUsers || 0;
                 const pro = stats.proCount || 0;
                 const prem = stats.premiumCount || 0;
+                const agency = stats.agencyCount || 0;
 
-                const free = stats.freeCount !== undefined ? stats.freeCount : (total - (pro + prem));
+                const free = stats.freeCount !== undefined ? stats.freeCount : (total - (pro + prem + agency));
 
                 // UI Update
                 document.getElementById('adminTotalUsers').innerText = total;
                 document.getElementById('adminMRR').innerText = `$${stats.estimatedMRR || 0}`;
-                document.getElementById('adminPlanSplit').innerText = `Pro: ${pro} | Prem: ${prem} | Free: ${free}`;
+                document.getElementById('adminPlanSplit').innerText = `Agency: ${agency} | Prem: ${prem} | Pro: ${pro} | Free: ${free}`;
                 document.getElementById('adminTodayDAU').innerText = stats.todayUsage > 0 ? "Active" : "Idle";
                 document.getElementById('adminTodayUsage').innerText = `Total Actions: ${stats.todayUsage || 0}`;
 
@@ -256,10 +263,12 @@
                 let plan = 'free';
                 if (user?.plan) {
                     const rawPlan = String(user.plan).toLowerCase().trim();
-                    if (rawPlan.includes('premium')) plan = 'premium';
+                    if (rawPlan.includes('agency')) plan = 'agency';
+                    else if (rawPlan.includes('premium')) plan = 'premium';
                     else if (rawPlan.includes('pro')) plan = 'pro';
                 } else if (user?.monthlyLimit) {
-                    if (user.monthlyLimit >= 3000) plan = 'premium';
+                    if (user.monthlyLimit >= 10000) plan = 'agency';
+                    else if (user.monthlyLimit >= 3000) plan = 'premium';
                     else if (user.monthlyLimit >= 2000) plan = 'pro';
                 }
                 const isBlocked = user.is_blocked === true;
@@ -309,6 +318,7 @@
                         <option value="free" ${plan === 'free' ? 'selected' : ''}>Free Plan</option>
                         <option value="pro" ${plan === 'pro' ? 'selected' : ''}>Pro Plan</option>
                         <option value="premium" ${plan === 'premium' ? 'selected' : ''}>Premium Plan</option>
+                        <option value="agency" ${plan === 'agency' ? 'selected' : ''}>Agency / Team</option>
                     </select>
                     <div style="font-size: 0.75em; color: var(--accent-orange); font-weight: 700; display: flex; align-items: center; gap: 4px;">
                         <i class="fas fa-chart-line"></i> ${user.todayCount || 0} hits today
@@ -345,7 +355,7 @@
                         ${user.customDailyLimit > 0 ? '<span style="color:#10B981;">✦ Custom</span>' : '<span style="color:var(--text-muted);">Default</span>'}
                     </div>
                     <div style="font-size: 0.6em; color: var(--text-muted);">
-                        Plan: ${plan === 'premium' ? '100' : plan === 'pro' ? '70' : '10'}/day
+                        Plan: ${plan === 'agency' ? '500' : plan === 'premium' ? '100' : plan === 'pro' ? '70' : '20'}/day
                     </div>
                 </div>
             </td>
@@ -376,6 +386,11 @@
                         <i class="fas ${isBlocked ? 'fa-user-slash' : 'fa-user-check'}"></i>
                         ${isBlocked ? 'BLOCKED' : 'ACTIVE'}
                     </div>
+                    <div style="display: flex; gap: 4px; margin-bottom: 4px;">
+                        <button class="admin-action-btn" style="flex: 2; background: rgba(139,92,246,0.1); color: #8B5CF6; border-color: rgba(139,92,246,0.2);" onclick="promptGiftCredits(&apos;${user.email}&apos;)" title="Gift Action Credits">
+                            <i class="fas fa-gift"></i> Gift
+                        </button>
+                    </div>
                     <div style="display: flex; gap: 4px;">
                         <button class="admin-action-btn ${isBlocked ? 'unblock' : 'block'}" onclick="toggleUserBlock(&apos;${user.email}&apos;, ${!isBlocked})" title="${isBlocked ? 'Unblock User' : 'Block User'}" style="flex: 1;">
                             <i class="fas ${isBlocked ? 'fa-unlock' : 'fa-ban'}"></i>
@@ -389,6 +404,90 @@
         `;
                 tbody.appendChild(tr);
             });
+        }
+
+        async function promptGiftCredits(email) {
+            const amount = prompt(`How many credits do you want to gift to ${email}?`);
+            if (!amount || isNaN(amount)) return;
+            const parsed = parseInt(amount, 10);
+            if (parsed <= 0) return;
+
+            if (!confirm(`Are you sure you want to send a gift of ${parsed} credits to ${email}?\n\nThey will see an animated gift box on their next login!`)) return;
+
+            try {
+                const user = auth.currentUser;
+                const idToken = await user.getIdToken();
+
+                const updates = { gift_credits: parsed };
+
+                const res = await fetch('https://metagen-pro-api.metagenp.workers.dev/admin/user/update', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': 'Bearer ' + idToken,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ targetEmail: email, updates })
+                });
+
+                if (!res.ok) throw new Error("Failed to send gift.");
+
+                // Check if showSuccess is defined, else use alert
+                if (typeof showSuccess === 'function') {
+                    showSuccess(`🎁 Sent ${parsed} credits to ${email} successfully!`);
+                } else {
+                    alert(`🎁 Sent ${parsed} credits to ${email} successfully!`);
+                }
+                loadAdminDashboardData(); // Refresh list
+
+            } catch (err) {
+                alert("Gift Error: " + err.message);
+            }
+        }
+
+        async function claimAdminGift() {
+            const btn = document.getElementById('adminGiftClaimBtn');
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Claiming...';
+            }
+            try {
+                if (!window.userUsageData || !window.userUsageData.email) return;
+                const email = window.userUsageData.email.toLowerCase();
+                const giftAmount = window.userUsageData.giftCredits || 0;
+
+                if (giftAmount > 0) {
+                    // Claim gift credits securely via Worker API
+                    const res = await fetch('https://metagen-pro-api.metagenp.workers.dev/user/claim-gift-credits', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ email: email })
+                    });
+                    const result = await res.json();
+
+                    if (result.success) {
+                        window.userUsageData.referralBonus = result.totalBonus || ((window.userUsageData.referralBonus || 0) + giftAmount);
+                        window.userUsageData.giftCredits = 0;
+                        console.log(`Gift credits +${result.giftClaimed} claimed. Total bonus: ${result.totalBonus}`);
+
+                        // Show confetti if available
+                        if (typeof confetti === 'function') confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
+                    } else {
+                        console.error("Gift claim failed:", result.error || result.message);
+                    }
+                }
+            } catch (e) {
+                console.error("Gift claim failed", e);
+            }
+
+            setTimeout(() => {
+                const gm = document.getElementById('adminGiftBoxModal');
+                if (gm) gm.style.display = 'none';
+                updateUsageUI();
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = '🎁 Claim Now';
+                }
+            }, 1000);
         }
 
         async function toggleUserBlock(email, newStatus) {
@@ -422,7 +521,16 @@
                 const idToken = await user.getIdToken();
 
                 const updates = {};
-                updates[field] = value;
+                // প্ল্যান পরিবর্তন করলে অটোমেটিক সঠিক লিমিট আপডেট করে দিবে
+                if (field === 'plan') {
+                    updates['plan'] = value;
+                    if (value === 'agency') { updates['monthlyLimit'] = 10000; updates['limit'] = 500; }
+                    else if (value === 'premium') { updates['monthlyLimit'] = 3000; updates['limit'] = 100; }
+                    else if (value === 'pro') { updates['monthlyLimit'] = 2000; updates['limit'] = 70; }
+                    else { updates['monthlyLimit'] = 120; updates['limit'] = 20; }
+                } else {
+                    updates[field] = value;
+                }
 
                 const res = await fetch('https://metagen-pro-api.metagenp.workers.dev/admin/user/update', {
                     method: 'POST',
@@ -580,8 +688,9 @@
             const sidebar = document.getElementById('trialProgressSidebar');
             const plan = (window.userUsageData?.plan || 'free').toLowerCase();
 
-            if (!sidebar || plan !== 'free' || t.total <= 0) {
+            if (!sidebar || plan !== 'free' || t.total <= 0 || t.used >= t.total) {
                 if (sidebar) sidebar.style.display = 'none';
+                updateTrialBadges(false); 
                 return;
             }
 
@@ -602,8 +711,7 @@
 
             const hint = document.getElementById('trialProgressHint');
             if (hint) {
-                if (remaining <= 0) hint.textContent = '⏰ Trial ended — Upgrade for unlimited!';
-                else if (remaining <= 2) hint.textContent = '🔥 Almost done! Use wisely!';
+                if (remaining <= 2) hint.textContent = '🔥 Almost done! Use wisely!';
                 else hint.textContent = '✨ Pro features unlocked!';
             }
 
@@ -612,7 +720,7 @@
         }
 
         function updateTrialBadges(isTrialActive) {
-            const proButtons = ['embedMetadataButton', 'translateAllBtn', 'batchQualityCheckButton'];
+            const proButtons = ['embedMetadataButton', 'translateAllBtn'];
             proButtons.forEach(id => {
                 const btn = document.getElementById(id);
                 if (!btn) return;
@@ -677,7 +785,7 @@
             const apiKeyButtons = document.querySelector('.api-key-buttons');
             const trialContainer = document.getElementById('trialStatusContainer');
 
-            if (plan === 'pro' || plan === 'premium' || isTrialActive) {
+            if (plan === 'pro' || plan === 'premium' || plan === 'agency' || isTrialActive) {
                 // প্রো বা প্রিমিয়াম হলে শুধু এপিআই কি সেকশন লুকাবেন (ট্রান্সলেশন নয়)
                 if (apiKeyButtons) apiKeyButtons.style.display = 'none';
                 if (trialContainer) trialContainer.style.display = 'none';
@@ -709,13 +817,20 @@
             // hide login/signup forms while loading
             const lf = document.getElementById('loginFormContainer'); if (lf) lf.style.display = 'none';
             const sf = document.getElementById('signupFormContainer'); if (sf) sf.style.display = 'none';
+
+            clearTimeout(window._loadingFailSafe);
+            window._loadingFailSafe = setTimeout(hideLoadingState, 1500);
         }
 
         function hideLoadingState() {
             const init = document.getElementById('initialLoading');
             if (init) init.classList.add('hidden');
+    
+            sessionStorage.setItem('metagen_loaded_once', 'true');
+
             const lf = document.getElementById('loginFormContainer'); if (lf) lf.style.display = 'block';
             const sf = document.getElementById('signupFormContainer'); if (sf) sf.style.display = 'none';
+            clearTimeout(window._loadingFailSafe);
         }
 
         /* FAQ modal open/close handlers with focus trap and backdrop click */
@@ -796,6 +911,11 @@
                 } else {
                     hideLoadingState();
                     showMainApp();
+
+                    if (sessionStorage.getItem('show_login_on_reload') === 'true') {
+                        sessionStorage.removeItem('show_login_on_reload');
+                        showLoginModal();
+                    }
                 }
             } catch (err) {
                 console.error('Auth check error:', err);
@@ -803,6 +923,7 @@
                 showMainApp();
             }
         }
+
         function showLoginModal() {
             // Open the login modal as an overlay without hiding the main app
             document.getElementById('loginModal').classList.remove('hidden');
@@ -859,6 +980,7 @@
         }
 
         async function showMainApp(email, displayName, avatarUrl) {
+            hideLoadingState();
             // Hide the login modal and show main app. If email provided, treat as logged-in.
             document.getElementById('loginModal').classList.add('hidden');
             document.querySelector('.app-container').style.display = 'flex';
@@ -867,44 +989,44 @@
 
             // Show header profile icon always so user can open login/profile
             try { document.getElementById('profileHeaderBtn').style.display = 'flex'; } catch (e) { }
+
+            const btnFreeTrial = document.getElementById('heroBtnFreeTrial');
+            const btnTryFree = document.getElementById('heroBtnTryFree');
+            const btnBuyPkg = document.getElementById('heroBtnBuyPkg');
+
             if (email) {
+                if (btnFreeTrial) btnFreeTrial.style.display = 'none';
+                if (btnTryFree) btnTryFree.style.display = '';
+                if (btnBuyPkg) btnBuyPkg.style.display = '';
+
                 // --- NEW: Record Referral if exists ---
                 const referrerEmailStored = localStorage.getItem('metagen_referrer');
                 if (referrerEmailStored) {
                     try {
-                        const referrerEmail = referrerEmailStored; // Already decoded
+                        const referrerEmail = referrerEmailStored.toLowerCase();
+                        const currentUserEmail = email.toLowerCase();
 
-                        if (referrerEmail !== email && referrerEmail.includes('@')) {
-                            // Give referral bonus via Firestore (using snake_case to match worker)
-                            try {
-                                // Check if this user already used a referral (prevent repeat bonus)
-                                const currentUserDoc = await db.collection('users').doc(email.toLowerCase()).get();
-                                const alreadyReferred = currentUserDoc.exists && currentUserDoc.data()?.referred_by;
+                        if (referrerEmail !== currentUserEmail) {
 
-                                if (!alreadyReferred) {
-                                    // Award bonus to referrer
-                                    const refDoc = db.collection('users').doc(referrerEmail);
-                                    await refDoc.set({
-                                        referral_bonus: firebase.firestore.FieldValue.increment(50)
-                                    }, { merge: true });
+                            const userRef = db.collection('users').doc(currentUserEmail);
+                            const userDoc = await userRef.get();
 
-                                    // Mark current user as referred to prevent repeat
-                                    await db.collection('users').doc(email.toLowerCase()).set({
-                                        referred_by: referrerEmail
-                                    }, { merge: true });
+                            if (!userDoc.exists || !userDoc.data().referred_by) {
 
-                                    console.log("Referral bonus +50 awarded to:", referrerEmail);
-                                } else {
-                                    console.log("Referral already processed for this user.");
-                                }
-                                localStorage.removeItem('metagen_referrer');
-                            } catch (error) {
-                                console.warn("Referral Firestore error:", error);
+                                const refDoc = db.collection('users').doc(referrerEmail);
+                                await refDoc.set({
+                                    referral_bonus: firebase.firestore.FieldValue.increment(50)
+                                }, { merge: true });
+
+                                await userRef.set({
+                                    referred_by: referrerEmail
+                                }, { merge: true });
+
+                                console.log("Referral bonus +50 awarded to:", referrerEmail);
                             }
-                        } else {
-                            // Self-referral attempt or invalid email
-                            localStorage.removeItem('metagen_referrer');
                         }
+                        localStorage.removeItem('metagen_referrer');
+
                     } catch (e) {
                         console.error("Referral processing failed:", e);
                         localStorage.removeItem('metagen_referrer');
@@ -918,38 +1040,75 @@
                 // FIX: Pass avatarUrl to the update function
                 updateHeaderProfileImage(email, name, avatarUrl);
 
-                // 📊 Initialize and show usage indicator
+                // Fetch user usage details from backend (independent of usageIndicator DOM presence)
+                const usage = await getMetadataUsage(email);
+
+                // Store in global state
+                window.userUsageData = {
+                    count: usage.count,
+                    limit: usage.limit,
+                    monthlyLimit: usage.monthlyLimit,
+                    monthlyCount: usage.monthlyCount,
+                    baseLimit: usage.baseLimit || (usage.plan === 'premium' ? 3000 : (usage.plan === 'pro' ? 2000 : 120)),
+                    referralBonus: usage.referralBonus || 0,
+                    plan: usage.plan,
+                    hasClaimedShareBonus: usage.hasClaimedShareBonus || false,
+                    trialCreditsTotal: usage.trialCreditsTotal || 0,
+                    trialCreditsUsed: usage.trialCreditsUsed || 0,
+                    trialActive: usage.trialActive || false,
+                    giftCredits: usage.giftCredits || 0,
+                    email: email
+                };
+
+                // Welcome Power-Pack: Sync trial state
+                if (usage.trialCreditsTotal !== undefined) {
+                    window.trialPowerPack = {
+                        total: usage.trialCreditsTotal || 0,
+                        used: usage.trialCreditsUsed || 0,
+                        active: usage.trialActive || false,
+                        isNew: false // If coming from metadata usage, it's not the initial "new" trigger
+                    };
+                }
+
+                // 📊 Initialize and show usage indicator if DOM element exists
                 if (usageIndicator) {
                     usageIndicator.style.display = 'flex';
-                    const usage = await getMetadataUsage(email);
+                    try { updateUsageUI(); } catch (e) { console.warn('Usage UI update failed:', e); }
+                }
 
-                    // Store in global state
-                    window.userUsageData = {
-                        count: usage.count,
-                        limit: usage.limit,
-                        monthlyLimit: usage.monthlyLimit,
-                        monthlyCount: usage.monthlyCount,
-                        baseLimit: usage.baseLimit || (usage.plan === 'premium' ? 3000 : (usage.plan === 'pro' ? 2000 : 120)),
-                        referralBonus: usage.referralBonus || 0,
-                        plan: usage.plan,
-                        hasClaimedShareBonus: usage.hasClaimedShareBonus || false,
-                        trialCreditsTotal: usage.trialCreditsTotal || 0,
-                        trialCreditsUsed: usage.trialCreditsUsed || 0,
-                        trialActive: usage.trialActive || false,
-                        email: email
-                    };
+                try {
+                    let currentPlan = usage.plan ? usage.plan.toLowerCase() : 'free';
+                    let isStreakPromoShown = localStorage.getItem('streakPromoShown');
 
-                    // Welcome Power-Pack: Sync trial state
-                    if (usage.trialCreditsTotal !== undefined) {
-                        window.trialPowerPack = {
-                            total: usage.trialCreditsTotal || 0,
-                            used: usage.trialCreditsUsed || 0,
-                            active: usage.trialActive || false,
-                            isNew: false // If coming from metadata usage, it's not the initial "new" trigger
-                        };
+                    if (currentPlan === 'free' && !isStreakPromoShown) {
+                        console.log("⏳ Streak Modal will open in 3.5 seconds...");
+                        setTimeout(() => {
+                            const streakModal = document.getElementById('streakInfoModal');
+                            if (streakModal) {
+                                streakModal.style.display = 'flex';
+                                localStorage.setItem('streakPromoShown', 'true'); // মার্ক করা হলো
+                                console.log("✅ Streak Modal Opened!");
+                            } else {
+                                console.error("❌ ERROR: 'streakInfoModal' HTML element not found!");
+                            }
+                        }, 3500);
+                    } else {
+                        console.log(`⏩ Streak Modal Skipped. Plan: ${currentPlan}, Already Shown: ${!!isStreakPromoShown}`);
                     }
+                } catch (err) {
+                    console.error("Streak Promo Error:", err);
+                }
 
-                    updateUsageUI();
+                // Trigger Admin Gift Box Check
+                if (usage.giftCredits && usage.giftCredits > 0) {
+                    setTimeout(() => {
+                        const gm = document.getElementById('adminGiftBoxModal');
+                        if (gm) {
+                            document.getElementById('adminGiftValue').textContent = usage.giftCredits;
+                            window.userUsageData.giftCredits = usage.giftCredits; // Ensure stored locally for claim
+                            gm.style.display = 'flex';
+                        }
+                    }, 1200);
                 }
             } else {
                 // Not logged in: hide the small user-profile panel
@@ -957,6 +1116,10 @@
                 document.getElementById('userEmail').textContent = '';
                 // Reset header profile button
                 resetHeaderProfileImage();
+
+                if (btnFreeTrial) btnFreeTrial.style.display = '';
+                if (btnTryFree) btnTryFree.style.display = 'none';
+                if (btnBuyPkg) btnBuyPkg.style.display = 'none';
 
                 // 📊 Hide usage indicator
                 if (usageIndicator) usageIndicator.style.display = 'none';
@@ -969,7 +1132,9 @@
             const btn = document.getElementById('referralBtn');
             const originalContent = btn.innerHTML;
 
-            if (!window.userUsageData || !window.userUsageData.email) {
+            const userEmail = (window.userUsageData && window.userUsageData.email) || (auth && auth.currentUser ? auth.currentUser.email : null);
+
+            if (!userEmail) {
                 alert("Please login first to generate your referral link.");
                 document.getElementById('loginModal').classList.remove('hidden');
                 return;
@@ -977,7 +1142,7 @@
 
             try {
                 // ১. রেফারেল লিঙ্ক তৈরি
-                const encodedEmail = btoa(window.userUsageData.email);
+                const encodedEmail = btoa(userEmail);
                 const referralUrl = `${window.location.origin}${window.location.pathname}?ref=${encodedEmail}`;
                 const shareData = {
                     title: 'MetaGen Pro - AI Metadata Generator',
@@ -985,12 +1150,12 @@
                     url: referralUrl
                 };
 
-                // ২. শেয়ার মেথড (মোবাইল হলে শেয়ার মেনু খুলবে, পিসি হলে কপি হবে)
-                if (navigator.share && navigator.canShare(shareData)) {
+                // ২. শেয়ার মেথড (মোবাইল হলে শেয়ার মেনু খুলবে, পিসি হলে কাস্টম মোডাল আসবে)
+                const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+                if (isMobile && navigator.share && navigator.canShare && navigator.canShare(shareData)) {
                     await navigator.share(shareData);
                 } else {
-                    await navigator.clipboard.writeText(referralUrl);
-                    alert("Referral link copied to clipboard!");
+                    openDesktopShareModal(referralUrl, shareData.text);
                 }
 
                 // ৩. ইউআই আপডেট (লিঙ্ক কপি হওয়া বোঝানোর জন্য)
@@ -1002,28 +1167,55 @@
                     btn.style.background = '';
                 }, 3000);
 
-                // ৪. বোনাস ক্লেইম করা (যদি আগে না করা হয়)
-                if (!window.userUsageData.hasClaimedShareBonus) {
-                    const bonusRes = await fetch('https://metagen-pro-api.metagenp.workers.dev/user/claim-share-bonus', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ email: window.userUsageData.email })
-                    });
-
-                    if (bonusRes.ok) {
-                        const bonusData = await bonusRes.json();
-                        if (bonusData.success) {
-                            showSuccess(`Congrats! +50 credits added to your monthly limit.`);
-                            // Local update
-                            window.userUsageData.referralBonus = bonusData.totalBonus;
-                            window.userUsageData.hasClaimedShareBonus = true;
-                            updateUsageUI();
-                        }
-                    }
-                }
-
             } catch (err) {
                 console.error("Sharing failed:", err);
+            }
+        }
+
+        // --- Desktop Custom Share Modal Helpers ---
+        function openDesktopShareModal(url, text) {
+            // Close the profile modal and backdrop to ensure no overlay conflict
+            const profileModal = document.getElementById('profileModal');
+            if (profileModal) profileModal.classList.add('hidden');
+            const profileBackdrop = document.getElementById('profileModalBackdrop');
+            if (profileBackdrop) profileBackdrop.classList.add('hidden');
+
+            // Delay showing the modal to decouple from the current click event cycle.
+            // Without this, the click event bubbles to window and global click-outside
+            // handlers (e.g., for seoInfoModal, manualPaymentModal) detect the click on
+            // the newly visible overlay and may interfere with display.
+            setTimeout(() => {
+                const modal = document.getElementById('customShareModal');
+                modal.style.display = 'flex';
+
+                document.getElementById('shareLinkInput').value = url;
+
+                const encodedUrl = encodeURIComponent(url);
+                const encodedText = encodeURIComponent(text);
+
+                document.getElementById('shareFb').href = `https://www.facebook.com/sharer/sharer.php?u=${encodedUrl}`;
+                document.getElementById('shareTw').href = `https://twitter.com/intent/tweet?url=${encodedUrl}&text=${encodedText}`;
+                document.getElementById('shareWa').href = `https://api.whatsapp.com/send?text=${encodedText}%20${encodedUrl}`;
+                document.getElementById('shareLi').href = `https://www.linkedin.com/sharing/share-offsite/?url=${encodedUrl}`;
+            }, 50);
+        }
+
+        async function copyShareUrl() {
+            const input = document.getElementById('shareLinkInput');
+            input.select();
+            input.setSelectionRange(0, 99999);
+            try {
+                await navigator.clipboard.writeText(input.value);
+                const btn = document.getElementById('copyShareLinkBtn');
+                const origHtml = btn.innerHTML;
+                btn.innerHTML = '<i class="fas fa-check"></i> Copied';
+                btn.style.background = '#10B981';
+                setTimeout(() => {
+                    btn.innerHTML = origHtml;
+                    btn.style.background = 'var(--accent-blue)';
+                }, 2000);
+            } catch (e) {
+                console.error('Copy failed');
             }
         }
 
@@ -1115,6 +1307,17 @@
 
             updateVisibility();
         }
+
+        // Set dynamic greeting based on time of day
+        (function setTimeGreeting() {
+            const greetingSpan = document.querySelector('#loginModeText span');
+            if (greetingSpan) {
+                const hour = new Date().getHours();
+                if (hour < 12) greetingSpan.textContent = 'Good Morning';
+                else if (hour < 18) greetingSpan.textContent = 'Good Afternoon';
+                else greetingSpan.textContent = 'Good Evening';
+            }
+        })();
 
         // Toggle between Login and Signup
         window.toggleSignupMode = function () {
@@ -1218,19 +1421,24 @@
         };
 
         // Google OAuth Login
-        window.handleGoogleLogin = async function () {
-            const btn = event.target;
-            btn.disabled = true;
-            btn.innerHTML = '<span style="animation: spin 1s linear infinite;">⌛</span> Redirecting to Google...';
+        window.handleGoogleLogin = async function (event) {
+            if (event) event.preventDefault();
+            const btn = (event && event.target) ? event.target.closest('.google-button') : document.querySelector('.google-button');
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = '<span style="animation: spin 1s linear infinite;">⌛</span> Redirecting to Google...';
+            }
 
             try {
                 const provider = new firebase.auth.GoogleAuthProvider();
                 await auth.signInWithPopup(provider);
-                // Auth change listener will handle the UI update
+                window.location.reload();
             } catch (error) {
                 showError(error.message || 'Google login failed');
-                btn.disabled = false;
-                btn.innerHTML = '<span style="margin-right: 10px;">🔐</span> Continue with Google';
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = '<span style="margin-right: 10px;">🔐</span> Continue with Google';
+                }
             }
         };
 
@@ -1252,32 +1460,49 @@
         }
 
         // Profile Modal Functions
-        window.openProfileModal = async function () {
-            try {
-                const user = auth.currentUser;
-                if (user) {
-                    document.getElementById('profileName').textContent = user.displayName || user.email.split('@')[0];
-                    document.getElementById('profileEmailText').textContent = user.email;
+        window.openProfileModal = function () {
+            const user = firebase.auth().currentUser;
 
-                    const avatarImg = document.getElementById('profileAvatarImg');
+            if (user && user.email) {
+                const loginModal = document.getElementById('loginModal');
+                if (loginModal) loginModal.classList.add('hidden');
+
+
+                const profileModal = document.getElementById('profileModal');
+                if (profileModal) profileModal.classList.remove('hidden');
+
+                document.getElementById('profileName').textContent = user.displayName || user.email.split('@')[0];
+                document.getElementById('profileEmailText').textContent = user.email;
+
+                const avatarImg = document.getElementById('profileAvatarImg');
+                if (avatarImg) {
                     avatarImg.src = user.photoURL || getGravatarUrl(user.email);
                     avatarImg.style.display = 'block';
-                    document.getElementById('profileAvatarDefault').style.display = 'none';
-
-                    // 📊 Refresh Usage Stats
-                    const usage = await getMetadataUsage(user.email);
-                    window.userUsageData = usage;
-                    updateUsageUI();
-
-                    document.getElementById('profileModal').classList.remove('hidden');
-                } else {
-                    showLoginModal();
                 }
-            } catch (err) {
-                console.error('Error loading profile:', err);
+
+                const defaultIcon = document.getElementById('profileAvatarDefault');
+                if (defaultIcon) defaultIcon.style.display = 'none';
+
+                fetchAndRefreshUsage(user.email);
+
+            } else {
                 showLoginModal();
             }
         };
+
+        async function fetchAndRefreshUsage(email) {
+            try {
+                const usage = await getMetadataUsage(email);
+                window.userUsageData = { ...usage, email: email };
+
+                if (typeof updateUsageUI === 'function') {
+                    updateUsageUI();
+                }
+            } catch (e) {
+                console.warn("Background data sync failed:", e);
+            }
+        }
+
         window.closeProfileModal = function () {
             document.getElementById('profileModal').classList.add('hidden');
         };
@@ -1351,12 +1576,201 @@
         window.handleLogout = async function () {
             if (confirm('Are you sure you want to logout?')) {
                 await auth.signOut();
-                document.getElementById('loginForm').reset();
-                document.getElementById('signupForm').reset();
+                if (document.getElementById('loginForm')) document.getElementById('loginForm').reset();
+                if (document.getElementById('signupForm')) document.getElementById('signupForm').reset();
                 closeProfileModal();
-                // After logout, show the main app in logged-out state (do not force login modal)
-                hideLoadingState();
-                showMainApp();
+
+                localStorage.removeItem('metagen_referrer');
+                sessionStorage.setItem('show_login_on_reload', 'true');
+
+                window.location.reload();
+            }
+        };
+
+        // --- Team Management Functions ---
+        window.openTeamManagement = async function () {
+            const user = auth.currentUser;
+            if (!user) return;
+
+            // Close profile modal
+            closeProfileModal();
+
+            // Show modal and backdrop
+            document.getElementById('teamManagementModal').classList.remove('hidden');
+            document.getElementById('teamModalBackdrop').classList.remove('hidden');
+
+            await loadTeamInfo();
+        };
+
+        window.closeTeamManagement = function () {
+            document.getElementById('teamManagementModal').classList.add('hidden');
+            document.getElementById('teamModalBackdrop').classList.add('hidden');
+        };
+
+        async function loadTeamInfo() {
+            const user = auth.currentUser;
+            if (!user) return;
+
+            const noTeamView = document.getElementById('noTeamView');
+            const hasTeamView = document.getElementById('hasTeamView');
+            const loadError = document.getElementById('teamLoadError');
+
+            // Reset views
+            noTeamView.style.display = 'none';
+            hasTeamView.style.display = 'none';
+            loadError.style.display = 'none';
+
+            try {
+                const idToken = await user.getIdToken();
+                const res = await fetch('https://metagen-pro-api.metagenp.workers.dev/team/info', {
+                    method: 'POST',
+                    headers: { 'Authorization': 'Bearer ' + idToken }
+                });
+
+                let data = null;
+                const contentType = res.headers.get("content-type");
+                if (contentType && contentType.includes("application/json")) {
+                    data = await res.json().catch(() => null);
+                }
+
+                if (!res.ok) {
+                    throw new Error((data && data.error) ? data.error : 'Failed to fetch team info');
+                }
+
+                // সার্ভার যদি জানায় যে ইউজারের টিম নেই (hasTeam: false)
+                if (data && data.hasTeam === false) {
+                    noTeamView.style.display = 'block';
+                    return;
+                }
+
+                renderTeamUI(data);
+                hasTeamView.style.display = 'block';
+
+            } catch (err) {
+                console.error('Team Info Error:', err);
+                loadError.style.display = 'block';
+            }
+        }
+
+        function renderTeamUI(data) {
+            const user = auth.currentUser;
+            const isOwner = user && data.owner === user.email;
+
+            document.getElementById('displayTeamName').textContent = data.teamName || 'Your Agency';
+            document.getElementById('teamMonthlyUsage').textContent = `${data.teamMonthlyUsage || 0} / ${data.monthlyLimit || 10000}`;
+            document.getElementById('teamMemberCount').textContent = `${data.members.length} / ${data.maxMembers}`;
+
+            const roleBadge = document.getElementById('userTeamRoleBadge');
+            if (roleBadge) {
+                roleBadge.textContent = isOwner ? 'Admin' : 'Editor';
+                roleBadge.className = 'member-role-badge ' + (isOwner ? 'role-owner' : 'role-member');
+            }
+
+            // Show/Hide invite section
+            const inviteSec = document.getElementById('inviteSection');
+            if (inviteSec) inviteSec.style.display = isOwner ? 'flex' : 'none';
+
+            // Render member list
+            const listBody = document.getElementById('teamMemberListBody');
+            if (listBody) {
+                listBody.innerHTML = '';
+                data.members.forEach(memberEmail => {
+                    const row = document.createElement('tr');
+                    const role = memberEmail === data.owner ? 'Admin' : 'Editor';
+                    const roleClass = memberEmail === data.owner ? 'role-owner' : 'role-member';
+
+                    row.innerHTML = `
+                        <td>${memberEmail} ${user && memberEmail === user.email ? '<strong>(You)</strong>' : ''}</td>
+                        <td><span class="member-role-badge ${roleClass}">${role}</span></td>
+                        <td style="text-align: right;">
+                            ${(isOwner && memberEmail !== data.owner) ? `<button class="remove-member-btn" onclick="handleRemoveMember('${memberEmail}')" title="Remove Member"><i class="fas fa-trash-alt"></i></button>` : ''}
+                        </td>
+                    `;
+                    listBody.appendChild(row);
+                });
+            }
+        }
+
+        window.handleCreateTeam = async function () {
+            const teamName = document.getElementById('newTeamName').value.trim();
+            if (!teamName) { alert('Please enter a team name.'); return; }
+
+            const btn = document.getElementById('createTeamBtn');
+            const orig = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Creating...';
+
+            try {
+                const idToken = await auth.currentUser.getIdToken();
+                const res = await fetch('https://metagen-pro-api.metagenp.workers.dev/team/create', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + idToken },
+                    body: JSON.stringify({ teamName })
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error || 'Failed to create team');
+
+                alert('Team created successfully!');
+                await loadTeamInfo();
+                if (typeof fetchAndRefreshUsage === 'function') fetchAndRefreshUsage(auth.currentUser.email);
+
+            } catch (err) {
+                alert('Error: ' + err.message);
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = orig;
+            }
+        };
+
+        window.handleInviteMember = async function () {
+            const email = document.getElementById('inviteEmail').value.trim();
+            if (!email) { alert('Please enter an email.'); return; }
+
+            const btn = document.getElementById('inviteBtn');
+            const orig = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+
+            try {
+                const idToken = await auth.currentUser.getIdToken();
+                const res = await fetch('https://metagen-pro-api.metagenp.workers.dev/team/invite', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + idToken },
+                    body: JSON.stringify({ memberEmail: email })
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error || 'Failed to invite member');
+
+                alert('Member invited successfully!');
+                document.getElementById('inviteEmail').value = '';
+                await loadTeamInfo();
+
+            } catch (err) {
+                alert('Error: ' + err.message);
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = orig;
+            }
+        };
+
+        window.handleRemoveMember = async function (email) {
+            if (!confirm(`Are you sure you want to remove ${email} from the team?`)) return;
+
+            try {
+                const idToken = await auth.currentUser.getIdToken();
+                const res = await fetch('https://metagen-pro-api.metagenp.workers.dev/team/remove', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + idToken },
+                    body: JSON.stringify({ memberEmail: email })
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error || 'Failed to remove member');
+
+                alert('Member removed successfully.');
+                await loadTeamInfo();
+
+            } catch (err) {
+                alert('Error: ' + err.message);
             }
         };
 
@@ -1490,7 +1904,6 @@
 
         // Initialize when page loads
         window.addEventListener('load', function () {
-            showLoadingState();
             checkAuthState();
         });
 
@@ -1498,171 +1911,7 @@
             // Show loading state while auth initializes
             showLoadingState();
 
-            // Policy modal setup
-            const policyModal = document.getElementById('policyModal');
-            const policyModalTitle = document.getElementById('policyModalTitle');
-            const policyModalBody = document.getElementById('policyModalBody');
-            const closePolicyModalBtn = document.getElementById('closePolicyModal');
-
-            const today = new Date();
-            const options = { year: 'numeric', month: 'long', day: 'numeric' };
-            const autoDate = today.toLocaleDateString('en-US', options);
-
-            const policyContentMap = {
-                rank: {
-                    title: 'Keyword Strategy Guide',
-                    body: `
-                      <div class="container-1">
-                        <h1><strong>Welcome to MetaGen Pro!</strong></h1>
-                           <div class="policy-section">
-                              <p><strong>MetaGen Pro:</strong> MetaGen Pro একটি  professional মেটাডেটা অটোমেশন টুল, এই সেবা ব্যবহার করুন।</p></p>
-                           </div>
-                       <div class="success">
-                         <h1>এক শব্দের কীওয়ার্ড, দুই শব্দের কীওয়ার্ড এবং তিন শব্দের কীওয়ার্ড: কোনটি কখন ব্যবহার করবেন?</h1>
-                       </div>
-                       <p>
-                           স্টক ফটোগ্রাফি, ইলাস্ট্রেশন বা AI ইমেজে সঠিক keyword ব্যবহার না করলে ভালো ইমেজও sale পায় না।
-                           এই গাইডে আমরা বুঝব—<span class="highlight">কোন keyword strategy সবচেয়ে কার্যকর</span>।
-                       </p>
-
-                      <h2>🟢 ১ শব্দের Keyword (Single-word)</h2>
-                      <p>একটি মাত্র শব্দ দিয়ে তৈরি keyword, যা broad visibility তৈরি করে।</p>
-
-                     <div class="example">
-                         <strong>উদাহরণ:</strong><br />
-                         <span class="tag">business</span>
-                         <span class="tag">technology</span>
-                         <span class="tag">hands</span>
-                         <span class="tag">illustration</span>
-                     </div>
-
-                      <h2>✔ সুবিধা</h2>
-                      <ul>
-                          <li>Search volume বেশি</li>
-                          <li>Algorithm-friendly</li>
-                      </ul>
-
-                      <h3>❌ অসুবিধা</h3>
-                      <ul>
-                          <li>Competition খুব বেশি</li>
-                          <li>Conversion কম</li>
-                      </ul>
-
-                      <p><strong>Recommended:</strong> মোট keyword-এর <span class="highlight">20–30%</span></p>
-
-                      <h4>🟡 ২ শব্দের Keyword (Two-word)</h4>
-                          <p>দুটি শব্দ মিলিয়ে clear intent বোঝায় — stock SEO-র backbone।</p>
-
-                      <div class="example">
-                          <strong>উদাহরণ:</strong><br />
-                          <span class="tag">business meeting</span>
-                          <span class="tag">user interaction</span>
-                          <span class="tag">mobile app</span>
-                          <span class="tag">flat illustration</span>
-                     </div>
-
-                     <h2>✔ সুবিধা</h2>
-                     <ul>
-                         <li>High relevance</li>
-                         <li>Buyer intent strong</li>
-                     </ul>
-
-                     <p><strong>Recommended:</strong> মোট keyword-এর <span class="highlight">40–50%</span></p>
-
-                     <h5>🔵 ৩ বা তার বেশি শব্দের Keyword (Long-tail)</h5>
-                     <p>৩–৫ শব্দে তৈরি highly targeted keyword, যা sale বাড়াতে সাহায্য করে।</p>
-
-                     <div class="example">
-                         <strong>উদাহরণ:</strong><br />
-                         <span class="tag">hands interacting with smartphone</span>
-                         <span class="tag">minimalist illustration of mobile app</span>
-                         <span class="tag">user tapping checklist on phone</span>
-                     </div>
-
-                     <h2>✔ সুবিধা</h2>
-                     <ul>
-                        <li>Conversion বেশি</li>
-                        <li>New contributor-friendly</li>
-                     </ul>
-
-                     <p><strong>Recommended:</strong> মোট keyword-এর <span class="highlight">20–30%</span></p>
-
-                     <h2>✅ Ideal Keyword Mix (50 Keywords)</h2>
-                     <ul>
-                        <li>15টি → ১ শব্দের keyword</li>
-                        <li>22টি → ২ শব্দের keyword</li>
-                        <li>13টি → ৩+ শব্দের keyword</li>
-                    </ul>
-
-                    <div class="warning">
-                    <strong>⚠️ Common Mistake:</strong>
-                    <ul>
-                       <li>একই শব্দ বারবার ব্যবহার</li>
-                       <li>Image-এর সাথে সম্পর্কহীন keyword</li>
-                       <li>অতিরিক্ত long sentence keyword</li>
-                    </ul>
-                    </div>
-
-                    <div class="success">
-                    <strong>🚀 MetaGen Pro Advantage</strong>
-                    <p>
-                       MetaGen Pro automatically keyword balance করে, duplicate remove করে এবং SEO Score দেখিয়ে দেয় —
-                       ফলে আপনি faster upload করতে পারেন এবং rejection risk কমে।
-                    </p>
-                    </div>
-
-                    <div class="footer-rank">
-                        © MetaGen Pro • Stock SEO Knowledge Base
-                    </div>
-                    </div>
-                   `
-                },
-            };
-
-            function openPolicyModal(type) {
-                if (!policyModal || !policyModalTitle || !policyModalBody) return;
-                const content = policyContentMap[type];
-                if (!content) return;
-                policyModalTitle.textContent = content.title;
-                policyModalBody.innerHTML = content.body;
-                policyModal.style.display = 'flex';
-                policyModal.classList.add('visible');
-                document.body.style.overflow = 'hidden';
-            }
-
-            function closePolicyModal() {
-                if (!policyModal) return;
-                policyModal.style.display = 'none';
-                policyModal.classList.remove('visible');
-                document.body.style.overflow = '';
-            }
-
-            if (closePolicyModalBtn) {
-                closePolicyModalBtn.addEventListener('click', closePolicyModal);
-            }
-
-            if (policyModal) {
-                policyModal.addEventListener('click', (event) => {
-                    if (event.target === policyModal) {
-                        closePolicyModal();
-                    }
-                });
-            }
-
-            document.querySelectorAll('[data-policy]').forEach(link => {
-                link.addEventListener('click', (event) => {
-                    event.preventDefault();
-                    const type = link.getAttribute('data-policy');
-                    openPolicyModal(type);
-                });
-            });
-
-            document.addEventListener('keydown', (event) => {
-                if (event.key === 'Escape' && policyModal && policyModal.classList.contains('visible')) {
-                    closePolicyModal();
-                }
-            });
-
+            
             // --- NEW: Sidebar Toggle Logic ---
             const sidebarToggleBtn = document.getElementById('sidebarToggleBtn');
             const sidebar = document.getElementById('appSidebar');
@@ -2354,9 +2603,31 @@ showpage
                         if (selectedPlatform === 'adobe') {
                             section.style.display = 'block'; // Adobe Stock সিলেক্ট করলে দেখাবে
                         } else {
-                            section.style.display = 'none'; // অন্যথায় লুকাবে
+                            section.style.display = 'none'; // অন্যথায় লুকাবে
                         }
                     });
+
+                    // ৪. Affiliate CTA — প্ল্যাটফর্ম অনুসারে সাইনআপ রেফারেল দেখানো
+                    const affCta = document.getElementById('platformAffiliateCta');
+                    const affText = document.getElementById('affiliateCtaText');
+                    const affLink = document.getElementById('affiliateCtaLink');
+                    const affiliateMap = {
+                        'shutterstock': { text: 'Not a Shutterstock contributor yet? Sign up & start earning up to 40% per download!', url: 'https://submit.shutterstock.com/?ref=YOUR_SHUTTERSTOCK_REF', btn: 'Join Shutterstock →' },
+                        'adobe': { text: 'Not registered on Adobe Stock? Join as a contributor & earn 33% commission!', url: 'https://contributor.stock.adobe.com/?ref=YOUR_ADOBE_REF', btn: 'Join Adobe Stock →' },
+                        'vecteezy': { text: 'Want to sell on Vecteezy? Become a contributor & reach millions of buyers!', url: 'https://www.vecteezy.com/contributors?ref=YOUR_VECTEEZY_REF', btn: 'Join Vecteezy →' },
+                        'pond5': { text: 'Sell your photos & videos on Pond5! Join one of the largest media marketplaces.', url: 'https://www.pond5.com/sell-media?ref=YOUR_POND5_REF', btn: 'Join Pond5 →' },
+                        '123RF': { text: 'Become a 123RF contributor and monetize your creative work worldwide!', url: 'https://www.123rf.com/contributors/?ref=YOUR_123RF_REF', btn: 'Join 123RF →' },
+                        'Magnific': { text: 'Start selling on Magnific and reach a growing creative community!', url: 'https://contributor.magnific.com?utm_campaign=pradipcob84&utm_medium=referral-content&utm_source=referral', btn: 'Join Magnific →' }
+                    };
+                    if (affCta && affiliateMap[selectedPlatform]) {
+                        const aff = affiliateMap[selectedPlatform];
+                        affText.textContent = aff.text;
+                        affLink.href = aff.url;
+                        affLink.textContent = aff.btn;
+                        affCta.style.display = 'flex';
+                    } else if (affCta) {
+                        affCta.style.display = 'none';
+                    }
                 });
             }
 
@@ -2371,6 +2642,14 @@ showpage
             if (svgEpsInput) svgEpsInput.onchange = (e) => handleFiles(e.target.files);
             if (videoInput) videoInput.onchange = (e) => handleFiles(e.target.files);
 
+            const folderButton = document.getElementById('folderUploadButton');
+            const folderInput = document.getElementById('folderInput');
+
+            if (folderButton && folderInput) {
+                folderButton.onclick = () => folderInput.click();
+                folderInput.onchange = (e) => handleFiles(e.target.files);
+            }
+
             // --- DRAG & DROP ---
             const dropZone = document.getElementById('dropZone');
             if (dropZone) {
@@ -2378,8 +2657,76 @@ showpage
                 function preventDefaults(e) { e.preventDefault(); e.stopPropagation(); }
                 ['dragenter', 'dragover'].forEach(eventName => dropZone.addEventListener(eventName, () => dropZone.classList.add('dragover'), false));
                 ['dragleave', 'drop'].forEach(eventName => dropZone.addEventListener(eventName, () => dropZone.classList.remove('dragover'), false));
-                dropZone.addEventListener('drop', (event) => {
-                    if (event.dataTransfer && event.dataTransfer.files.length) handleFiles(event.dataTransfer.files);
+
+                async function traverseFileTree(item, path = '') {
+                    return new Promise((resolve) => {
+                        if (!item) {
+                            resolve([]);
+                            return;
+                        }
+                        if (item.isFile) {
+                            item.file((file) => {
+                                // Preserve full path for FTP & processing 
+                                file.customPath = path + file.name;
+                                resolve([file]);
+                            });
+                        } else if (item.isDirectory) {
+                            const dirReader = item.createReader();
+                            const entries = [];
+                            const readEntries = () => {
+                                dirReader.readEntries(async (results) => {
+                                    if (!results.length) {
+                                        let allFiles = [];
+                                        for (const entry of entries) {
+                                            const subFiles = await traverseFileTree(entry, path + item.name + "/");
+                                            allFiles.push(...subFiles);
+                                        }
+                                        resolve(allFiles);
+                                    } else {
+                                        entries.push(...results);
+                                        readEntries();
+                                    }
+                                });
+                            };
+                            readEntries();
+                        } else {
+                            resolve([]);
+                        }
+                    });
+                }
+
+                dropZone.addEventListener('drop', async (event) => {
+                    if (event.dataTransfer && event.dataTransfer.items) {
+                        const items = event.dataTransfer.items;
+                        let allFiles = [];
+                        const promises = [];
+                        for (let i = 0; i < items.length; i++) {
+                            const item = items[i];
+                            const entry = item.webkitGetAsEntry ? item.webkitGetAsEntry() : null;
+                            if (entry) {
+                                promises.push(traverseFileTree(entry));
+                            } else if (item.kind === 'file') {
+                                const file = item.getAsFile();
+                                if (file) {
+                                    file.customPath = file.name;
+                                    allFiles.push(file);
+                                }
+                            }
+                        }
+                        if (promises.length > 0) {
+                            const resolvedFiles = await Promise.all(promises);
+                            for (const files of resolvedFiles) {
+                                allFiles.push(...files);
+                            }
+                        }
+                        if (allFiles.length > 0) {
+                            handleFiles(allFiles);
+                        } else if (event.dataTransfer.files.length > 0) {
+                            handleFiles(event.dataTransfer.files);
+                        }
+                    } else if (event.dataTransfer && event.dataTransfer.files.length) {
+                        handleFiles(event.dataTransfer.files);
+                    }
                 }, false);
             }
 
@@ -2394,7 +2741,7 @@ showpage
                 const blob = new Blob([ab], { type: 'image/png' });
                 return new File([blob], filename, { type: 'image/png' });
             }
-            async function handleFiles(files) {
+            window.handleFiles = async function handleFiles(files) {
                 if (files.length === 0) return;
 
                 // 🟠 IMMEDIATE UI FEEDBACK: Hide upload section and show Add More button
@@ -2410,22 +2757,21 @@ showpage
 
                 const user = auth.currentUser;
 
-                // --- NEW: Plan Limit Check (Asynchronous) ---
-                // We do this after the UI change to avoid blocking
-                const usage = await getMetadataUsage(user ? user.email : null);
+                // Get usage synchronously from global state to avoid blocking file load
+                let usage = window.userUsageData || { plan: 'free', limit: 10 };
                 let currentPlan = 'free';
-                if (usage?.plan) {
+                if (usage.plan) {
                     const rawPlan = String(usage.plan).toLowerCase().trim();
                     if (rawPlan.includes('premium')) currentPlan = 'premium';
                     else if (rawPlan.includes('pro')) currentPlan = 'pro';
-                } else if (usage?.limit) {
+                } else if (usage.limit) {
                     if (usage.limit >= 100) currentPlan = 'premium';
                     else if (usage.limit >= 70) currentPlan = 'pro';
                 }
 
                 let maxFiles = 50;
                 if (currentPlan === 'free') {
-                    maxFiles = usage.limit;
+                    maxFiles = usage.limit || 10;
                 } else if (currentPlan === 'pro') {
                     maxFiles = 200;
                 } else if (currentPlan === 'premium') {
@@ -2439,6 +2785,16 @@ showpage
                     if (uploadedFilesData.length === 0 && uploadSection) uploadSection.style.display = 'flex';
                     if (addMoreBtn) addMoreBtn.style.display = 'none';
                     return;
+                }
+
+                // In the background, fetch fresh usage without blocking rendering
+                if (user && user.email) {
+                    getMetadataUsage(user.email).then(freshUsage => {
+                        window.userUsageData = { ...freshUsage, email: user.email };
+                        if (typeof updateUsageUI === 'function') {
+                            updateUsageUI();
+                        }
+                    }).catch(e => console.warn("Background usage check failed:", e));
                 }
 
                 // Separate vector and non-vector files
@@ -2568,7 +2924,8 @@ showpage
                     video.src = URL.createObjectURL(videoFile);
 
                     video.onloadedmetadata = () => {
-                        const seekTime = Math.min(1, video.duration * 0.1);
+                        const duration = (isNaN(video.duration) || !isFinite(video.duration) || video.duration === 0) ? 2 : video.duration;
+                        const seekTime = Math.min(1, duration * 0.1);
                         video.currentTime = seekTime;
                     };
 
@@ -2579,10 +2936,14 @@ showpage
                         const ctx = canvas.getContext('2d');
                         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
+                        const isVertical = video.videoWidth < video.videoHeight;
+
                         canvas.toBlob((blob) => {
                             URL.revokeObjectURL(video.src);
                             if (blob) {
-                                resolve(new File([blob], videoFile.name + ".jpg", { type: 'image/jpeg' }));
+                                const f = new File([blob], videoFile.name + ".jpg", { type: 'image/jpeg' });
+                                f.isVertical = isVertical;
+                                resolve(f);
                             } else {
                                 reject(new Error("Failed to extract video frame"));
                             }
@@ -2596,38 +2957,37 @@ showpage
                 });
             }
 
+
             // Extract Preview from AI (PDF-compatible) file
             async function extractAiPreview(aiFile) {
                 // Initialize PDF.js
-                const pdfjsLib = window['pdfjs-dist/build/pdf'];
-                if (!pdfjsLib) {
-                    throw new Error("PDF.js library not loaded");
+                const pdfjsLib = window.pdfjsLib || window['pdfjs-dist/build/pdf'];
+                if (!pdfjsLib) throw new Error("PDF.js library not loaded");
+
+                // Ensure worker is set correctly
+                if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
+                    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
                 }
 
                 try {
                     const arrayBuffer = await aiFile.arrayBuffer();
-                    const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+                    const uint8Array = new Uint8Array(arrayBuffer); // FIX: Convert to Uint8Array for strict parsing
+                    
+                    const loadingTask = pdfjsLib.getDocument({ data: uint8Array });
                     const pdf = await loadingTask.promise;
-                    const page = await pdf.getPage(1); // Get first page
+                    const page = await pdf.getPage(1);
 
-                    // Determine scale (aim for decent quality thumbnail)
                     const viewport = page.getViewport({ scale: 1.5 });
                     const canvas = document.createElement('canvas');
                     const context = canvas.getContext('2d');
                     canvas.height = viewport.height;
                     canvas.width = viewport.width;
 
-                    const renderContext = {
-                        canvasContext: context,
-                        viewport: viewport
-                    };
-
-                    await page.render(renderContext).promise;
+                    await page.render({ canvasContext: context, viewport: viewport }).promise;
 
                     return new Promise((resolve, reject) => {
                         canvas.toBlob((blob) => {
                             if (blob) {
-                                // Create a File object from the Blob
                                 const file = new File([blob], aiFile.name.replace(/\.ai$/i, '.png'), { type: "image/png" });
                                 resolve(file);
                             } else {
@@ -2637,8 +2997,115 @@ showpage
                     });
                 } catch (error) {
                     console.error("PDF.js extraction error:", error);
-                    throw new Error("Failed to parse AI file. Ensure it is saved with 'Create PDF Compatible File' option.");
+                    throw new Error("Invalid PDF Structure. Falling back to server render.");
                 }
+            }
+
+            // Function to upscale image using ClipDrop
+            async function upscaleImageToClipDrop(cardId, file) {
+                const upscaleBtn = document.getElementById(`upscale-btn-${cardId}`);
+                const originalText = upscaleBtn.innerHTML;
+                const spinner = document.querySelector(`#${cardId} .image-spinner`);
+
+                try {
+                    upscaleBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Upscaling...';
+                    upscaleBtn.disabled = true;
+                    if (spinner) spinner.style.display = 'block';
+
+                    // Get Firebase auth token
+                    const user = auth.currentUser;
+                    if (!user) {
+                        alert('Please sign in to use the Upscale feature.');
+                        upscaleBtn.innerHTML = originalText;
+                        upscaleBtn.disabled = false;
+                        if (spinner) spinner.style.display = 'none';
+                        return;
+                    }
+                    const idToken = await user.getIdToken();
+
+                    // Calculate target dimensions (2x upscale, capped at 4096)
+                    const imgEl = document.querySelector(`#${cardId} .thumbnail-medium`);
+                    const origW = imgEl ? imgEl.naturalWidth : 1024;
+                    const origH = imgEl ? imgEl.naturalHeight : 1024;
+                    let targetW = origW * 2;
+                    let targetH = origH * 2;
+                    if (targetW > 4096 || targetH > 4096) {
+                        const scale = 4096 / Math.max(targetW, targetH);
+                        targetW = Math.round(targetW * scale);
+                        targetH = Math.round(targetH * scale);
+                    }
+
+                    const formData = new FormData();
+                    formData.append('image_file', file);
+                    formData.append('target_width', String(targetW));
+                    formData.append('target_height', String(targetH));
+
+                    const response = await fetch('https://metagen-pro-api.metagenp.workers.dev/clipdrop/upscale', {
+                        method: 'POST',
+                        headers: { 'Authorization': 'Bearer ' + idToken },
+                        body: formData
+                    });
+
+                    if (!response.ok) {
+                        const errorData = await response.json().catch(() => ({}));
+                        throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+                    }
+
+                    const upscaledBlob = await response.blob();
+
+                    // Create a new File object from the upscaled blob
+                    const upscaledFile = new File([upscaledBlob], file.name, { type: upscaledBlob.type || file.type });
+
+                    // Replace image source in UI
+                    const imgElement = document.querySelector(`#${cardId} .thumbnail-medium`);
+                    if (imgElement) {
+                        const url = URL.createObjectURL(upscaledFile);
+                        imgElement.src = url;
+                    }
+
+                    // Update fileObject in uploadedFilesData so Embed Metadata uses the upscaled version
+                    const fileDataEntry = uploadedFilesData.find(f => f.id === cardId);
+                    if (fileDataEntry) {
+                        fileDataEntry.fileObject = upscaledFile;
+                    }
+
+                    // Hide the button after successful upscale
+                    upscaleBtn.style.display = 'none';
+
+                } catch (error) {
+                    console.error('Error upscaling image:', error);
+                    alert('Failed to upscale image. Please try again.\n' + error.message);
+                    upscaleBtn.innerHTML = originalText;
+                    upscaleBtn.disabled = false;
+                } finally {
+                    if (spinner) spinner.style.display = 'none';
+                }
+            }
+
+
+            // Helper to capture a small thumbnail for history
+            function captureThumbnail(cardId, size = 120) {
+                const img = document.querySelector(`#${cardId} .thumbnail-medium`);
+                if (!img || !img.complete || img.naturalWidth === 0) return null;
+
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+
+                // Keep aspect ratio
+                let w = img.naturalWidth;
+                let h = img.naturalHeight;
+                if (w > h) {
+                    h = (h / w) * size;
+                    w = size;
+                } else {
+                    w = (w / h) * size;
+                    h = size;
+                }
+
+                canvas.width = w;
+                canvas.height = h;
+                ctx.drawImage(img, 0, 0, w, h);
+                return canvas.toDataURL('image/jpeg', 0.7);
             }
 
             // Process file after checklist approval or for non-vector files
@@ -2655,6 +3122,8 @@ showpage
                     ? (file.size / 1024).toFixed(1) + ' KB'
                     : (file.size / (1024 * 1024)).toFixed(1) + ' MB';
 
+                window.processVectorFile = processVectorFile;
+
                 card.innerHTML = `
                     <div class="card-image-col">
                         <div class="card-checkbox-container">
@@ -2664,7 +3133,12 @@ showpage
                             <button class="card-image-action-btn regenerate" title="Regenerate" onclick="regenerateMetadata(this)"><span style="font-size:1.1em;">&#x21bb;</span></button>
                             <button class="card-image-action-btn close" title="Close" onclick="closeCard(this)"><span style="font-size:1.1em;">&#x2716;</span></button>
                         </div>
-                        <img src="${placeholderSrc}" alt="${file.name}" class="thumbnail-medium">
+                        <img loading='lazy' src="${placeholderSrc}" alt="${file.name}" class="thumbnail-medium" style="position: relative; overflow: hidden; border-radius: 12px;">
+
+                        <!-- Quality Scan Overlay -->
+                        <div id="qualityScanOverlay-${card.id}" class="sales-scan-overlay" style="display:none; z-index: 9;">
+                            <div class="sales-scan-line"></div>
+                        </div>
                         
                         <!-- Image Properties Overlay -->
                         <div class="image-properties-overlay">
@@ -2675,13 +3149,13 @@ showpage
                         </div>
 
                         ${isAi ? '<div class="file-type-badge ai-badge" style="position: absolute; top: 10px; left: 10px; padding: 4px 8px; border-radius: 4px; font-size: 0.7em; font-weight: bold; background: #FF7F18; color: white;">AI</div>' : ''}
-                        ${isVideo ? '<div class="file-type-badge video-badge" style="position: absolute; top: 10px; left: 10px; padding: 4px 8px; border-radius: 4px; font-size: 0.7em; font-weight: bold; background: #EF4444; color: white;">VIDEO</div>' : ''}
+                        ${isVideo ? '<div class="file-type-badge video-badge" style="position: absolute; top: 15px; left: 46px; padding: 4px 8px; border-radius: 4px; font-size: 0.7em; font-weight: bold; background: #EF4444; color: white; z-index: 1000;">VIDEO</div>' : ''}
                         <div class="image-spinner" style="display:block;"></div>
                         
                         <!-- Copyright Status -->
                         <div id="copyright-status-${card.id}" class="copyright-status-container" style="margin-top: 2px; background: var(--bg-input); border: 1px solid rgba(255, 255, 255, 0.15); box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3); padding: 4px 12px; border-radius: 14px; text-align: center;">
                             <div class="copyright-badge copyright-checking">
-                                <span class="image-spinner" style="display:inline-block; width:12px; height:12px; border-width:2px; margin:0;"></span> Checking Copyright...
+                                <span class="image-spinner" style="display:inline-block; width:30px; height:30px; border-width:5px; margin:0;"></span> Checking Copyright...
                             </div>
                         </div>
 
@@ -2698,12 +3172,16 @@ showpage
                                 <div class="lock-icon" title="Pro Feature">🔒</div>
                             </div>
                             <div class="seo-score-header">
-                                <span><span data-i18n="seo_score">SEO Score</span><button class="seo-info-icon" onclick="openSeoInfoModal()" title="Learn how to improve SEO Score">i</button></span>
+                               <span>
+                                  <span data-i18n="seo_score">SEO Score</span>
+                                    <a href="https://www.aimetagenpro.com/p/seo-score.html" target="blank" class="seo-info-icon" title="Learn how to improve SEO Score">i</a>
+                                  </span>
                                 <span class="seo-badge excellent" id="seo-badge-${card.id}">0 / 100 🟢 Excellent</span>
                             </div>
                             <div class="seo-progress-bg">
                                 <div class="seo-progress-fill excellent" id="seo-progress-${card.id}" style="width: 0%;"></div>
                             </div>
+                            <div class="seo-suggestions" id="seo-suggestions-${card.id}" style="color:var(--text-muted); font-size:0.75em; margin-top:8px; display:none; flex-direction:column; gap:4px; padding:6px; border-radius:4px; background:var(--bg-tertiary); border: 1px dashed var(--border-color);"></div>
                         </div>
 
                         <!-- Rejection Predictor Meter -->
@@ -2740,6 +3218,10 @@ showpage
                              </div>
                         </div>
                         
+                        <button id="upscale-btn-${card.id}" class="action-button blue-button" style="display:none; width:100%; margin-top:8px; justify-content:center; align-items:center; gap:6px;">
+                            <i class="fas fa-expand-arrows-alt"></i> Upscale (Advance AI)
+                        </button>
+
                         <div class="card-filename" style="display:none;">${file.name}</div>
                     </div>
                     <div class="card-meta-col">
@@ -2765,9 +3247,60 @@ showpage
                                 <button class="action-button blue-button" style="padding: 4px 12px; font-size: 0.65em; white-space: nowrap; flex-shrink: 0;" onclick="translateMetadata('${card.id}')"><span data-i18n="go">Go</span></button>
                             </div>
                         </div>
-                        <div class="meta-section">
-                            <div class="meta-section-label"><span><span data-i18n="label_title">Title</span> <span id="title-count-${card.id}" class="meta-count"></span></span><button class="copy-btn" onclick="copyToClipboard(this, 'title')"><i class="icon-copy"></i><span data-i18n="btn_copy">Copy</span></button></div>
+                        <div class="meta-section" style="position: relative;">
+                            <div class="meta-section-label" style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                                <span>
+                                    <span data-i18n="label_title">Title</span>
+                                    <span id="title-count-${card.id}" class="meta-count"></span>
+                                </span>
+                                <div style="display: flex; gap: 8px; align-items: center;">
+                                    <button class="action-button blue-button TitleBtn" id="check-clarity-btn-${card.id}" style="padding: 5px 8px; font-size: 0.72em; display: none; height: auto;" onclick="checkTitleClarity('${card.id}')">
+                                        <i class="fas fa-magic" style='margin-right: 5px;'></i> Clarity
+                                    </button>
+                                    <button class="copy-btn" onclick="copyToClipboard(this, 'title')"><i class="icon-copy"></i><span data-i18n="btn_copy">Copy</span></button>
+                                </div>
+                            </div>
                             <div class="meta-title" contenteditable="true" oninput="updateTitle(this)"></div>
+
+                            <!-- Clarity Checker Widget -->
+                            <div id="clarity-checker-container-${card.id}" class="clarity-checker-container" style="display: none;">
+                                <div class="clarity-scores-row">
+                                    <div class="clarity-score-item">
+                                        <div class="clarity-score-header">
+                                            <span>Accuracy</span>
+                                            <span id="clarity-grammar-value-${card.id}" class="clarity-score-value">0%</span>
+                                        </div>
+                                        <div class="clarity-progress-bg">
+                                            <div id="clarity-grammar-bar-${card.id}" class="clarity-progress-fill" style="width: 0%;"></div>
+                                        </div>
+                                    </div>
+                                    <div class="clarity-score-item">
+                                        <div class="clarity-score-header">
+                                            <span>Buyer Appeal</span>
+                                            <span id="clarity-appeal-value-${card.id}" class="clarity-score-value">0%</span>
+                                        </div>
+                                        <div class="clarity-progress-bg">
+                                            <div id="clarity-appeal-bar-${card.id}" class="clarity-progress-fill" style="width: 0%;"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div id="clarity-details-${card.id}" class="clarity-details">
+                                    <div id="clarity-feedback-${card.id}" class="clarity-feedback"></div>
+                                    <ul id="clarity-suggestions-${card.id}" class="clarity-suggestions"></ul>
+                                </div>
+                                <div id="clarity-lock-overlay-${card.id}" class="locked-overlay" style="display: none;" onclick="scrollToPricing(); alert('Upgrade to PRO or PREMIUM plan to unlock actionable title optimization suggestions.')">
+                                    <div class="lock-icon" style="font-size: 1.25em;">🔒</div>
+                                    <span style="font-size: 0.7em; font-weight: bold; color: var(--text-primary);">Unlock Pro Recommendations</span>
+                                </div>
+                                <div class="clarity-header-actions" style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px;">
+                                    <button class="action-button blue-button TitleBtn" id="clarity-fix-btn-${card.id}" style="padding: 2px 8px; font-size: 0.72em; height: auto;" onclick="fixTitleWithAI('${card.id}')">
+                                        <i class="fas fa-magic"></i> AI Fix
+                                    </button>
+                                    <button class="action-button" style="padding: 2px 8px; font-size: 0.72em; height: auto; background: #e12727c7; border: 1px solid rgba(255,255,255,0.2); color: #fff; cursor: pointer;" onclick="document.getElementById('clarity-checker-container-${card.id}').style.display='none'">
+                                        <i class="fas fa-times"></i> Close
+                                    </button>
+                                </div>
+                            </div>
                         </div>
                         <div class="meta-section" id="desc-section-${card.id}">
                             <div class="meta-section-label"><span><span data-i18n="label_desc">Description</span> <span id="desc-count-${card.id}" class="meta-count"></span></span><button class="copy-btn" onclick="copyToClipboard(this, 'description')"><i class="icon-copy"></i><span data-i18n="btn_copy">Copy</span></button></div>
@@ -2779,6 +3312,14 @@ showpage
                             <div class="keyword-add-container">
                                 <input type="text" class="keyword-add-input" data-i18n="placeholder_add_kw" placeholder="Add keyword..." id="keyword-input-${card.id}" onkeypress="if(event.key === 'Enter') addKeyword('${card.id}')">
                                 <button class="keyword-add-btn" style='white-space: nowrap; flex-shrink: 0;' onclick="addKeyword('${card.id}')">+ <span data-i18n="btn_add">Add</span></button>
+                            </div>
+                            <div class="keyword-preset-container" style="margin-top: 8px; display: flex; gap: 8px; align-items: center;">
+                                <select class="preset-select-dropdown" data-card-id="${card.id}" onchange="window.applyPresetToCard('${card.id}', this.value)" style="flex: 1; padding: 4px 8px; border-radius: 4px; background: var(--bg-input); color: var(--text-primary); border: 1px solid var(--border-color); font-size: 0.72em; width: 80%;">
+                                    <option value="">📁 Apply Preset/Templates...</option>
+                                </select>
+                                <button class="action-button blue-button" onclick="window.savePresetFromCard('${card.id}')" title="Save current keywords as preset template" style="padding: 4px 8px; font-size: 0.72em; margin-top: 0; white-space: nowrap; flex-shrink: 0;">
+                                    <i class="fas fa-save"></i> Save Preset
+                                </button>
                             </div>
                         </div>
                         
@@ -2838,10 +3379,11 @@ showpage
                                      <button class="prompt-tab-btn active" data-style="realistic" onclick="switchPromptStyle('${card.id}', 'realistic')">
                                          📷 <span data-i18n="style_realistic">Realistic</span>
                                      </button>
-                                     <button class="prompt-tab-btn" data-style="illustration" onclick="switchPromptStyle('${card.id}', 'illustration')">
+                                     <button class="prompt-tab-btn" data-style="illustration" onclick="switchPromptStyle('${card.id}', 'illustration')" style='background: #8b5cf6;'>
                                          🎨 <span data-i18n="style_illustration">Illustration</span>
                                      </button>
-                                     <button class="prompt-tab-btn" data-style="3d" onclick="switchPromptStyle('${card.id}', '3d')">
+                                     <button class="prompt-tab-btn" data-style="3d" onclick="switchPromptStyle('${card.id}', '3d')" style='width: 100%;
+    background: #f16908;'>
                                          🧊 <span data-i18n="style_3d">3D Render</span>
                                      </button>
                                  </div>
@@ -2888,21 +3430,61 @@ showpage
                             dimsEl.textContent = `${width} x ${height}`;
                         }
 
-                        // Dimensions updated in UI hook, Platform Check functionality replaced by Release Check.
+                        // NEW: Update Video Badge for Short Videos
+                        const fileDataObj = uploadedFilesData.find(f => f.id === card.id);
+                        if (fileDataObj && fileDataObj.isVideo && (width < height || fileDataObj.isVertical)) {
+                            fileDataObj.isVertical = true;
+                            const videoBadge = card.querySelector('.video-badge');
+                            if (videoBadge) {
+                                videoBadge.textContent = "SHORT VIDEO";
+                                videoBadge.style.background = "linear-gradient(45deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%)";
+                            }
+                        }
+
+                        // Capture thumbnail for history
+                        try {
+                            if (typeof captureThumbnail === 'function') {
+                                const thumb = captureThumbnail(card.id, 100);
+                                if (thumb) {
+                                    const entry = uploadedFilesData.find(f => f.id === card.id);
+                                    if (entry) entry.thumbnail = thumb;
+                                }
+                            }
+                        } catch (e) { console.warn("Thumb capture failed in onload:", e); }
+
+                        // Check if dimensions are unsuitable for microstock (Pro/Premium only)
+                        const userPlan = (window.userUsageData?.plan || 'free').toLowerCase();
+                        const isProOrPremium = userPlan.includes('pro') || userPlan.includes('premium') || userPlan.includes('agency');
+                        if ((file.type === 'image/jpeg' || file.type === 'image/png' || file.type === 'image/webp') && (width <= 1024 || height <= 1024)) {
+                            const upscaleBtn = document.getElementById(`upscale-btn-${card.id}`);
+                            if (upscaleBtn) {
+                                upscaleBtn.style.display = 'flex';
+                                upscaleBtn.onclick = () => {
+                                    if (isProOrPremium) {
+                                        upscaleImageToClipDrop(card.id, file);
+                                    } else {
+                                        alert("Upgrade to PRO/PREMIUM plan. Upscale (Advance AI) features are for pro & premium users only.");
+                                        if (typeof scrollToPricing === 'function') scrollToPricing();
+                                    }
+                                };
+                            }
+                        }
                     };
                 }
+
                 const spinner = card.querySelector('.image-spinner');
 
                 if (isEps) {
                     // --- EPS Conversion Restriction (Premium Only) ---
                     const user = auth.currentUser;
 
-                    // Plan check using global window.userUsageData or a simpler check
-                    let isPremium = (window.userUsageData?.plan || '').toLowerCase().includes('premium') || (window.userUsageData?.limit >= 100);
+                    // Plan check: checks if plan includes 'premium' OR 'pro', or if limit >= 100
+                    const userPlan = (window.userUsageData?.plan || '').toLowerCase();
+                    let isProOrPremium = userPlan.includes('premium') || userPlan.includes('pro') || userPlan.includes('agency') || (window.userUsageData?.limit >= 100);
 
-                    if (!isPremium) {
-                        alert("Direct Vector/EPS conversion is a Premium feature. Please upgrade to use this feature.");
-                        openUpgradeModal('premium');
+                    if (!isProOrPremium) {
+                        alert("Direct Vector/EPS conversion is a Pro/Premium feature. Please upgrade to use this feature.");
+                        openUpgradeModal('pro'); // অথবা আপনার প্রয়োজন অনুযায়ী 'premium' રાખতে পারেন
                         spinner.style.display = 'none';
                         return;
                     }
@@ -2973,50 +3555,50 @@ showpage
 
                 } else if (isAi) {
                     try {
+                        // Attempt 1: Client-side PDF.js extraction
                         const previewFile = await extractAiPreview(file);
                         imgElement.src = URL.createObjectURL(previewFile);
                         uploadedFilesData.push({
                             id: card.id,
                             name: file.name,
-                            fileObject: file, // Keep original AI file
-                            previewFile: previewFile, // Store extracted preview separately
+                            fileObject: file,
+                            previewFile: previewFile,
                             isAiFile: true,
-                            title: '',
-                            keywords: '',
-                            description: '',
-                            style: '',
-                            mood: '',
-                            prompt: ''
+                            title: '', keywords: '', description: '', style: '', mood: '', prompt: ''
                         });
+                        
                     } catch (error) {
-                        console.error('AI preview failed:', error);
-                        // Fallback icon
-                        imgElement.src = `data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIiBmaWxsPSJub25lIiBzdHJva2U9IiNGRjdGMTgiIHN0cm9rZS13aWR0aD0iNCI+IDxyZWN0IHg9IjIiIHk9IjIiIHdpZHRoPSI5NiIgaGVpZHRoPSI5NiIgcng9IjgiIHJ5PSI4IiBmaWxsPSIjMUUyOTNCIi8+IDx0ZXh0IHg9IjUwIiB5PSI2MCIgZm9udC1mYW1pbHk9InNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMzYiIGZpbGw9IiNGRjdGMTgiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZvbnQtd2VpZ2h0PSJib2xkIj5BSTwvdGV4dD48L3N2Zz4=`;
+                        console.warn('Native AI preview failed. File is likely not PDF-compatible.', error);
+                        
+                        // সার্ভারে রিকোয়েস্ট না পাঠিয়ে সরাসরি অ্যালার্ট দিন এবং ডিফল্ট আইকন দেখান
+                        alert(`Could not extract preview for "${file.name}".\n\nFor visual previews, please save .ai files with the "Create PDF Compatible File" option checked in Illustrator.`);
 
-                        // Push original file even if preview fails
+                        // Fallback generic AI icon (No server request to avoid 500 error)
+                        imgElement.src = `data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIiBmaWxsPSJub25lIiBzdHJva2U9IiNGRjdGMTgiIHN0cm9rZS13aWR0aD0iNCI+IDxyZWN0IHg9IjIiIHk9IjIiIHdpZHRoPSI5NiIgaGVpZHRoPSI5NiIgcng9IjgiIHJ5PSI4IiBmaWxsPSIjMUUyOTNCIi8+IDx0ZXh0IHg9IjUwIiB5PSI2MCIgZm9udC1mYW1pbHk9InNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMzYiIGZpbGw9IiNGRjdGMTgiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZvbnQtd2VpZ2h0PSJib2xkIj5BSTwvdGV4dD48L3N2Zz4=`;
+                        
                         uploadedFilesData.push({
                             id: card.id,
                             name: file.name,
-                            fileObject: file, // Use original file if preview fails
+                            fileObject: file,
                             isAiFile: true,
-                            title: '',
-                            keywords: '',
-                            description: '',
-                            style: '',
-                            mood: '',
-                            prompt: ''
+                            title: '', keywords: '', description: '', style: '', mood: '', prompt: ''
                         });
                     } finally {
                         spinner.style.display = 'none';
-                        updateAllButtonStates(); // Ensure button state updates after async op
+                        updateAllButtonStates();
 
                         // Auto-run Copyright Check if enabled
                         if (document.getElementById('copyrightToggle') && document.getElementById('copyrightToggle').checked) {
-                            if (uploadedFilesData[uploadedFilesData.length - 1].previewFile) {
-                                checkCopyrightAndTrademark(uploadedFilesData[uploadedFilesData.length - 1].previewFile, card.id);
+                            const fileDataEntry = uploadedFilesData[uploadedFilesData.length - 1];
+                            // প্রিভিউ ফাইল থাকলে কপিরাইট স্ক্যান করবে, না থাকলে ওয়ার্নিং দেখাবে
+                            if (fileDataEntry && fileDataEntry.previewFile) {
+                                checkCopyrightAndTrademark(fileDataEntry.previewFile, card.id);
                             } else {
-                                // Try with original file if preview missing (might fail but worth try if image)
-                                checkCopyrightAndTrademark(file, card.id);
+                                const statusEl = document.getElementById(`copyright-status-${card.id}`);
+                                if (statusEl) {
+                                    statusEl.style.display = 'block';
+                                    statusEl.innerHTML = '<div class="copyright-badge copyright-warning" style="font-size:0.75em;">⚠️ Preview Unavailable for Scan</div>';
+                                }
                             }
                         } else {
                             const statusEl = document.getElementById(`copyright-status-${card.id}`);
@@ -3034,6 +3616,7 @@ showpage
                             previewFile: previewFile,
                             isAiFile: true,
                             isVideo: true,
+                            isVertical: previewFile.isVertical,
                             title: '',
                             keywords: '',
                             description: '',
@@ -3050,6 +3633,7 @@ showpage
                             name: file.name,
                             fileObject: file,
                             isVideo: true,
+                            isVertical: false,
                             title: '',
                             keywords: '',
                             description: '',
@@ -3060,7 +3644,6 @@ showpage
                     } finally {
                         spinner.style.display = 'none';
                         updateAllButtonStates();
-                        // No copyright check for videos
                         const statusEl = document.getElementById(`copyright-status-${card.id}`);
                         if (statusEl) statusEl.style.display = 'none';
                     }
@@ -3117,7 +3700,7 @@ showpage
                     }
 
                     // Stop processing if Free user (Backup check)
-                    if (currentPlan !== 'pro' && currentPlan !== 'premium') {
+                    if (currentPlan !== 'pro' && currentPlan !== 'premium' && currentPlan !== 'agency') {
                         badge.className = 'copyright-badge copyright-warning';
                         badge.innerHTML = '⚠️ Pro/Premium Only';
                         return;
@@ -3221,13 +3804,6 @@ showpage
                         const card = document.getElementById(cardId);
                         if (card) card.style.borderColor = '#EF4444';
                     }
-
-                    // 📊 Log activity and update usage
-                    logActivity('Copyright Check', {
-                        fileName: file.name,
-                        status: result.status
-                    });
-
                 } catch (error) {
                     console.error("Copyright Check Error:", error);
                     badge.className = 'copyright-badge copyright-warning';
@@ -3237,15 +3813,11 @@ showpage
 
             // --- AI IMAGE QUALITY & ARTIFACT CHECKER (PRO/PREMIUM ONLY) ---
             window.checkImageQuality = async function (fileData) {
-                const plan = (window.userUsageData?.plan || 'free').toLowerCase();
-                if (plan === 'free') {
-                    alert("Upgrade to PRO/PREMIUM plan. Image quality check features are for pro & premium users only.");
-                    if (typeof scrollToPricing === 'function') scrollToPricing();
-                    return;
-                }
                 const cardId = fileData.id;
                 const badge = document.getElementById(`quality-badge-${cardId}`);
                 const reportBox = document.getElementById(`quality-report-${cardId}`);
+
+                const scanOverlay = document.getElementById(`qualityScanOverlay-${cardId}`);
 
                 if (!badge) return;
 
@@ -3259,23 +3831,10 @@ showpage
                     if (user) {
                         accessToken = await user.getIdToken();
                         try {
-                            const profileDoc = await db.collection('users').doc(user.email).get();
+                            const profileDoc = await db.collection('users').doc(user.email.toLowerCase()).get();
                             const profileData = profileDoc.exists ? profileDoc.data() : null;
                             currentPlan = (profileData?.plan || 'free').toLowerCase();
-                        } catch (e) { console.warn('Plan check failed:', e); }
-                    }
-
-                    // Restricted to Pro/Premium
-                    if (currentPlan !== 'pro' && currentPlan !== 'premium') {
-                        badge.className = 'quality-status-badge danger';
-                        badge.innerHTML = '<i class="fas fa-lock"></i> Pro Required';
-                        if (reportBox) {
-                            reportBox.innerHTML = `<div class="quality-report-header" style="color: #EF4444; font-weight: bold;">Upgrade Required</div>
-                                                   <p style="font-size: 0.85em; margin-top: 5px;">AI Quality Checker is exclusive to Pro and Premium plans.</p>
-                                                   <button class="action-button orange-button" style="width: 100%; margin-top: 10px;" onclick="scrollToPricing()">Upgrade to Pro</button>`;
-                            reportBox.style.display = 'block';
-                        }
-                        return null;
+                        } catch (e) { console.warn('Plan check failed', e); }
                     }
 
                     // Update UI to "Checking"
@@ -3284,6 +3843,9 @@ showpage
 
                     badge.className = 'quality-status-badge checking';
                     badge.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Checking...';
+
+                    if (scanOverlay) scanOverlay.style.display = 'block';
+
                     if (reportBox) {
                         reportBox.style.display = 'block';
                         reportBox.innerHTML = '<div class="quality-report-header">Analyzing Technical Quality...</div><div class="image-spinner" style="display:block; margin: 10px auto;"></div>';
@@ -3313,7 +3875,7 @@ showpage
                     });
 
                     // 3. Call Cloudflare Worker
-                    const qualityPrompt = `You are an expert image quality analyst for stock photography platforms. Analyze this image for technical quality issues. Check for: blur, noise/grain, compression artifacts, color banding, chromatic aberration, over/under exposure, AI-generated artifacts (extra fingers, distorted text, unnatural patterns), watermarks, logos. Return ONLY valid JSON in this exact format: {"overall_score": <0-100>, "issues": [{"type": "<issue name>", "description": "<brief description>", "severity": "<high|medium|low>"}]}. If no issues found, return {"overall_score": 95, "issues": []}. Be strict but fair.`;
+                    const qualityPrompt = `You are an expert image quality analyst for stock photography platforms. Analyze this image for technical quality issues. Check for: blur, noise/grain, compression artifacts, color banding, chromatic aberration, over/under exposure, AI-generated artifacts (extra fingers, distorted text, unnatural patterns), watermarks, logos. Return ONLY valid JSON in this exact format: {"overall_score": <0-100>, "issues": [{"type": "<issue name>", "description": "<brief description>", "severity": "<high|medium|low>", "regions": [[xmin, ymin, xmax, ymax]]}]}. If no issues found, return {"overall_score": 95, "issues": []}. The "regions" array must contain coordinate arrays [xmin, ymin, xmax, ymax] normalized from 0 to 100 indicating where each technical issue is visually located on the image. Be strict but fair.`;
                     const proxyUrl = "https://metagen-pro-api.metagenp.workers.dev/generate";
                     const response = await fetch(proxyUrl, {
                         method: "POST",
@@ -3335,8 +3897,21 @@ showpage
 
                     // 4. Parse Results
                     let resStr = data.text || "";
-                    resStr = resStr.replace(/```json/g, '').replace(/```/g, '').trim();
-                    const results = JSON.parse(resStr);
+                    resStr = resStr.replace(/```json/gi, '').replace(/```/g, '').trim();
+                    const jsonStart = resStr.indexOf('{');
+                    const jsonEnd = resStr.lastIndexOf('}');
+                    
+                    if (jsonStart !== -1 && jsonEnd !== -1) {
+                        resStr = resStr.substring(jsonStart, jsonEnd + 1);
+                    }
+
+                    let results;
+                    try {
+                        results = JSON.parse(resStr);
+                    } catch (parseErr) {
+                        console.error("Quality Check JSON Parse Error:", parseErr, "Raw Text:", resStr);
+                        throw new Error("AI returned invalid JSON. Please try again.");
+                    }
 
                     // 5. Update UI
                     updateQualityUI(cardId, results);
@@ -3348,6 +3923,8 @@ showpage
                     badge.innerHTML = `<i class="fas fa-exclamation-triangle"></i> Check Failed: ${error.message}`;
                     if (reportBox) reportBox.innerHTML = `<div class="quality-report-header" style="color: #EF4444;">Error: ${error.message}</div>`;
                     return null;
+                } finally {
+                    if (scanOverlay) scanOverlay.style.display = 'none';
                 }
             };
 
@@ -3425,62 +4002,156 @@ showpage
                 const body = document.getElementById('qualityModalBody');
                 if (!modal || !body) return;
 
+                // Increase modal width for heatmap
+                const modalContent = modal.querySelector('.modal-content');
+                if (modalContent) modalContent.style.maxWidth = '850px';
+
                 const score = results.overall_score || 0;
                 const issues = results.issues || [];
 
-                let reportHtml = `<div style="text-align: center; margin-bottom: 30px;">
-                                    <div style="font-size: 2em; font-weight: 800; color: var(--text-primary); margin-bottom: 8px; letter-spacing: -0.5px;">Technical Analysis Report</div>
-                                    <div style="color: var(--text-muted); font-size: 1em; font-weight: 500;">AI-Powered Quality Assessment</div>
-                                  </div>
-                                  
-                                  <div style="background: var(--bg-input); border-radius: 20px; padding: 25px; margin-bottom: 30px; border: 1px solid var(--border-color); box-shadow: inset 0 2px 4px rgba(0,0,0,0.05);">
-                                      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                                          <span style="font-weight: 700; color: var(--text-secondary); font-size: 1.1em;">Overall Quality Score</span>
-                                          <div style="font-size: 1.8em; font-weight: 900; color: ${score >= 80 ? '#10B981' : (score >= 50 ? '#F59E0B' : '#EF4444')}">${score}<span style="font-size: 0.6em; opacity: 0.7;">/100</span></div>
-                                      </div>
-                                      <div style="height: 12px; width: 100%; background: rgba(0,0,0,0.1); border-radius: 6px; overflow: hidden; box-shadow: inset 0 1px 3px rgba(0,0,0,0.2);">
-                                          <div style="height: 100%; width: ${score}%; background: linear-gradient(90deg, ${score >= 80 ? '#10B981, #059669' : (score >= 50 ? '#F59E0B, #D97706' : '#EF4444, #DC2626')}); border-radius: 6px; transition: width 1s cubic-bezier(0.34, 1.56, 0.64, 1);"></div>
-                                      </div>
-                                      <div style="margin-top: 10px; font-size: 0.85em; color: var(--text-muted); text-align: right; font-weight: 600;">
-                                          ${score >= 80 ? 'Excellent Technical Quality' : (score >= 50 ? 'Minor Technical Issues' : 'Critical Artifacts Detected')}
-                                      </div>
-                                  </div>`;
+                const card = document.getElementById(cardId);
+                const thumbnail = card ? card.querySelector('.thumbnail-medium') : null;
+                const imgSrc = thumbnail ? thumbnail.src : '';
+
+                let reportHtml = `
+                    <div style="display: flex; gap: 30px; flex-wrap: wrap;">
+                        <!-- Left: Visual Analysis / Heatmap -->
+                        <div style="flex: 1; min-width: 300px;">
+                            <div style="font-weight: 800; margin-bottom: 15px; color: var(--text-primary); display: flex; align-items: center; gap: 10px; font-size: 1.1em;">
+                                <i class="fas fa-eye" style="color: var(--accent-blue);"></i> Visual Artifact Map
+                            </div>
+                            <div style="position: relative; background: #000; border-radius: 16px; overflow: hidden; border: 1px solid var(--border-color); box-shadow: 0 10px 30px rgba(0,0,0,0.1);">
+                                <img id="quality-heatmap-img" src="${imgSrc}" style="width: 100%; display: block; opacity: 0.8;">
+                                <canvas id="quality-heatmap-canvas" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none;"></canvas>
+                            </div>
+                            <div style="margin-top: 15px; display: flex; gap: 15px; font-size: 0.85em; font-weight: 600;">
+                                <div style="display: flex; align-items: center; gap: 6px;"><span style="width: 12px; height: 12px; background: rgba(239, 68, 68, 0.6); border-radius: 3px;"></span> High Severity</div>
+                                <div style="display: flex; align-items: center; gap: 6px;"><span style="width: 12px; height: 12px; background: rgba(245, 158, 11, 0.6); border-radius: 3px;"></span> Medium/Low</div>
+                            </div>
+                        </div>
+
+                        <!-- Right: Report Details -->
+                        <div style="flex: 1.2; min-width: 300px;">
+                            <div style="text-align: left; margin-bottom: 25px;">
+                                <div style="font-size: 1.8em; font-weight: 800; color: var(--text-primary); margin-bottom: 4px; letter-spacing: -0.5px;">Technical Report</div>
+                                <div style="color: var(--text-muted); font-size: 0.9em; font-weight: 500;">AI-Powered Quality Assessment</div>
+                            </div>
+                            
+                            <div style="background: var(--bg-input); border-radius: 20px; padding: 20px; margin-bottom: 25px; border: 1px solid var(--border-color);">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                                    <span style="font-weight: 700; color: var(--text-secondary);">Quality Score</span>
+                                    <div style="font-size: 1.6em; font-weight: 900; color: ${score >= 80 ? '#10B981' : (score >= 50 ? '#F59E0B' : '#EF4444')}">${score}<span style="font-size: 0.6em; opacity: 0.7;">/100</span></div>
+                                </div>
+                                <div style="height: 10px; width: 100%; background: rgba(0,0,0,0.1); border-radius: 5px; overflow: hidden;">
+                                    <div style="height: 100%; width: ${score}%; background: linear-gradient(90deg, ${score >= 80 ? '#10B981, #059669' : (score >= 50 ? '#F59E0B, #D97706' : '#EF4444, #DC2626')}); border-radius: 5px;"></div>
+                                </div>
+                            </div>
+
+                            <div id="quality-issues-list">`;
 
                 if (issues.length > 0) {
-                    reportHtml += `<div style="font-weight: 800; margin-bottom: 18px; color: var(--text-primary); display: flex; align-items: center; gap: 10px; font-size: 1.1em;">
-                                       <i class="fas fa-microscope" style="color: var(--accent-blue);"></i> Detected Artifacts
-                                   </div>`;
                     issues.forEach((issue, idx) => {
                         const icon = issue.severity === 'high' ? 'fa-exclamation-triangle' : 'fa-info-circle';
                         const color = issue.severity === 'high' ? '#EF4444' : '#F59E0B';
                         const bg = issue.severity === 'high' ? 'rgba(239, 68, 68, 0.05)' : 'rgba(245, 158, 11, 0.05)';
 
-                        const isFixable = issue.type.includes('Noise') || issue.type.includes('Blur') || issue.type.includes('Sharpness');
-                        const fixButton = isFixable ? `<button class="ai-fix-btn" onclick="fixImageArtifact('${cardId}', '${issue.type.replace(/'/g, "\\'")}')">✨ AI Fix</button>` : '';
+                        const clickCheck = `if((window.userUsageData?.plan || 'free').toLowerCase() === 'free') { alert('Upgrade to PRO/PREMIUM plan. Image quality check features are for pro & premium users only.'); if (typeof scrollToPricing === 'function') scrollToPricing(); return; }`;
+                        const fixButton = `
+                          <div style="display: flex; gap: 10px; margin-top: 10px; flex-wrap: wrap;">
+                             <button class="ai-fix-btn" style="padding: 6px 14px; background: rgba(37, 99, 235, 0.1); border: 1px solid rgba(37, 99, 235, 0.3); color: #2563EB; border-radius: 8px; font-weight: bold; cursor: pointer; display: flex; align-items: center; gap: 6px; font-size: 0.85em; transition: 0.2s;" onclick="${clickCheck} fixImageArtifact('${cardId}', '${issue.type.replace(/'/g, "\\'")}')">
+                                <i class="fas fa-magic"></i> AI Fix
+                             </button>
+                             <button class="ai-heal-btn" style="padding: 6px 14px; background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); color: #10B981; border-radius: 8px; font-weight: bold; cursor: pointer; display: flex; align-items: center; gap: 6px; font-size: 0.85em; transition: 0.2s;" onclick="${clickCheck} document.getElementById('qualityResultModal').style.display='none'; sendToHealing('${cardId}', ${idx})">
+                                <i class="fas fa-eraser"></i> Remove & Heal
+                             </button>
+                             <button class="ai-denoise-btn" style="padding: 6px 14px; background: rgba(139, 92, 246, 0.1); border: 1px solid rgba(139, 92, 246, 0.3); color: #8B5CF6; border-radius: 8px; font-weight: bold; cursor: pointer; display: flex; align-items: center; gap: 6px; font-size: 0.85em; transition: 0.2s;" onclick="${clickCheck} document.getElementById('qualityResultModal').style.display='none'; sendToHealing('${cardId}', ${idx})">
+                                <i class="fas fa-wand-magic-sparkles"></i> Fix Noise & Blur
+                             </button>
+                          </div>
+                        `;
 
-                        reportHtml += `<div class="issue-item" style="background: ${bg}; border-radius: 16px; padding: 18px; margin-bottom: 15px; border: 1px solid ${color}33; display: flex; gap: 18px; align-items: flex-start; transition: transform 0.2s; cursor: default;" onmouseover="this.style.transform='translateX(5px)'" onmouseout="this.style.transform='translateX(0)'">
-                                           <div style="background: ${color}22; padding: 10px; border-radius: 12px;">
-                                               <i class="fas ${icon}" style="color: ${color}; font-size: 1.25em;"></i>
+                        reportHtml += `<div class="issue-item" data-index="${idx}" style="background: ${bg}; border-radius: 12px; padding: 15px; margin-bottom: 12px; border: 1px solid ${color}33; display: flex; gap: 15px; align-items: flex-start; transition: 0.2s;">
+                                           <div style="background: ${color}22; padding: 8px; border-radius: 10px;">
+                                               <i class="fas ${icon}" style="color: ${color}; font-size: 1.1em;"></i>
                                            </div>
                                            <div style="flex: 1;">
-                                               <div style="font-weight: 800; color: var(--text-primary); margin-bottom: 4px; font-size: 1.05em;">${issue.type}</div>
-                                               <div style="font-size: 0.95em; color: var(--text-muted); line-height: 1.5; font-weight: 500;">${issue.description}</div>
+                                               <div style="font-weight: 800; color: var(--text-primary); margin-bottom: 2px; font-size: 1em;">${issue.type}</div>
+                                               <div style="font-size: 0.85em; color: var(--text-muted); line-height: 1.4;">${issue.description}</div>
                                                ${fixButton}
                                            </div>
                                        </div>`;
                     });
                 } else {
-                    reportHtml += `<div style="text-align: center; padding: 40px 20px; background: rgba(16, 185, 129, 0.05); border-radius: 20px; border: 2px dashed rgba(16, 185, 129, 0.2); animation: fadeIn 0.5s ease-out;">
-                                       <div style="background: rgba(16, 185, 129, 0.1); width: 80px; height: 80px; border-radius: 40px; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px;">
-                                           <i class="fas fa-check-circle" style="color: #10B981; font-size: 3em;"></i>
-                                       </div>
-                                       <div style="color: #10B981; font-weight: 800; font-size: 1.4em; margin-bottom: 8px;">Technically Perfect!</div>
-                                       <div style="color: var(--text-muted); font-size: 1em; line-height: 1.5;">Our AI engine found no technical issues. <br>This image is ready for top-tier platforms.</div>
+                    reportHtml += `<div style="text-align: center; padding: 30px 15px; background: rgba(16, 185, 129, 0.05); border-radius: 20px; border: 2px dashed rgba(16, 185, 129, 0.2);">
+                                       <i class="fas fa-check-circle" style="color: #10B981; font-size: 2.5em; margin-bottom: 15px;"></i>
+                                       <div style="color: #10B981; font-weight: 800; font-size: 1.2em; margin-bottom: 5px;">Perfect Quality!</div>
+                                       <div style="color: var(--text-muted); font-size: 0.9em;">No technical issues detected.</div>
                                    </div>`;
                 }
 
+                reportHtml += `</div></div></div>`;
+
                 body.innerHTML = reportHtml;
                 modal.style.display = 'flex';
+
+                // Initialize Heatmap after modal is visible
+                setTimeout(() => {
+                    drawQualityHeatmap(results);
+                }, 100);
+            }
+
+            function drawQualityHeatmap(results) {
+                const canvas = document.getElementById('quality-heatmap-canvas');
+                const img = document.getElementById('quality-heatmap-img');
+                if (!canvas || !img) return;
+
+                const render = () => {
+                    const ctx = canvas.getContext('2d');
+                    canvas.width = img.clientWidth || img.naturalWidth || 500;
+                    canvas.height = img.clientHeight || img.naturalHeight || 350;
+
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+                    const issues = results.issues || [];
+                    issues.forEach(issue => {
+                        const regions = issue.regions || [];
+                        const color = issue.severity === 'high' ? '239, 68, 68' : '245, 158, 11';
+
+                        regions.forEach(reg => {
+                            if (!Array.isArray(reg) || reg.length < 4) return;
+
+                            const x = (reg[0] / 100) * canvas.width;
+                            const y = (reg[1] / 100) * canvas.height;
+                            const w = ((reg[2] - reg[0]) / 100) * canvas.width;
+                            const h = ((reg[3] - reg[1]) / 100) * canvas.height;
+
+                            // Draw a soft glowing rectangle or circle
+                            const gradient = ctx.createRadialGradient(
+                                x + w / 2, y + h / 2, 0,
+                                x + w / 2, y + h / 2, Math.max(Math.abs(w), Math.abs(h)) / 1.5
+                            );
+                            gradient.addColorStop(0, `rgba(${color}, 0.6)`);
+                            gradient.addColorStop(1, `rgba(${color}, 0)`);
+
+                            ctx.fillStyle = gradient;
+                            ctx.beginPath();
+                            ctx.ellipse(x + w / 2, y + h / 2, Math.abs(w) / 1.2, Math.abs(h) / 1.2, 0, 0, Math.PI * 2);
+                            ctx.fill();
+
+                            // Inner stronger indicator
+                            ctx.strokeStyle = `rgba(${color}, 0.8)`;
+                            ctx.lineWidth = 2;
+                            ctx.setLineDash([5, 5]);
+                            ctx.strokeRect(x, y, w, h);
+                        });
+                    });
+                }
+
+                if (img.complete) {
+                    render();
+                } else {
+                    img.onload = render;
+                }
             }
 
             window.fixImageArtifact = async function (cardId, issueType) {
@@ -3509,18 +4180,70 @@ showpage
                     canvas.height = img.naturalHeight;
 
                     // Apply filters for enhancement
-                    if (issueType.includes('Noise')) {
+                    const issueLower = issueType.toLowerCase();
+                    let needsCustomSharpen = false;
+
+                    if (issueLower.includes('saturate') || issueLower.includes('saturation') || issueLower.includes('over-saturated') || issueLower.includes('color')) {
+                        // Correct over-saturation by reducing saturation levels
+                        ctx.filter = 'saturate(0.7) contrast(1.05)';
+                    } else if (issueLower.includes('over-exposure') || issueLower.includes('overexposure') || issueLower.includes('overexposed') || issueLower.includes('blown highlights') || issueLower.includes('too bright')) {
+                        // Correct over-exposure: reduce brightness, balance contrast and saturation
+                        ctx.filter = 'brightness(0.82) contrast(1.12) saturate(0.95)';
+                    } else if (issueLower.includes('under-exposure') || issueLower.includes('underexposure') || issueLower.includes('underexposed') || issueLower.includes('dark')) {
+                        // Correct under-exposure: lift brightness, adjust contrast
+                        ctx.filter = 'brightness(1.25) contrast(1.08) saturate(1.05)';
+                    } else if (issueLower.includes('exposure') || issueLower.includes('light')) {
+                        // Generic exposure adjustment
+                        ctx.filter = 'brightness(0.9) contrast(1.1)';
+                    } else if (issueLower.includes('blur') || issueLower.includes('sharpness') || issueLower.includes('focus')) {
+                        // Apply basic adjustment, then trigger custom sharpening convolution
+                        ctx.filter = 'contrast(1.1) brightness(1.02)';
+                        needsCustomSharpen = true;
+                    } else if (issueLower.includes('noise') || issueLower.includes('grain')) {
                         // Subtle blur followed by contrast boost to reduce grain
-                        ctx.filter = 'blur(0.5px) contrast(1.1) saturate(1.05)';
-                    } else if (issueType.includes('Blur') || issueType.includes('Sharpness')) {
-                        // High pass-like effect via contrast and brightness
-                        ctx.filter = 'contrast(1.2) brightness(1.02) saturate(1.1)';
+                        ctx.filter = 'blur(0.5px) contrast(1.12) saturate(1.05)';
+                    } else if (issueLower.includes('compression') || issueLower.includes('jpeg')) {
+                        // Smooth out blocks slightly
+                        ctx.filter = 'blur(0.4px) contrast(1.1) saturate(1.05)';
+                    } else if (issueLower.includes('banding')) {
+                        // Blend bands slightly
+                        ctx.filter = 'blur(0.3px) saturate(1.15) contrast(1.05)';
+                    } else if (issueLower.includes('aberration') || issueLower.includes('fringe')) {
+                        // Desaturate slightly to reduce color fringing impact
+                        ctx.filter = 'saturate(0.9) contrast(1.1)';
                     } else {
-                        // General enhancement
+                        // General enhancement for AI artifacts, watermarks, etc.
                         ctx.filter = 'contrast(1.1) saturate(1.1)';
                     }
 
                     ctx.drawImage(img, 0, 0);
+
+                    // Perform high-speed custom 3x3 Laplacian sharpening for blur issues
+                    if (needsCustomSharpen) {
+                        try {
+                            const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                            const d = imgData.data;
+                            const comp = new Uint8ClampedArray(d);
+                            const strength = 0.65; // Adjust sharpening effect strength (0.0 to 1.0)
+                            const w = canvas.width;
+
+                            for (let i = w * 4; i < d.length - w * 4; i += 4) {
+                                // Skip edge pixels to avoid out-of-bounds errors
+                                if (i % (w * 4) === 0 || (i + 4) % (w * 4) === 0) continue;
+
+                                const r = comp[i] * 5 - (comp[i - 4] + comp[i + 4] + comp[i - w * 4] + comp[i + w * 4]);
+                                const g = comp[i + 1] * 5 - (comp[i - 3] + comp[i + 5] + comp[i + 1 - w * 4] + comp[i + 1 + w * 4]);
+                                const b = comp[i + 2] * 5 - (comp[i - 2] + comp[i + 6] + comp[i + 2 - w * 4] + comp[i + 2 + w * 4]);
+
+                                d[i] = comp[i] + (r - comp[i]) * strength;
+                                d[i + 1] = comp[i + 1] + (g - comp[i + 1]) * strength;
+                                d[i + 2] = comp[i + 2] + (b - comp[i + 2]) * strength;
+                            }
+                            ctx.putImageData(imgData, 0, 0);
+                        } catch (e) {
+                            console.error("Custom sharpening convolution failed:", e);
+                        }
+                    }
 
                     const fixedDataUrl = canvas.toDataURL('image/jpeg', 0.95);
                     img.src = fixedDataUrl;
@@ -3551,7 +4274,7 @@ showpage
                 } finally {
                     img.classList.remove('image-card-fixing');
                 }
-            }
+            };
 
             // --- ADD MORE BUTTON LOGIC ---
             const addMoreFilesBtn = document.getElementById('addMoreFilesButton');
@@ -3575,6 +4298,8 @@ showpage
                     uploadedFilesData = [];
                     previewContainer.innerHTML = '';
                     updateAllButtonStates();
+
+                    if (typeof window.SessionDB !== 'undefined') window.SessionDB.clearSession();
 
                     // Show upload section again on Clear All
                     const uploadSection = document.querySelector('.file-upload-section');
@@ -4269,9 +4994,7 @@ showpage
                         Notification.requestPermission();
                     }
 
-                    // Define selectedProvider (default to 'gemini' since UI element is gone)
                     const selectedProvider = document.getElementById('aiProviderSelect')?.value || 'groq';
-
                     const user = auth.currentUser;
 
                     // Filter files to process
@@ -4285,7 +5008,7 @@ showpage
                         return;
                     }
 
-                    // Check plan and usage in parallel to save time
+                    // Check plan and usage
                     let usage = { count: 0, limit: 10 };
                     let isProPremium = false;
 
@@ -4298,24 +5021,34 @@ showpage
 
                             const profileData = profileDoc.exists ? profileDoc.data() : null;
                             const dbPlan = (profileData?.plan || '').toLowerCase();
-                            isProPremium = (dbPlan === 'pro' || dbPlan === 'premium');
+                            isProPremium = (dbPlan === 'pro' || dbPlan === 'premium' || dbPlan === 'agency');
                             usage = usageData;
                         } catch (e) {
                             console.warn('Initial data check failed', e);
                         }
+                    } else {
+                        try {
+                            usage = await getMetadataUsage("unknown");
+                        } catch (e) {
+                            console.warn('Anonymous usage check failed', e);
+                        }
                     }
 
                     // 🛑 LIMIT CHECK
-                    if (user && usage.count + filesToProcess.length > usage.limit) {
+                    if (usage.count + filesToProcess.length > usage.limit) {
                         const remaining = usage.limit - usage.count;
-                        if (remaining <= 0) {
-                            if (usage.limit === 10) {
-                                showLimitModal("You have reached your daily limit <strong>(10 images for Free Plan fairness)</strong>. <strong>Upgrade to the Pro plan</strong> to process more images.");
+                        if (!user) {
+                            if (remaining <= 0) {
+                                showLimitModal(`Your lifetime login-free free trial has expired (3/3 images processed). Please sign in to continue & get 10 more free credits!`);
                             } else {
-                                showLimitModal(`Your daily limit <strong>(${usage.limit} images)</strong> has been reached. Please try again tomorrow or upgrade.`);
+                                showLimitModal(`You have only <strong>${remaining}</strong> login-free trial image(s) left for this device. You selected <strong>${filesToProcess.length}</strong> images. Please reduce the number or sign in to get 10 more free credits.`);
                             }
                         } else {
-                            showLimitModal(`You have only <strong>${remaining}</strong> images left against your limit for today (current usage: ${usage.count}/${usage.limit}).<br><br>You have selected <strong>${filesToProcess.length}</strong> images. Please reduce the number of images to process or upgrade to a Pro plan.`);
+                            if (remaining <= 0) {
+                                showLimitModal(`Your daily limit has been reached. Please try again tomorrow or upgrade.`);
+                            } else {
+                                showLimitModal(`You have only <strong>${remaining}</strong> images left for today. You selected <strong>${filesToProcess.length}</strong> images. Please reduce the number or upgrade to Pro.`);
+                            }
                         }
                         processAllButton.disabled = false;
                         processAllButton.innerHTML = '<i class="icon-process"></i> ' + (typeof getTrans === 'function' ? getTrans('process_selected') : 'Process Selected');
@@ -4324,13 +5057,11 @@ showpage
                     }
 
                     // Reset pause state and show button
-
-                    // Reset pause state and show button
                     window.isPaused = false;
                     const pauseBtn = document.getElementById('pauseProcessButton');
                     if (pauseBtn) {
                         pauseBtn.style.display = 'inline-flex';
-                        pauseBtn.innerHTML = '<i class="fas fa-pause"></i> ' + getTrans('pause');
+                        pauseBtn.innerHTML = '<i class="fas fa-pause"></i> ' + (typeof getTrans === 'function' ? getTrans('pause') : 'Pause');
                         pauseBtn.classList.remove('green-button');
                         pauseBtn.classList.add('orange-button');
                     }
@@ -4340,133 +5071,125 @@ showpage
                     let completedCount = 0;
                     let errorCount = 0;
 
-                    // 🟠 Show batch progress bar
-                    showBatchProgress('generate');
+                    // 🚀 SUPER FAST CONCURRENCY LOGIC (Dynamic Speed)
+                    // Mistral স্লো তাই একসাথে ১টি, বাকিগুলোর ক্ষেত্রে Pro হলে ৪টি, Free হলে ২টি
+                    let concurrencyLimit = 2; // Default for Free
+                    if (isProPremium) {
+                        concurrencyLimit = (selectedProvider === 'mistral') ? 1 : 4;
+                    } else {
+                        concurrencyLimit = (selectedProvider === 'mistral') ? 1 : 2;
+                    }
 
-                    for (const fileData of filesToProcess) {
-                        try {
-                            const latestUsage = await getMetadataUsage(authUser?.email || "unknown");
-                            if (latestUsage.count >= latestUsage.limit) {
-                                alert(`Daily limit reached during processing! Successfully processed: ${completedCount}`);
-                                console.log("Stopping batch as limit exceeded.");
-                                break; // লুপটি পুরোপুরি বন্ধ করে দিবে
-                            }
-                        } catch (usageErr) {
-                            console.warn("Usage check failed, continuing carefully...", usageErr);
-                        }
-                        // Check for pause
+                    // Chunking / Batching Array
+                    for (let i = 0; i < filesToProcess.length; i += concurrencyLimit) {
+                        // Pause Check
                         while (window.isPaused) {
                             await new Promise(r => setTimeout(r, 200));
                         }
 
-                        processedCount++;
+                        // Create a chunk of files
+                        const chunk = filesToProcess.slice(i, i + concurrencyLimit);
 
-                        updateProcessButtonText(processedCount, totalFiles, completedCount, errorCount);
-                        updateBatchProgress(processedCount, totalFiles, fileData.name, 'generate');
-                        const currentCard = document.getElementById(fileData.id);
-                        if (currentCard) currentCard.style.borderColor = "#F97316";
+                        // Process the chunk concurrently using Promise.all
+                        const chunkPromises = chunk.map(async (fileData) => {
+                            const currentCard = document.getElementById(fileData.id);
+                            if (currentCard) currentCard.style.borderColor = "#F97316";
 
-                        try {
-                            const metadata = await generateMetadata(fileData);
+                            try {
+                                // Live Usage Check
+                                const latestUsage = await getMetadataUsage(authUser?.email || "unknown");
+                                if (latestUsage.count >= latestUsage.limit) {
+                                    throw new Error("Daily limit reached");
+                                }
 
-                            fileData.title = metadata.title;
-                            fileData.keywords = metadata.keywords;
-                            fileData.description = metadata.description || '';
+                                // 🧠 Call AI (Concurrent)
+                                const metadata = await generateMetadata(fileData);
 
-                            const epsBtn = document.getElementById(`btn-eps-${fileData.id}`);
-                            if (epsBtn) epsBtn.disabled = false;
+                                // Save Data
+                                fileData.title = metadata.title;
+                                fileData.keywords = metadata.keywords;
+                                fileData.description = metadata.description || '';
 
-                            // 📊 Usage and logging are already handled inside generateMetadata()
-                            // No need to log here to avoid double-credit issue
+                                const epsBtn = document.getElementById(`btn-eps-${fileData.id}`);
+                                if (epsBtn) epsBtn.disabled = false;
 
-                            // Enable batch translate button when metadata is available
-                            const batchTranslateButton = document.getElementById('batchTranslateButton');
-                            if (batchTranslateButton) {
-                                batchTranslateButton.disabled = false;
+                                completedCount++;
+                                if (currentCard) currentCard.style.borderColor = "#10B981"; // Success Green
+
+                            } catch (error) {
+                                console.error("Error processing file:", fileData.name, error);
+                                fileData.title = "Error";
+                                errorCount++;
+                                if (currentCard) {
+                                    currentCard.style.borderColor = "#EF4444";
+                                    const metaTitle = currentCard.querySelector('.meta-title');
+                                    if (metaTitle) metaTitle.textContent = "Failed: " + error.message;
+                                }
+                            } finally {
+                                processedCount++;
+                                // Update UI per file completion
+                                const overallCompleted = uploadedFilesData.filter(f => f.title && f.title !== "Error" && f.title !== "").length;
+                                const overallErrors = uploadedFilesData.filter(f => f.title === "Error").length;
+                                updateProcessButtonText(processedCount, totalFiles, overallCompleted, overallErrors);
+                                updateBatchProgress(processedCount, totalFiles, fileData.name, 'generate');
                             }
+                        });
 
-                            completedCount++;
+                        // Wait for all 2-4 images in this chunk to finish
+                        await Promise.all(chunkPromises);
 
-                            if (currentCard) currentCard.style.borderColor = "#10B981"; // Green border
-
-                        } catch (error) {
-                            console.error("Error processing file:", fileData.name, error);
-
-                            // *** CRITICAL FIX ***
-                            fileData.title = "Error";
-
-                            const metaTitle = currentCard.querySelector('.meta-title');
-                            if (metaTitle) metaTitle.textContent = "Failed: " + error.message;
-
-                            errorCount++;
-
-                            if (currentCard) {
-                                currentCard.style.borderColor = "#EF4444";
-                                const metaTitle = currentCard.querySelector('.meta-title');
-                                if (metaTitle) metaTitle.textContent = "Failed: " + error.message;
-                            }
-                        }
-
-                        // Delay logic: Pro users get faster processing (shorter delay)
-                        let delayTime = 1500;
-                        if (isProPremium) {
-                            delayTime = 500; // Faster for Pro
-                        } else if (selectedProvider === 'mistral') {
-                            delayTime = 6000;
-                        }
-
-                        const overallCompleted = uploadedFilesData.filter(f => f.title && f.title !== "Error").length;
-                        const overallErrors = uploadedFilesData.filter(f => f.title === "Error").length;
-                        updateProcessButtonText(processedCount, totalFiles, overallCompleted, overallErrors);
-
+                        // ⏱️ Delay between chunks to avoid 429 API Rate Limit
+                        let delayTime = isProPremium ? 800 : 2500;
+                        if (selectedProvider === 'mistral') delayTime = 4000;
                         await new Promise(resolve => setTimeout(resolve, delayTime));
                     }
 
-                    const finalCompleted = uploadedFilesData.filter(f => f.title && f.title !== "Error").length;
+                    // 🏁 Finish Process
+                    const finalCompleted = uploadedFilesData.filter(f => f.title && f.title !== "Error" && f.title !== "").length;
                     const finalErrors = uploadedFilesData.filter(f => f.title === "Error").length;
+
+                    // 🔥 Record daily streak activity
+                    if (finalCompleted > 0 && typeof window.recordStreakActivity === 'function') {
+                        window.recordStreakActivity();
+                    }
+
                     updateProcessButtonText(processedCount, totalFiles, finalCompleted, finalErrors, true);
                     hideBatchProgress(finalErrors === 0);
+
                     setTimeout(() => {
                         processAllButton.disabled = false;
-                        const pauseBtn = document.getElementById('pauseProcessButton');
                         if (pauseBtn) pauseBtn.style.display = 'none';
-                    }, 1000)
+                    }, 1000);
 
                     // 🔔 Completion Notification
                     if (Notification.permission === "granted") {
                         new Notification("Metadata Generation Complete! ✅", {
-                            body: `Process finished.\nSuccessful: ${finalCompleted}\nFailed: ${finalErrors}`,
-                            icon: "https://cdn-icons-png.flaticon.com/512/148/148767.png" // Checkmark icon
+                            body: `Successful: ${finalCompleted}\nFailed: ${finalErrors}`,
+                            icon: "https://cdn-icons-png.flaticon.com/512/148/148767.png"
                         });
                     } else {
-                        alert(`Metadata Generation Complete!\nSuccessful: ${finalCompleted}\nFailed: ${finalErrors}`);
+                        setTimeout(() => {
+                            alert(`Batch Generation Complete!\nSuccess: ${finalCompleted}\nFailed: ${finalErrors}`);
+                        }, 500);
                     }
 
-                    // --- NEW: Trigger Feedback Modal ---
-                    // Show modal only if some files were successfully processed AND user hasn't submitted feedback before
+                    // Trigger Feedback Modal
                     if (finalCompleted > 0 && !localStorage.getItem('feedbackSubmitted')) {
                         setTimeout(() => {
                             const feedbackModal = document.getElementById('feedbackModal');
-                            if (feedbackModal) {
-                                feedbackModal.style.display = 'flex';
-                            }
-                        }, 2000); // Small delay to let the user see the "Complete" state/alert first
+                            if (feedbackModal) feedbackModal.style.display = 'flex';
+                        }, 2500);
                     }
                 }
+
+
                 processAllButton.onclick = async function () {
                     if (this.disabled) return;
 
                     try {
-                        const user = auth.currentUser;
-
-                        if (user) {
-                            await processSelectedFiles();
-                        } else {
-                            window.pendingProcessAll = true;
-                            document.getElementById('loginModal').classList.remove('hidden');
-                        }
+                        await processSelectedFiles();
                     } catch (err) {
-                        console.error('Auth check failed:', err);
+                        console.error('Processing failed:', err);
                     }
                 };
             }
@@ -4488,7 +5211,7 @@ showpage
                             const profileDoc2 = await db.collection('users').doc(planUser2.email).get();
                             const profileData2 = profileDoc2.exists ? profileDoc2.data() : null;
                             const dbPlan2 = (profileData2?.plan || '').toLowerCase();
-                            isProPremium2 = (dbPlan2 === 'pro' || dbPlan2 === 'premium');
+                            isProPremium2 = (dbPlan2 === 'pro' || dbPlan2 === 'premium' || dbPlan2 === 'agency');
                         } catch (e) { console.warn('Plan check failed', e); }
                     }
 
@@ -4815,44 +5538,213 @@ showpage
                 return new Promise((resolve, reject) => {
                     const reader = new FileReader();
                     reader.onload = (e) => {
-                        try {
-                            const originalBytes = new Uint8Array(e.target.result);
-                            const iendOffset = findIendChunkOffset(originalBytes);
-                            if (iendOffset === -1) {
-                                throw new Error("Could not find IEND chunk. The PNG file might be corrupt.");
+                        const arrayBuffer = e.target.result;
+                        const metadata = getMetadataForExport(fileData);
+
+                        const workerCode = `
+                            // Helper to sanitize string to ASCII
+                            function toAscii(str) {
+                                return (str || "").replace(/[^\\x00-\\x7F]/g, "");
                             }
-                            const contentBeforeIEND = originalBytes.subarray(0, iendOffset);
-                            const iendChunk = originalBytes.subarray(iendOffset);
-                            // Use translated metadata if available
-                            const metadata = getMetadataForExport(fileData);
-                            const chunksToEmbed = [
-                                createTextChunk("Title", metadata.title || ""),
-                                createTextChunk("Description", metadata.description || ""),
-                                createTextChunk("Keywords", metadata.keywords || ""),
-                                createTextChunk("Author", "MetaGen Pro"),
-                                createTextChunk("Software", "MetaGen Pro v5"),
-                                createTextChunk("Subject", metadata.title || ""),
-                                createTextChunk("Comment", metadata.description || ""),
-                                createTextChunk("Copyright", "MetaGen Pro"),
-                                createTextChunk("Creation Time", new Date().toISOString())
-                            ];
-                            const xmpChunk = createXmpChunk(metadata.title || "", metadata.description || "", metadata.keywords || "");
-                            const newPngBytes = concatArrays([contentBeforeIEND, ...chunksToEmbed, xmpChunk, iendChunk]);
-                            const blob = new Blob([newPngBytes], { type: 'image/png' });
-                            const url = URL.createObjectURL(blob);
-                            const link = document.createElement("a");
-                            link.href = url;
-                            link.download = fileData.name.replace(/(\.png)$/i, '_meta$1');
-                            document.body.appendChild(link);
-                            link.click();
-                            document.body.removeChild(link);
-                            URL.revokeObjectURL(url);
-                            resolve();
-                        } catch (error) {
-                            console.error("A critical error occurred during PNG embedding:", error);
-                            alert(`Could not process ${fileData.name}. The file might be corrupt. Check the console for details.`);
-                            reject(error);
-                        }
+
+                            function concatArrays(arrays) {
+                                let totalLength = 0;
+                                for (const arr of arrays) {
+                                    totalLength += arr.length;
+                                }
+                                const result = new Uint8Array(totalLength);
+                                let offset = 0;
+                                for (const arr of arrays) {
+                                    result.set(arr, offset);
+                                    offset += arr.length;
+                                }
+                                return result;
+                            }
+
+                            function pngCrc32(data) {
+                                const table = new Uint32Array(256);
+                                for (let i = 0; i < 256; i++) {
+                                    let c = i;
+                                    for (let k = 0; k < 8; k++) {
+                                        c = ((c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1));
+                                    }
+                                    table[i] = c;
+                                }
+                                let crc = -1;
+                                for (let i = 0; i < data.length; i++) {
+                                    crc = (crc >>> 8) ^ table[(crc ^ data[i]) & 0xFF];
+                                }
+                                return (crc ^ -1) >>> 0;
+                            }
+
+                            function createTextChunk(keyword, text) {
+                                const keywordBytes = new TextEncoder().encode(keyword);
+                                const safeText = toAscii(text);
+                                const textBytes = new TextEncoder().encode(safeText);
+                                const chunkType = new Uint8Array([116, 69, 88, 116]); // "tEXt"
+
+                                const data = new Uint8Array(keywordBytes.length + 1 + textBytes.length);
+                                data.set(keywordBytes, 0);
+                                data.set([0], keywordBytes.length);
+                                data.set(textBytes, keywordBytes.length + 1);
+
+                                const lengthBytes = new Uint8Array(4);
+                                new DataView(lengthBytes.buffer).setUint32(0, data.length, false);
+
+                                const typeAndData = concatArrays([chunkType, data]);
+                                const crc = pngCrc32(typeAndData);
+                                const crcBytes = new Uint8Array(4);
+                                new DataView(crcBytes.buffer).setUint32(0, crc, false);
+
+                                return concatArrays([lengthBytes, typeAndData, crcBytes]);
+                            }
+
+                            function findIendChunkOffset(uint8Array) {
+                                let offset = 8;
+                                const dataView = new DataView(uint8Array.buffer);
+
+                                while (offset < uint8Array.length) {
+                                    if (offset + 8 > uint8Array.length) {
+                                        return -1;
+                                    }
+
+                                    const chunkLength = dataView.getUint32(offset, false);
+
+                                    if (chunkLength > uint8Array.length) {
+                                        return -1;
+                                    }
+
+                                    const chunkTypeBytes = uint8Array.subarray(offset + 4, offset + 8);
+                                    const chunkType = new TextDecoder().decode(chunkTypeBytes);
+
+                                    if (chunkType === 'IEND') {
+                                        return offset;
+                                    }
+
+                                    const nextOffset = offset + 12 + chunkLength;
+
+                                    if (nextOffset > uint8Array.length) {
+                                        return -1;
+                                    }
+
+                                    offset = nextOffset;
+                                }
+                                return -1;
+                            }
+
+                            function createXmpChunk(title, description, keywords) {
+                                const xmpString = \`<?xml version="1.0" encoding="UTF-8"?>
+<x:xmpmeta xmlns:x="adobe:ns:meta/">
+  <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+    <rdf:Description rdf:about=""
+      xmlns:dc="http://purl.org/dc/elements/1.1/"
+      xmlns:xmp="http://ns.adobe.com/xap/1.0/"
+      xmlns:photoshop="http://ns.adobe.com/photoshop/1.0/">
+      <dc:title>\${title || ""}</dc:title>
+      <dc:description>\${description || ""}</dc:description>
+      <dc:subject>
+        \${keywords.split(',').map(k => k.trim()).filter(Boolean).map(k => \`<rdf:li>\${k}</rdf:li>\`).join('\\n        ')}
+      </dc:subject>
+      <xmp:Title>\${title || ""}</xmp:Title>
+      <xmp:Description>\${description || ""}</xmp:Description>
+      <photoshop:Headline>\${title || ""}</photoshop:Headline>
+      <photoshop:Description>\${description || ""}</photoshop:Description>
+      <photoshop:Keywords>
+        \${keywords.split(',').map(k => k.trim()).filter(Boolean).map(k => \`<rdf:li>\${k}</rdf:li>\`).join('\\n        ')}
+      </photoshop:Keywords>
+    </rdf:Description>
+  </rdf:RDF>
+</x:xmpmeta>\`;
+
+                                const keyword = "XML:com.adobe.xmp";
+                                const keywordBytes = new TextEncoder().encode(keyword);
+                                const nullSeparator = new Uint8Array([0]);
+                                const compressionFlag = new Uint8Array([0]);
+                                const compressionMethod = new Uint8Array([0]);
+                                const langTag = new Uint8Array([]);
+                                const translatedKeyword = new Uint8Array([]);
+                                const xmpBytes = new TextEncoder().encode(xmpString);
+
+                                const data = concatArrays([
+                                    keywordBytes, nullSeparator, compressionFlag, compressionMethod, nullSeparator, nullSeparator, xmpBytes
+                                ]);
+                                const chunkType = new Uint8Array([105, 84, 88, 116]); // "iTXt"
+                                const lengthBytes = new Uint8Array(4);
+                                new DataView(lengthBytes.buffer).setUint32(0, data.length, false);
+                                const typeAndData = concatArrays([chunkType, data]);
+                                const crc = pngCrc32(typeAndData);
+                                const crcBytes = new Uint8Array(4);
+                                new DataView(crcBytes.buffer).setUint32(0, crc, false);
+                                return concatArrays([lengthBytes, typeAndData, crcBytes]);
+                            }
+
+                            self.onmessage = function(e) {
+                                try {
+                                    const { arrayBuffer, metadata } = e.data;
+                                    const originalBytes = new Uint8Array(arrayBuffer);
+                                    const iendOffset = findIendChunkOffset(originalBytes);
+                                    if (iendOffset === -1) {
+                                        throw new Error("Could not find IEND chunk. The PNG file might be corrupt.");
+                                    }
+                                    const contentBeforeIEND = originalBytes.subarray(0, iendOffset);
+                                    const iendChunk = originalBytes.subarray(iendOffset);
+                                    
+                                    const chunksToEmbed = [
+                                        createTextChunk("Title", metadata.title || ""),
+                                        createTextChunk("Description", metadata.description || ""),
+                                        createTextChunk("Keywords", metadata.keywords || ""),
+                                        createTextChunk("Author", "MetaGen Pro"),
+                                        createTextChunk("Software", "MetaGen Pro v5"),
+                                        createTextChunk("Subject", metadata.title || ""),
+                                        createTextChunk("Comment", metadata.description || ""),
+                                        createTextChunk("Copyright", "MetaGen Pro"),
+                                        createTextChunk("Creation Time", new Date().toISOString())
+                                    ];
+                                    const xmpChunk = createXmpChunk(metadata.title || "", metadata.description || "", metadata.keywords || "");
+                                    const newPngBytes = concatArrays([contentBeforeIEND, ...chunksToEmbed, xmpChunk, iendChunk]);
+                                    
+                                    self.postMessage({ success: true, resultBuffer: newPngBytes.buffer }, [newPngBytes.buffer]);
+                                } catch (error) {
+                                    self.postMessage({ success: false, error: error.message });
+                                }
+                            };
+                        `;
+
+                        const workerBlob = new Blob([workerCode], { type: 'application/javascript' });
+                        const workerUrl = URL.createObjectURL(workerBlob);
+                        const worker = new Worker(workerUrl);
+
+                        worker.onmessage = (e) => {
+                            if (e.data.success) {
+                                const blob = new Blob([e.data.resultBuffer], { type: 'image/png' });
+                                const url = URL.createObjectURL(blob);
+                                const link = document.createElement("a");
+                                link.href = url;
+                                link.download = fileData.name.replace(/(\.png)$/i, '_meta$1');
+                                document.body.appendChild(link);
+                                link.click();
+                                document.body.removeChild(link);
+                                URL.revokeObjectURL(url);
+                                worker.terminate();
+                                URL.revokeObjectURL(workerUrl);
+                                resolve();
+                            } else {
+                                console.error("A critical error occurred during PNG embedding:", e.data.error);
+                                alert(`Could not process ${fileData.name}. The file might be corrupt. Check the console for details.`);
+                                worker.terminate();
+                                URL.revokeObjectURL(workerUrl);
+                                reject(new Error(e.data.error));
+                            }
+                        };
+
+                        worker.onerror = (err) => {
+                            console.error("Worker error:", err);
+                            worker.terminate();
+                            URL.revokeObjectURL(workerUrl);
+                            reject(err);
+                        };
+
+                        worker.postMessage({ arrayBuffer, metadata }, [arrayBuffer]);
                     };
                     reader.onerror = (err) => {
                         console.error("FileReader error:", err);
@@ -5051,6 +5943,37 @@ showpage
                     this.width = 0;
                     this.height = 0;
                     this.boundingBox = [0, 0, 0, 0];
+                    this.extractCSS(this.doc);
+                }
+
+                extractCSS(doc) {
+                    this.cssRules = {};
+                    const styleNodes = doc.getElementsByTagName("style");
+                    for (let i = 0; i < styleNodes.length; i++) {
+                        const cssText = styleNodes[i].textContent;
+                        const blockRegex = /([^{]+)\s*\{\s*([^}]+)\s*\}/g;
+                        let match;
+                        while ((match = blockRegex.exec(cssText)) !== null) {
+                            const selectors = match[1].split(',').map(s => s.trim());
+                            const rulesStr = match[2];
+
+                            const rules = {};
+                            rulesStr.split(';').forEach(rule => {
+                                const parts = rule.split(':');
+                                if (parts.length === 2) {
+                                    rules[parts[0].trim().toLowerCase()] = parts[1].trim();
+                                }
+                            });
+
+                            selectors.forEach(selector => {
+                                if (selector.startsWith('.')) {
+                                    const className = selector.substring(1);
+                                    if (!this.cssRules[className]) this.cssRules[className] = {};
+                                    Object.assign(this.cssRules[className], rules);
+                                }
+                            });
+                        }
+                    }
                 }
 
                 convert() {
@@ -5156,11 +6079,18 @@ showpage
                     // Priority:
                     // 1. Attribute directly on element (e.g. fill="red")
                     // 2. Inline style attribute (e.g. style="fill:red") - parsed into stylesObj
-                    // 3. Inherited? (We wont do full inheritance for MVP, but we can try basic)
+                    // 3. CSS Classes applied to node
                     // 4. Default
 
                     if (node.hasAttribute(prop)) return node.getAttribute(prop);
                     if (stylesObj && stylesObj[prop]) return stylesObj[prop];
+
+                    const classNames = (node.getAttribute("class") || "").split(/\s+/);
+                    for (const cls of classNames) {
+                        if (this.cssRules && this.cssRules[cls] && this.cssRules[cls][prop]) {
+                            return this.cssRules[cls][prop];
+                        }
+                    }
 
                     return null;
                 }
@@ -5601,23 +6531,44 @@ showpage
                 setColor(colorStr) {
                     if (!colorStr) return;
 
+                    const colors = {
+                        'white': '1 1 1',
+                        'black': '0 0 0',
+                        'red': '1 0 0',
+                        'green': '0 1 0',
+                        'blue': '0 0 1',
+                        'yellow': '1 1 0',
+                        'cyan': '0 1 1',
+                        'magenta': '1 0 1',
+                        'gray': '0.5 0.5 0.5',
+                        'grey': '0.5 0.5 0.5',
+                        'orange': '1 0.5 0',
+                        'purple': '0.5 0 0.5'
+                    };
+
+                    const c = colorStr.toLowerCase();
+
                     // Handle Hex
-                    if (colorStr.startsWith('#')) {
-                        let hex = colorStr.substring(1);
-                        if (hex.length === 3) hex = hex.split('').map(c => c + c).join('');
+                    if (c.startsWith('#')) {
+                        let hex = c.substring(1);
+                        if (hex.length === 3) hex = hex.split('').map(char => char + char).join('');
                         const r = parseInt(hex.substring(0, 2), 16) / 255;
                         const g = parseInt(hex.substring(2, 4), 16) / 255;
                         const b = parseInt(hex.substring(4, 6), 16) / 255;
-                        this.psCode.push(`${r.toFixed(3)} ${g.toFixed(3)} ${b.toFixed(3)} rgb`);
+                        if (!isNaN(r)) this.psCode.push(`${r.toFixed(3)} ${g.toFixed(3)} ${b.toFixed(3)} rgb`);
                     }
                     // Handle rgb()
-                    else if (colorStr.startsWith('rgb')) {
-                        const vals = colorStr.match(/\d+/g);
+                    else if (c.startsWith('rgb')) {
+                        const vals = c.match(/\d+/g);
                         if (vals && vals.length >= 3) {
                             this.psCode.push(`${(vals[0] / 255).toFixed(3)} ${(vals[1] / 255).toFixed(3)} ${(vals[2] / 255).toFixed(3)} rgb`);
                         }
                     }
-                    // Named colors could be added here (red, blue, etc.), defaulting to black otherwise
+                    // Handle Named Colors
+                    else if (colors[c]) {
+                        this.psCode.push(`${colors[c]} rgb`);
+                    }
+                    // Default fallback
                     else {
                         this.psCode.push("0 0 0 rgb");
                     }
@@ -5651,19 +6602,31 @@ showpage
                     }
                 }
 
-                const formData = new FormData();
-                formData.append('title', currentTitle);
-                formData.append('description', currentDesc);
-                formData.append('keywords', currentKeywords);
-                formData.append('file', fileData.fileObject);
+                return new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        try {
+                            const svgContent = e.target.result;
+                            const metadata = {
+                                title: currentTitle,
+                                description: currentDesc,
+                                keywords: currentKeywords
+                            };
 
-                const response = await fetch('https://metagen-eps-server.onrender.com/api/convert-svg-to-eps', {
-                    method: 'POST',
-                    body: formData
+                            // Run EpsConverter directly on the main thread
+                            // which automatically utilizes the browser's native DOMParser
+                            const converter = new EpsConverter(svgContent, metadata);
+                            const epsString = converter.convert();
+                            const blob = new Blob([epsString], { type: 'application/postscript' });
+                            resolve(blob);
+                        } catch (error) {
+                            reject(new Error("Local EPS conversion failed: " + error.message));
+                        }
+                    };
+
+                    reader.onerror = () => reject(new Error("File read error"));
+                    reader.readAsText(fileData.fileObject);
                 });
-
-                if (!response.ok) throw new Error("Server conversion failed.");
-                return await response.blob();
             }
 
             // --- Individual EPS Download ---
@@ -5708,6 +6671,7 @@ showpage
 
 
             // --- Batch Download All EPS (ZIP Packaging - Premium Only) ---
+            // Uses In-line Web Worker for non-blocking ZIP generation
             window.downloadAllEps = async function () {
                 const isPremium = window.userUsageData?.plan === 'premium';
                 if (!isPremium) {
@@ -5734,7 +6698,7 @@ showpage
                 }
 
                 try {
-                    const zip = new JSZip();
+                    const zipFilesArray = [];
                     let successCount = 0;
                     let failCount = 0;
 
@@ -5744,12 +6708,11 @@ showpage
                         }
                         try {
                             const blob = await getEpsBlobForFile(svgFiles[i]);
-                            const epsFilename = svgFiles[i].name.replace(/(\.svg)$/i, '_meta.eps');
-                            zip.file(epsFilename, blob);
+                            const filename = svgFiles[i].name.replace('.svg', '.eps');
+                            // Convert blob to ArrayBuffer for transferring to worker
+                            const arrayBuffer = await blob.arrayBuffer();
+                            zipFilesArray.push({ filename, data: arrayBuffer });
                             successCount++;
-
-                            // Small throttle delay between server requests
-                            if (i < svgFiles.length - 1) await new Promise(r => setTimeout(r, 500));
                         } catch (err) {
                             console.error(`EPS conversion failed for ${svgFiles[i].name}:`, err);
                             failCount++;
@@ -5758,16 +6721,69 @@ showpage
 
                     if (successCount > 0) {
                         if (batchBtn) batchBtn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> Packaging ZIP...`;
-                        const zipBlob = await zip.generateAsync({ type: "blob" });
-                        const url = URL.createObjectURL(zipBlob);
-                        const link = document.createElement("a");
-                        link.href = url;
-                        link.download = `MetaGen_EPS_Batch_${new Date().getTime()}.zip`;
-                        document.body.appendChild(link);
-                        link.click();
-                        document.body.removeChild(link);
-                        URL.revokeObjectURL(url);
+
+                        // In-line Web Worker for ZIP generation
+                        const zipWorkerCode = `
+                            importScripts('https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js');
+                            self.onmessage = async function(e) {
+                                try {
+                                    const files = e.data.files;
+                                    const zip = new JSZip();
+                                    for (const file of files) {
+                                        zip.file(file.filename, file.data);
+                                    }
+                                    const content = await zip.generateAsync(
+                                        { type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 6 } },
+                                        function(meta) {
+                                            self.postMessage({ type: 'progress', percent: meta.percent });
+                                        }
+                                    );
+                                    self.postMessage({ type: 'success', blob: content });
+                                } catch (err) {
+                                    self.postMessage({ type: 'error', error: err.message });
+                                }
+                            };
+                        `;
+                        const zipWorkerBlob = new Blob([zipWorkerCode], { type: 'application/javascript' });
+                        const zipWorkerUrl = URL.createObjectURL(zipWorkerBlob);
+
+                        await new Promise((resolve, reject) => {
+                            const worker = new Worker(zipWorkerUrl);
+                            worker.onmessage = (e) => {
+                                const { type, percent, blob, error } = e.data;
+                                if (type === 'progress') {
+                                    if (batchBtn) batchBtn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> Packaging ZIP... ${Math.round(percent)}%`;
+                                } else if (type === 'success') {
+                                    const url = URL.createObjectURL(blob);
+                                    const link = document.createElement("a");
+                                    link.href = url;
+                                    link.download = `MetaGen_EPS_Batch_${new Date().getTime()}.zip`;
+                                    document.body.appendChild(link);
+                                    link.click();
+                                    document.body.removeChild(link);
+                                    URL.revokeObjectURL(url);
+                                    worker.terminate();
+                                    URL.revokeObjectURL(zipWorkerUrl);
+                                    resolve();
+                                } else if (type === 'error') {
+                                    worker.terminate();
+                                    URL.revokeObjectURL(zipWorkerUrl);
+                                    reject(new Error(error));
+                                }
+                            };
+
+                            worker.onerror = (err) => {
+                                worker.terminate();
+                                URL.revokeObjectURL(zipWorkerUrl);
+                                reject(err);
+                            };
+
+                            // Transfer ArrayBuffers for zero-copy performance
+                            const transferables = zipFilesArray.map(f => f.data);
+                            worker.postMessage({ action: 'generateZip', files: zipFilesArray }, transferables);
+                        });
                     }
+
 
                     if (failCount > 0) {
                         alert(`Batch Complete: ${successCount} succeeded, ${failCount} failed.`);
@@ -5976,20 +6992,22 @@ showpage
                 return map[catName] || "8";
             };
 
-            window.exportAllCsv = function () {
+            window.exportAllCsv = function (targetPlatform) {
                 const successfulFiles = uploadedFilesData.filter(f => f.title && f.title !== "Error");
                 if (successfulFiles.length === 0) {
                     alert("No successful metadata to export.");
                     return;
                 }
 
-                // Try to get active platform, default to generic if not found (though logic usually relies on active class)
-                const activePlatformBtn = document.querySelector('.platform-button.active');
-                const activePlatform = activePlatformBtn ? activePlatformBtn.dataset.platform : '';
+                let platformToUse = targetPlatform;
+                if (!platformToUse) {
+                    const activePlatformBtn = document.querySelector('.platform-button.active');
+                    platformToUse = activePlatformBtn ? activePlatformBtn.dataset.platform : '';
+                }
 
                 let csvContent = '';
-                let isShutterstock = (activePlatform === 'shutterstock');
-                let isAdobe = (activePlatform === 'adobe');
+                let isShutterstock = (platformToUse === 'shutterstock');
+                let isAdobe = (platformToUse === 'adobe');
 
                 if (isShutterstock) {
                     csvContent += "Filename,Description,Keywords,Categories,Releases\n";
@@ -6042,10 +7060,11 @@ showpage
                     });
                 }
 
+                const fileName = platformToUse ? `${platformToUse}_metadata.csv` : "metadata_export.csv";
                 const encodedUri = "data:text/csv;charset=utf-8," + encodeURIComponent(csvContent);
                 const link = document.createElement("a");
                 link.setAttribute("href", encodedUri);
-                link.setAttribute("download", "metadata_export.csv");
+                link.setAttribute("download", fileName);
                 document.body.appendChild(link);
                 link.click();
                 document.body.removeChild(link);
@@ -6265,7 +7284,7 @@ showpage
                     if (window.userUsageData) window.userUsageData.plan = currentPlan;
                 }
 
-                if (currentPlan !== 'premium') {
+                if (currentPlan !== 'premium' && currentPlan !== 'agency') {
                     openUpgradeModal('premium');
                     return;
                 }
@@ -6307,26 +7326,27 @@ showpage
                 alert(testInfo);
             }
 
-            async function svgFileToPngDataUrl(svgFile, width = 512, height = 512) {
+            window.svgFileToPngDataUrl = async function (svgFile, width = 512, height = 512) {
                 return new Promise((resolve, reject) => {
-                    const reader = new FileReader();
-                    reader.onload = function (e) {
-                        const img = new Image();
-                        img.onload = function () {
-                            const canvas = document.createElement('canvas');
-                            canvas.width = width; canvas.height = height;
-                            const ctx = canvas.getContext('2d');
-                            ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, width, height);
-                            ctx.drawImage(img, 0, 0, width, height);
-                            resolve(canvas.toDataURL('image/png'));
-                        };
-                        img.onerror = reject;
-                        img.src = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(e.target.result)));
+                    const url = URL.createObjectURL(svgFile);
+                    const img = new Image();
+                    img.onload = function () {
+                        const canvas = document.createElement('canvas');
+                        canvas.width = width; canvas.height = height;
+                        const ctx = canvas.getContext('2d');
+                        ctx.fillStyle = "#fff";
+                        ctx.fillRect(0, 0, width, height);
+                        ctx.drawImage(img, 0, 0, width, height);
+                        URL.revokeObjectURL(url);
+                        resolve(canvas.toDataURL('image/png'));
                     };
-                    reader.onerror = reject;
-                    reader.readAsText(svgFile);
+                    img.onerror = (e) => {
+                        URL.revokeObjectURL(url);
+                        reject(e);
+                    };
+                    img.src = url;
                 });
-            }
+            };
 
             function updateAllButtonStates() {
                 updateProcessButtonText();
@@ -6427,6 +7447,91 @@ showpage
                 vecteezy: ["exclusive", "vecteezy"],
             };
 
+            // JS - Spam Shield Detection Logic (Pro Feature)
+            function checkSpamDuplicates(currentFileData, cardElement, isPaidPlan) {
+                if (!currentFileData.title || !currentFileData.keywords) return;
+
+                // Exclude current file from check
+                const otherProcessed = uploadedFilesData.filter(f => f.id !== currentFileData.id && f.title && f.keywords && f.title !== 'Error' && f.title !== '');
+                if (otherProcessed.length === 0) return;
+
+                let maxTitleSimilarity = 0;
+                let maxKeywordOverlap = 0;
+                let titleMatchNames = [];
+                let keywordMatchNames = [];
+
+                // Helper to calculate jaccard similarity for words
+                const getWords = str => str.toLowerCase().replace(/[^\w\s]/g, '').split(/\s+/).filter(w => w.length > 2);
+                const currentTitleWords = new Set(getWords(currentFileData.title));
+                const currentKeywordsArr = currentFileData.keywords.split(',').map(k => k.trim().toLowerCase()).filter(k => k.length > 0);
+                const currentKeywords = new Set(currentKeywordsArr);
+
+                otherProcessed.forEach(other => {
+                    // Check Title
+                    const otherTitleWords = new Set(getWords(other.title));
+                    let titleIntersect = Array.from(currentTitleWords).filter(w => otherTitleWords.has(w)).length;
+                    let titleUnion = new Set([...currentTitleWords, ...otherTitleWords]).size;
+                    let titleSim = titleUnion === 0 ? 0 : Math.round((titleIntersect / titleUnion) * 100);
+
+                    if (titleSim > 70) {
+                        maxTitleSimilarity = Math.max(maxTitleSimilarity, titleSim);
+                        titleMatchNames.push(other.name);
+                    }
+
+                    // Check Keywords
+                    const otherKeywords = new Set(other.keywords.split(',').map(k => k.trim().toLowerCase()).filter(k => k.length > 0));
+                    let kwIntersect = Array.from(currentKeywords).filter(w => otherKeywords.has(w)).length;
+                    let kwSim = currentKeywords.size === 0 ? 0 : Math.round((kwIntersect / currentKeywords.size) * 100);
+
+                    if (kwSim > 80) {
+                        maxKeywordOverlap = Math.max(maxKeywordOverlap, kwSim);
+                        keywordMatchNames.push(other.name);
+                    }
+                });
+
+                if (maxTitleSimilarity > 70 || maxKeywordOverlap > 80) {
+                    let riskLevel = 'low';
+                    if (maxKeywordOverlap > 90 || maxTitleSimilarity > 85) riskLevel = 'high';
+                    else if (maxKeywordOverlap > 80 || maxTitleSimilarity > 70) riskLevel = 'medium';
+
+                    // Remove existing spam-shield-warning if any
+                    const existingWarning = cardElement.querySelector('.spam-shield-warning');
+                    if (existingWarning) existingWarning.remove();
+
+                    const warningBanner = document.createElement('div');
+                    warningBanner.className = 'spam-shield-warning';
+
+                    if (!isPaidPlan) {
+                        warningBanner.classList.add('pro-feature-locked');
+                        warningBanner.innerHTML = `<div class="locked-overlay" onclick="typeof showProUpgradeAlert === 'function' ? showProUpgradeAlert() : alert('Please upgrade to Pro')"><div class="lock-icon" title="Pro Feature">🔒</div></div><div class="spam-badge ${riskLevel}">⚠️ Spam Risk Detected</div><div class="spam-details">Upgrade to PRO to view duplicate filenames and analysis details.</div>`;
+                    } else {
+                        let detailsHtml = '';
+                        // unique files only
+                        titleMatchNames = [...new Set(titleMatchNames)];
+                        keywordMatchNames = [...new Set(keywordMatchNames)];
+
+                        if (maxTitleSimilarity > 70) {
+                            detailsHtml += `<div><strong>${typeof getTrans === 'function' ? getTrans('spam_duplicate_title') || 'Duplicate title detected with:' : 'Duplicate title detected with:'}</strong> ${titleMatchNames.slice(0, 2).join(', ')}${titleMatchNames.length > 2 ? ' +' + (titleMatchNames.length - 2) + ' more' : ''} (${maxTitleSimilarity}%)</div>`;
+                        }
+                        if (maxKeywordOverlap > 80) {
+                            detailsHtml += `<div><strong>${typeof getTrans === 'function' ? getTrans('spam_keyword_overlap') || 'Keyword overlap detected:' : 'Keyword overlap detected:'}</strong> ${keywordMatchNames.slice(0, 2).join(', ')}${keywordMatchNames.length > 2 ? ' +' + (keywordMatchNames.length - 2) + ' more' : ''} (${maxKeywordOverlap}%)</div>`;
+                        }
+
+                        const riskText = riskLevel === 'high' ? 'spam_risk_high' : (riskLevel === 'medium' ? 'spam_risk_medium' : 'spam_risk_low');
+
+                        // --- AI FIX BUTTON ---
+                        const fixBtnHtml = `<button class="action-button blue-button" style="margin-top: 10px; padding: 4px 10px; font-size: 0.85em; width: fit-content;" onclick="fixSpamWithAI('${currentFileData.id}')"><i class="fas fa-magic"></i> AI Fix</button>`;
+
+                        warningBanner.innerHTML = `<div class="spam-badge ${riskLevel}">⚠️ ${typeof getTrans === 'function' ? getTrans(riskText) || riskText : riskText}</div><div class="spam-details">${detailsHtml}<div style="margin-top:4px; font-style:italic;">💡 ${typeof getTrans === 'function' ? getTrans('spam_suggestion') || 'Suggestion: Make title/keywords more unique.' : 'Suggestion: Make title/keywords more unique.'}</div>${fixBtnHtml}</div>`;
+                    }
+
+                    const metaCol = cardElement.querySelector('.card-meta-col');
+                    if (metaCol) {
+                        metaCol.insertBefore(warningBanner, metaCol.firstChild);
+                    }
+                }
+            }
+
             // JS - Updated generateMetadata Function supporting Mistral
             async function generateMetadata(fileData) {
                 const card = document.getElementById(fileData.id);
@@ -6462,6 +7567,7 @@ showpage
                 const vectorMode = document.getElementById('toggleVectorMode')?.checked || false;
                 const addWhiteBg = document.getElementById('toggleWhiteBg')?.checked || false;
                 const addTransparentBg = document.getElementById('toggleTransparentBg')?.checked || false;
+                const useTrendingTags = document.getElementById('toggleTrendingTags')?.checked || false;
                 const useProhibitedWordsFilter = document.getElementById('toggleProhibitedWords')?.checked || false;
                 const singleWordKeywords = document.getElementById('toggleSingleWordKeywords')?.checked || false;
                 const useCustomPrompt = document.getElementById('toggleCustomPrompt')?.checked || false;
@@ -6477,11 +7583,11 @@ showpage
                     let descriptionPromptSegment = '';
                     if (!noDescriptionMode) {
                         jsonFields += ', "description"';
-                        descriptionPromptSegment = `\n- Description: Generate a concise description between ${minDesc} and ${maxDesc} words based on the subject.`;
+                        descriptionPromptSegment = `\n- Description: Generate a concise description STRICTLY between ${minDesc} and ${maxDesc} words. Do not exceed this limit.`;
                     }
                     let keywordsPromptSegment = `Generate between ${minKeywords} and ${maxKeywords} SEO-friendly keywords based on the subject: "${customPromptText}". Format the output as a JSON array of objects, where each object has a "keyword" (string) and a "score" (integer 0-100 reflecting stock photo potential/relevance). Example: "keywords": [{"keyword": "sunset", "score": 95}, ...]`;
                     if (singleWordKeywords) {
-                        keywordsPromptSegment = `Only generate single-word, SEO-friendly keywords (no phrases) for the subject: "${customPromptText}". Generate between ${minKeywords} and ${maxKeywords} keywords. Format as a JSON array of objects with "keyword" and "score". Example: "keywords": [{"keyword": "sunset", "score": 95}, ...]`;
+                        keywordsPromptSegment = `Only generate single-word, SEO-friendly keywords (no phrases) for the subject: "${customPromptText}". Generate between ${minKeywords} and ${maxKeywords} keywords. Format as a JSON array of objects with "keyword" and "score".`;
                     }
 
                     // Vector Mode additions
@@ -6490,7 +7596,7 @@ showpage
                         vectorModeInstructions = `\n\nIMPORTANT - VECTOR MODE:\n- This is a vector illustration or logo.\n- Keywords MUST include: "vector illustration", "eps", "svg".\n- Detect and include style keywords like: "flat", "line art", "silhouette", "outline", "minimalist vector".\n- If the image has a plain background, describe it as "isolated on white background".`;
                     }
 
-                    promptText = `Generate metadata for the subject: "${customPromptText}".\nFormat the output strictly as a JSON object with the keys: ${jsonFields}, "style", "mood", "rejection_prediction", "requires_model_release", "requires_property_release".\n- Keywords: ${keywordsPromptSegment}${descriptionPromptSegment}\n- Style: Detect the photographic style (e.g., Cinematic, Minimalist, Vintage).\n- Mood: Detect the mood of the image (e.g., Happy, Melancholic, Energetic).${vectorModeInstructions}\n- Rejection Prediction: Analyze technical quality (focus, lighting, noise, artifacts) for stock photography usage. Estimate the probability of likely rejection based on technical standards (0-100). Return integer in 'rejection_prediction'.\n- requires_model_release: true if the image contains recognizable people/faces, false otherwise.\n- requires_property_release: true if the image contains recognizable private properties, modern architecture, brands, logos, or artworks, false otherwise.`;
+                    promptText = `Generate metadata for the subject: "${customPromptText}".\nFormat the output strictly as a JSON object with the keys: ${jsonFields}, "style", "mood", "rejection_prediction", "requires_model_release", "requires_property_release", "is_ai_generated".\n- Keywords: ${keywordsPromptSegment}${descriptionPromptSegment}\n- Style: Detect the photographic style.\n- Mood: Detect the mood of the image.${vectorModeInstructions}\n- Rejection Prediction: Analyze technical quality. Estimate the probability of likely rejection based on technical standards (0-100).\n- requires_model_release: true if the image contains recognizable people/faces, false otherwise.\n- requires_property_release: true if the image contains recognizable private properties, brands, logos, false otherwise.\n- is_ai_generated: true if AI-generated artwork, false otherwise.`;
                 } else {
                     let titleAddons = [];
                     if (addSilhouette) titleAddons.push("Silhouette");
@@ -6500,35 +7606,70 @@ showpage
                     let descriptionPromptSegment = '';
                     if (!noDescriptionMode) {
                         jsonFields += ', "description"';
-                        descriptionPromptSegment = `\n- Description: Generate a concise description between ${minDesc} and ${maxDesc} words.`;
+                        descriptionPromptSegment = `\n- Description: Generate a detailed description STRICTLY between ${minDesc} and ${maxDesc} words. Do not exceed ${maxDesc} words.`;
                     }
-                    let keywordsPromptSegment = `Generate between ${minKeywords} and ${maxKeywords} SEO-friendly keywords. Format the output as a JSON array of objects, where each object has a "keyword" (string) and a "score" (integer 0-100 reflecting stock photo potential/relevance). Example: "keywords": [{"keyword": "sunset", "score": 95}, ...]`;
+                    let keywordsPromptSegment = `Generate EXACTLY between ${minKeywords} and ${maxKeywords} SEO-friendly keywords. Format the output as a JSON array of objects, where each object has a "keyword" (string) and a "score" (integer 0-100 reflecting stock photo potential).`;
                     if (singleWordKeywords) {
-                        keywordsPromptSegment = `Only generate single-word, SEO-friendly keywords (no phrases). Generate between ${minKeywords} and ${maxKeywords} keywords. Format as a JSON array of objects with "keyword" and "score".`;
+                        keywordsPromptSegment = `Only generate single-word, SEO-friendly keywords (no phrases). Generate EXACTLY between ${minKeywords} and ${maxKeywords} keywords. Format as a JSON array of objects with "keyword" and "score".`;
                     }
 
-                    // Vector Mode additions
                     let vectorModeInstructions = '';
                     if (vectorMode) {
                         vectorModeInstructions = `\n\nIMPORTANT - VECTOR MODE:\n- This is a vector illustration or logo.\n- Keywords MUST include: "vector illustration", "eps", "svg".\n- Detect and include style keywords like: "flat", "line art", "silhouette", "outline", "minimalist vector".\n- If the image has a plain background, describe it as "isolated on white background".`;
                     }
-                    promptText = `Analyze this image and generate metadata.\nFormat the output strictly as a JSON object with the keys: ${jsonFields}, "style", "mood", "rejection_prediction", "shutterstock_category", "requires_model_release", "requires_property_release".\n- Title: Generate an SEO-friendly title between ${minTitle} and ${maxTitle} words. It MUST include the detected Style and Mood of the image. Do not use colons (:).${titleAddonString}\n- Keywords: ${keywordsPromptSegment}${descriptionPromptSegment}\n- Style: Detect the photographic style (e.g., Cinematic, Minimalist, Vintage).\n- Mood: Detect the mood of the image (e.g., Happy, Melancholic, Energetic).${vectorModeInstructions}\n- Rejection Prediction: Analyze technical quality (focus, lighting, noise, artifacts) for stock photography usage. Estimate probability of rejection (0-100) as integer in 'rejection_prediction'.\n- requires_model_release: true if the image contains recognizable people/faces, false otherwise.\n- requires_property_release: true if the image contains recognizable private properties, modern architecture, brands, logos, or artworks, false otherwise.\n- shutterstock_category: Pick the SINGLE most fitting Shutterstock category from this exact list: Abstract, Animals/Wildlife, Arts, Backgrounds/Textures, Beauty/Fashion, Buildings/Landmarks, Business/Finance, Celebrities, Education, Food and Drink, Healthcare/Medical, Holidays, Industrial, Interiors, Miscellaneous, Nature, Objects, Parks/Outdoor, People, Religion, Science, Signs/Symbols, Sports/Recreation, Technology, Transportation, Vintage. Return only the category name as a string.`;
+                    
+                    // --- 🔥 PROMPT FIX FOR CUSTOMIZATION & SEO SCORE ---
+                    promptText = `Analyze this image and generate highly commercial metadata.\nFormat the output strictly as a JSON object with the keys: ${jsonFields}, "style", "mood", "rejection_prediction", "shutterstock_category", "requires_model_release", "requires_property_release", "is_ai_generated".\n- Title: Generate a highly commercial, SEO-optimized stock photo title. You MUST limit the title strictly between ${minTitle} and ${maxTitle} words. Keep it concise (Ideally 40-70 characters) to maximize SEO score. It MUST include the main subject, Action, and the detected Style and Mood. Do not use colons (:).${titleAddonString}\n- Keywords: ${keywordsPromptSegment}${descriptionPromptSegment}\n- Style: Detect the photographic style (e.g., Cinematic, Minimalist, Vintage).\n- Mood: Detect the mood of the image (e.g., Happy, Melancholic, Energetic).${vectorModeInstructions}\n- Rejection Prediction: Analyze technical quality (focus, lighting, noise, artifacts) for stock photography usage. Estimate probability of rejection (0-100) as integer in 'rejection_prediction'.\n- requires_model_release: true if the image contains recognizable people/faces, false otherwise.\n- requires_property_release: true if the image contains recognizable private properties, modern architecture, brands, logos, or artworks, false otherwise.\n- is_ai_generated: true if the image appears to be an AI-generated artwork (e.g., Midjourney, DALL-E) rather than a real photograph, false otherwise.\n- shutterstock_category: Pick the SINGLE most fitting Shutterstock category from this exact list: Abstract, Animals/Wildlife, Arts, Backgrounds/Textures, Beauty/Fashion, Buildings/Landmarks, Business/Finance, Celebrities, Education, Food and Drink, Healthcare/Medical, Holidays, Industrial, Interiors, Miscellaneous, Nature, Objects, Parks/Outdoor, People, Religion, Science, Signs/Symbols, Sports/Recreation, Technology, Transportation, Vintage. Return only the category name as a string.`;
                 }
 
-                // --- NEW: Video-Specific Prompt Enhancement ---
+                // --- PLAN CHECK LOGIC (Firebase) ---
+                const user = auth.currentUser;
+                let dbPlan = "free";
+                let accessToken = "";
+                if (user) {
+                    try {
+                        accessToken = await user.getIdToken();
+                        const profileDoc = await db.collection('users').doc(user.email.toLowerCase()).get();
+                        const profileData = profileDoc.exists ? profileDoc.data() : null;
+                        dbPlan = (profileData?.plan || '').toLowerCase();
+                    } catch (e) { console.warn('Plan check failed:', e); }
+                }
+
+                if (dbPlan !== 'pro' && dbPlan !== 'premium' && dbPlan !== 'agency') dbPlan = 'free';
+                const isPaidPlan = (dbPlan === 'pro' || dbPlan === 'premium' || dbPlan === 'agency');
+                const proxyUrl = "https://metagen-pro-api.metagenp.workers.dev/generate";
+
+                // --- ADVANCED VIDEO & SHORT VIDEO PROMPT ENHANCEMENT ---
                 if (fileData.isVideo) {
                     // Update main prompt context
-                    promptText = promptText.replace(/Analyze this image/g, "Analyze this stock video footage (represented by this frame)");
+                    promptText = promptText.replace(/Analyze this image/g, "Analyze this stock video footage (represented by a keyframe)");
                     promptText = promptText.replace(/this image/g, "this video clip");
 
-                    // Add video-specific instructions
-                    const videoInstructions = `\n\nIMPORTANT - VIDEO MODE:
-- This is a stock video footage clip. 
-- You MUST include video-specific keywords: "footage", "video", "stock footage", "motion".
-- If the scene looks cinematic or high quality, include keywords: "cinematic", "4k", "high definition".
-- The Title should describe the action or scene accurately for a video buyer (e.g., "Drone view of...", "Slow motion of...", "Video clip of...").`;
+                    const isShort = fileData.isVertical || fileData.name.toLowerCase().includes('short') || fileData.name.toLowerCase().includes('reel') || fileData.name.toLowerCase().includes('tiktok');
+                    const orientationTag = isShort ? "VERTICAL (9:16) SHORT VIDEO FORMAT" : "HORIZONTAL (16:9) VIDEO FORMAT";
+
+                    // Add advanced video-specific instructions
+                    const videoInstructions = `\n\nIMPORTANT - ADVANCED VIDEO MODE (${orientationTag}):
+- This is a stock video/footage clip. Analyze the keyframe to determine the action, subject, lighting, and cinematic feel.
+- You MUST include general video keywords: "footage", "video", "stock footage", "motion", "clip", "b-roll".
+${isShort ? '- Since this is a SHORT/VERTICAL video, heavily prioritize keywords for social media algorithms: "shorts", "reels", "tiktok", "vertical", "social media", "mobile format", "trendy".' : '- Include high-quality cinematic keywords if applicable: "cinematic", "4k", "high definition", "widescreen".'}
+- The Title MUST be highly engaging, descriptive, and optimized for video buyers. Describe the motion or action vividly (e.g., "Dynamic slow motion of...", "Aerial drone footage of...", "POV shot of...").
+- Keep the title SEO-friendly for video searches and ensure keywords accurately describe what is happening in the scene.`;
 
                     promptText += videoInstructions;
+                }
+
+                if (useTrendingTags) {
+                    promptText += `\n\nIMPORTANT - TRENDING TAGS: Act as a stock photography data fetcher. Analyze current trending data for this visual category on Shutterstock and Adobe Stock. Prioritize and inject the most downloaded, highest-selling tags related to this asset strongly into the "keywords" array to maximize commercial sales.`;
+                }
+
+                // --- NEW: Advanced Metadata Prompt Enhancement (PRO/PREMIUM ONLY) ---
+                if (isPaidPlan) {
+                    let advancedInstructions = `\n\nIMPORTANT - ADVANCED INSIGHTS:\nAdditionally, provide the following fields in the same JSON object:\n- "commercial_use_cases": Array of 3-5 strings suggesting specific commercial uses (e.g., "website hero banner", "travel brochure").\n- "target_audience": A string describing the ideal market segment or buyer for this image.\n- "color_palette": Analyze dominant colors and provide an array of objects, e.g., [{"hex": "#FF5733", "name": "Vibrant Orange"}]. Max 4 colors.\n- "seo_title_variations": Array of 3 alternative SEO titles (strings) for A/B testing.\n- "long_tail_keywords": Array of 10 long-tail keyword phrases (strings, 3-5 words each).\n- "editorial_caption": A string containing a professional editorial caption suitable for news or publishing.\n- "trending_score": Extract an integer (0-100) reflecting how trendy or in-demand this visual subject is right now.`;
+
+                    // Inject the new fields into the structure checking instruction
+                    promptText = promptText.replace('"requires_property_release", "is_ai_generated"', '"requires_property_release", "is_ai_generated", "commercial_use_cases", "target_audience", "color_palette", "seo_title_variations", "long_tail_keywords", "editorial_caption", "trending_score"');
+                    promptText += advancedInstructions;
                 }
 
 
@@ -6546,7 +7687,7 @@ showpage
                 mimeType = fileToProcess.type;
 
                 if (mimeType === 'image/svg+xml') {
-                    const pngDataUrl = await svgFileToPngDataUrl(fileToProcess, 512, 512);
+                    const pngDataUrl = await window.svgFileToPngDataUrl(fileToProcess, 512, 512);
                     base64Image = pngDataUrl.split(',')[1];
                     mimeType = 'image/png';
                 } else {
@@ -6595,58 +7736,67 @@ showpage
                     });
                 }
 
-                // --- PLAN CHECK LOGIC (Firebase) ---
-                const user = auth.currentUser;
-                let dbPlan = "free";
-                let accessToken = "";
-                if (user) {
-                    try {
-                        accessToken = await user.getIdToken();
-                        const profileDoc = await db.collection('users').doc(user.email.toLowerCase()).get();
-                        const profileData = profileDoc.exists ? profileDoc.data() : null;
-                        dbPlan = (profileData?.plan || '').toLowerCase();
-                    } catch (e) { console.warn('Plan check failed:', e); }
-                }
-
-                if (dbPlan !== 'pro' && dbPlan !== 'premium') dbPlan = 'free';
-                const isPaidPlan = (dbPlan === 'pro' || dbPlan === 'premium');
-                const proxyUrl = "https://metagen-pro-api.metagenp.workers.dev/generate";
-
                 let generatedText = "";
                 let lastError = null;
 
                 try {
-                    // ================= ALL USERS LOGIC =================
-                    const response = await fetch(proxyUrl, {
-                        method: "POST",
-                        headers: {
-                            "Content-Type": "application/json",
-                            "Authorization": `Bearer ${accessToken}`
-                        },
-                        body: JSON.stringify({
-                            action: "generate",
-                            image: base64Image,
-                            mimeType: mimeType,
-                            prompt: promptText,
-                            provider: selectedProvider,
-                            email: user?.email || "unknown",
-                            deviceInfo: navigator.userAgent,
-                            plan: dbPlan
-                        })
-                    });
+                    // Retry configuration with Exponential Backoff
+                    const maxRetries = 3;
+                    let attempt = 0;
+                    let fetchSuccess = false;
+                    let data = null;
+                    let response = null;
 
-                    const data = await response.json();
+                    while (attempt <= maxRetries && !fetchSuccess) {
+                        try {
+                            response = await fetch(proxyUrl, {
+                                method: "POST",
+                                headers: {
+                                    "Content-Type": "application/json",
+                                    "Authorization": `Bearer ${accessToken}`
+                                },
+                                body: JSON.stringify({
+                                    action: "generate",
+                                    image: base64Image,
+                                    mimeType: mimeType,
+                                    prompt: promptText,
+                                    provider: selectedProvider,
+                                    email: user?.email || "unknown",
+                                    deviceInfo: navigator.userAgent,
+                                    plan: dbPlan
+                                })
+                            });
 
-                    if (!response.ok) {
-                        if (response.status === 429) {
-                            showLimitModal(data.error);
-                            throw new Error("Daily limit reached");
+                            data = await response.json();
+
+                            if (!response.ok) {
+                                if (response.status === 429) {
+                                    showLimitModal(data.error);
+                                    throw new Error("Daily limit reached");
+                                }
+                                throw new Error(`API Error: ${data.error || response.statusText}`);
+                            }
+                            fetchSuccess = true;
+                        } catch (err) {
+                            lastError = err;
+                            if (err.message === "Daily limit reached") {
+                                break; // Stop retrying immediately on limit reach
+                            }
+                            attempt++;
+                            if (attempt <= maxRetries) {
+                                const delay = Math.pow(2, attempt) * 1000 + Math.random() * 500;
+                                console.warn(`Generation attempt ${attempt} failed. Retrying in ${Math.round(delay)}ms... Error: ${err.message}`);
+                                await new Promise(r => setTimeout(r, delay));
+                            }
                         }
-                        throw new Error(`API Error: ${data.error || response.statusText}`);
+                    }
+
+                    if (!fetchSuccess) {
+                        throw lastError || new Error("Failed to generate AI response after multiple attempts.");
                     }
 
                     // Update trial UI if applicable
-                    if (data.newCount !== undefined && window.trialUsage) {
+                    if (data && data.newCount !== undefined && window.trialUsage) {
                         window.trialUsage.count = data.newCount;
                         if (typeof updateTrialUI === 'function') updateTrialUI();
                     }
@@ -6687,7 +7837,6 @@ showpage
 
                         metadata = JSON.parse(cleanedJsonString);
 
-
                     } catch (parseError) {
                         console.error('JSON Parse Error:', parseError);
                         console.log('Raw response:', generatedText);
@@ -6702,12 +7851,13 @@ showpage
 
                             // Fix common JSON issues
                             cleanedJsonString = cleanedJsonString
-                                .replace(/[\r\n\t]/g, ' ') // Replace newlines/tabs with spaces
+                                .replace(/[\n\t]/g, ' ') // Replace newlines/tabs with spaces
                                 .replace(/\s+/g, ' ') // Normalize whitespace
                                 .replace(/,\s*}/g, '}') // Remove trailing commas
                                 .replace(/,\s*]/g, ']'); // Remove trailing commas in arrays
 
-                            metadata = JSON.parse(cleanedJsonString);
+                            metadata = JSON.parse(cleanedJsonString)
+
                             console.log('Successfully parsed with fallback method');
 
                         } catch (fallbackError) {
@@ -6725,11 +7875,42 @@ showpage
                         metadata.title = nameWithoutExt;
                     }
 
+                    // --- 🔥 FIX: STRICTLY ENFORCE CUSTOMIZATION SLIDER LIMITS ---
+                    // 1. Force Trim Title if it exceeds user's Max Title Words
+                    if (!isCustomTitle && metadata.title) {
+                        let titleWords = metadata.title.split(/\s+/);
+                        if (titleWords.length > maxTitle) {
+                            metadata.title = titleWords.slice(0, maxTitle).join(' ');
+                            // Remove any trailing commas or hyphens after trim
+                            metadata.title = metadata.title.replace(/[, \-]+$/, '');
+                        }
+                    }
+
+                    // 2. Force Trim Description if it exceeds user's Max Desc Words
+                    if (metadata.description) {
+                        let descWords = metadata.description.split(/\s+/);
+                        if (descWords.length > maxDesc) {
+                            metadata.description = descWords.slice(0, maxDesc).join(' ') + '.';
+                        }
+                    }
+                   
+
                     // Title Addons
                     let finalTitle = metadata.title || "";
                     if (addWhiteBg && !finalTitle.toLowerCase().includes("white background")) finalTitle += " isolated on White Background";
                     if (addTransparentBg && !finalTitle.toLowerCase().includes("transparent background")) finalTitle += " isolated on Transparent Background";
                     metadata.title = finalTitle.replace(/,$/, '').trim();
+
+                    // Ensure Advanced Metadata mappings
+                    if (isPaidPlan) {
+                        fileData.commercial_use_cases = metadata.commercial_use_cases || [];
+                        fileData.target_audience = metadata.target_audience || "";
+                        fileData.color_palette = metadata.color_palette || [];
+                        fileData.seo_title_variations = metadata.seo_title_variations || [];
+                        fileData.long_tail_keywords = metadata.long_tail_keywords || [];
+                        fileData.editorial_caption = metadata.editorial_caption || "";
+                        fileData.trending_score = metadata.trending_score || 0;
+                    }
 
                     // Prohibited Words Filter
                     if (useProhibitedWordsFilter) {
@@ -6787,6 +7968,7 @@ showpage
                         fileData.keywords = "";
                         fileData.keywordScores = {};
                     }
+
                     fileData.description = metadata.description;
                     fileData.style = metadata.style;
                     fileData.mood = metadata.mood;
@@ -6832,6 +8014,69 @@ showpage
                         if (moodSection) moodSection.style.display = 'none';
                     }
 
+                    // --- Render Advanced Insights Panel (PRO/PREMIUM Only) ---
+                    if (isPaidPlan) {
+                        let advancedPanel = card.querySelector('.advanced-insights-panel');
+                        const hasAdvancedData = fileData.trending_score || fileData.commercial_use_cases?.length || fileData.target_audience || fileData.seo_title_variations?.length || fileData.long_tail_keywords?.length || fileData.editorial_caption || fileData.color_palette?.length;
+
+                        if (hasAdvancedData) {
+                            if (!advancedPanel) {
+                                advancedPanel = document.createElement('div');
+                                advancedPanel.className = 'advanced-insights-panel';
+                                advancedPanel.innerHTML = `
+                                    <div class="advanced-insights-header" onclick="const c = this.nextElementSibling; c.style.display = c.style.display === 'none' ? 'flex' : 'none'">
+                                        <span><i class="fas fa-bolt"></i> Advanced Insights (Pro)</span>
+                                        <i class="fas fa-chevron-down"></i>
+                                    </div>
+                                    <div class="advanced-insights-content" style="display: none;"></div>
+                                `;
+                                // Insert at the end of metaCol
+                                metaCol.appendChild(advancedPanel);
+                            }
+
+                            const panelContent = advancedPanel.querySelector('.advanced-insights-content');
+                            let contentHTML = '';
+
+                            if (fileData.trending_score) {
+                                contentHTML += `<div class="insight-item"><div class="insight-label"><span>📈 Trending Score</span></div><div class="insight-value"><div style="background:var(--bg-input); width:100%; height:8px; border-radius:4px; margin-top:5px; overflow:hidden;"><div style="background:linear-gradient(90deg, #8B5CF6, #EC4899); width:${fileData.trending_score}%; height:100%;"></div></div><div style="font-size:0.8em; margin-top:4px; text-align:right;">${fileData.trending_score}/100</div></div></div>`;
+                            }
+
+                            const escapeStr = (str) => (str || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+
+                            if (fileData.commercial_use_cases && fileData.commercial_use_cases.length > 0) {
+                                const val = fileData.commercial_use_cases.join(', ');
+                                contentHTML += `<div class="insight-item"><div class="insight-label"><span>💼 Commercial Use Cases</span> <button class="copy-btn" onclick="navigator.clipboard.writeText('${escapeStr(val)}'); this.innerHTML='<i class=\\'icon-check\\'></i> Copied'"><i class="icon-copy"></i> Copy</button></div><div class="insight-value">${val}</div></div>`;
+                            }
+
+                            if (fileData.target_audience) {
+                                contentHTML += `<div class="insight-item"><div class="insight-label"><span>🎯 Target Audience</span> <button class="copy-btn" onclick="navigator.clipboard.writeText('${escapeStr(fileData.target_audience)}'); this.innerHTML='<i class=\\'icon-check\\'></i> Copied'"><i class="icon-copy"></i> Copy</button></div><div class="insight-value">${fileData.target_audience}</div></div>`;
+                            }
+
+                            if (fileData.seo_title_variations && fileData.seo_title_variations.length > 0) {
+                                const titlesHtml = fileData.seo_title_variations.map(t => `<div style="margin-bottom:4px;">• ${t}</div>`).join('');
+                                const val = fileData.seo_title_variations.join('\\n');
+                                contentHTML += `<div class="insight-item"><div class="insight-label"><span>📝 A/B Title Variations</span> <button class="copy-btn" onclick="navigator.clipboard.writeText('${escapeStr(val)}'); this.innerHTML='<i class=\\'icon-check\\'></i> Copied'"><i class="icon-copy"></i> Copy</button></div><div class="insight-value">${titlesHtml}</div></div>`;
+                            }
+
+                            if (fileData.long_tail_keywords && fileData.long_tail_keywords.length > 0) {
+                                const val = fileData.long_tail_keywords.join(', ');
+                                contentHTML += `<div class="insight-item"><div class="insight-label"><span>🔑 Long-tail Keywords</span> <button class="copy-btn" onclick="navigator.clipboard.writeText('${escapeStr(val)}'); this.innerHTML='<i class=\\'icon-check\\'></i> Copied'"><i class="icon-copy"></i> Copy</button></div><div class="insight-value">${val}</div></div>`;
+                            }
+
+                            if (fileData.editorial_caption) {
+                                contentHTML += `<div class="insight-item"><div class="insight-label"><span>📰 Editorial Caption</span> <button class="copy-btn" onclick="navigator.clipboard.writeText('${escapeStr(fileData.editorial_caption)}'); this.innerHTML='<i class=\\'icon-check\\'></i> Copied'"><i class="icon-copy"></i> Copy</button></div><div class="insight-value">${fileData.editorial_caption}</div></div>`;
+                            }
+
+                            if (fileData.color_palette && fileData.color_palette.length > 0) {
+                                const swatches = fileData.color_palette.map(c => `<span class="color-swatch" style="background:${c.hex || c.color};" title="${c.name || c.hex || c.color}"></span>`).join('');
+                                const colorNames = fileData.color_palette.map(c => c.name || c.hex || c.color).join(', ');
+                                contentHTML += `<div class="insight-item"><div class="insight-label"><span>🎨 Color Palette</span> <button class="copy-btn" onclick="navigator.clipboard.writeText('${escapeStr(colorNames)}'); this.innerHTML='<i class=\\'icon-check\\'></i> Copied'"><i class="icon-copy"></i> Copy</button></div><div class="insight-value"><div class="color-swatch-container">${swatches}</div><div style="font-size:0.85em; margin-top:5px; color:var(--text-muted);">${colorNames}</div></div></div>`;
+                            }
+
+                            panelContent.innerHTML = contentHTML;
+                        }
+                    }
+
                     // Update Rejection Predictor
                     const rejectionMeter = document.getElementById(`rejection-meter-${card.id}`);
                     if (rejectionMeter && metadata.rejection_prediction !== undefined) {
@@ -6872,6 +8117,53 @@ showpage
                         }
                     }
 
+                    // --- Update Platform Approval Chance ---
+                    const approvalChanceContainer = document.getElementById(`approval-chance-container-${card.id}`);
+                    if (approvalChanceContainer && metadata.rejection_prediction !== undefined) {
+                        const rejectionScore = parseInt(metadata.rejection_prediction) || 0;
+                        const approvalBase = 100 - rejectionScore;
+
+                        // প্রতিটি প্ল্যাটফর্মের জন্য তাদের গাইডলাইন অনুযায়ী ডাইনামিক হিসাব
+                        // ১. Adobe Stock (কোয়ালিটি এবং আইপি রেগুলেশনে অত্যন্ত কঠোর)
+                        const adobeChance = Math.max(0, Math.min(100, Math.round(approvalBase * 0.96)));
+
+                        // ২. Shutterstock (টাইটেল এবং মেটাডেটা কি-ওয়ার্ড স্প্যামিংয়ের ওপর ভিত্তি করে)
+                        const totalKeywords = (metadata.keywords || "").split(',').length;
+                        let shutterPenalty = totalKeywords < 20 ? 5 : 0;
+                        const shutterChance = Math.max(0, Math.min(100, Math.round(approvalBase - shutterPenalty)));
+
+                        // ৩. Freepik (নান্দনিক সৌন্দর্য এবং কমার্শিয়াল ডিমান্ডে অত্যন্ত কঠোর)
+                        const freepikChance = Math.max(0, Math.min(100, Math.round(approvalBase * 0.92)));
+
+                        // মোডাল প্রদর্শন
+                        approvalChanceContainer.style.display = 'block';
+
+                        // ফ্রি এবং পেইড ইউজার লক ফিচার কন্ট্রোল
+                        const approvalLock = document.getElementById(`approval-lock-${card.id}`);
+                        if (!isPaidPlan) {
+                            approvalChanceContainer.classList.add('pro-feature-locked');
+                            if (approvalLock) approvalLock.style.display = 'flex';
+                        } else {
+                            approvalChanceContainer.classList.remove('pro-feature-locked');
+                            if (approvalLock) approvalLock.style.display = 'none';
+                        }
+
+                        // ইউআই-তে ডেটা এবং কালার সেট করা
+                        const setChanceUI = (elementId, score) => {
+                            const el = document.getElementById(elementId);
+                            if (el) {
+                                el.textContent = `${score}%`;
+                                if (score >= 80) el.style.color = '#10B981'; // Green
+                                else if (score >= 50) el.style.color = '#F59E0B'; // Yellow
+                                else el.style.color = '#EF4444'; // Red
+                            }
+                        };
+
+                        setChanceUI(`adobe-chance-${card.id}`, adobeChance);
+                        setChanceUI(`shutter-chance-${card.id}`, shutterChance);
+                        setChanceUI(`freepik-chance-${card.id}`, freepikChance);
+                    }
+
                     // Update Release Predictor
                     const releaseReqContainer = document.getElementById(`release-req-${card.id}`);
                     if (releaseReqContainer && (metadata.requires_model_release !== undefined || metadata.requires_property_release !== undefined)) {
@@ -6898,10 +8190,16 @@ showpage
 
                         let needsUpload = false;
 
+                        const isAiGeneratedToggle = document.getElementById('toggleAiGenerated')?.checked || false;
+                        const isAiImage = fileData.isAiGenerated ||
+                            fileData.name.toLowerCase().includes('ai generated') ||
+                            fileData.name.toLowerCase().includes('midjourney') ||
+                            isAiGeneratedToggle ||
+                            metadata.is_ai_generated === true;
+
                         if (metadata.requires_model_release) {
-                            const isAiImage = fileData.isAiGenerated || fileData.name.toLowerCase().includes('ai generated');
                             if (isAiImage) {
-                                reqModel.innerHTML = '<span style="color:#3B82F6; font-weight:bold;">AI 🤖</span>';
+                                reqModel.innerHTML = '<span style="color:#3B82F6; font-weight:bold;">AI 🤖 (No)</span>';
                             } else {
                                 reqModel.innerHTML = '<span style="color:#EF4444; font-weight:bold;">Yes ⚠️</span>';
                                 needsUpload = true;
@@ -6911,9 +8209,8 @@ showpage
                         }
 
                         if (metadata.requires_property_release) {
-                            const isAiImage = fileData.isAiGenerated || fileData.name.toLowerCase().includes('ai generated');
                             if (isAiImage) {
-                                reqProperty.innerHTML = '<span style="color:#3B82F6; font-weight:bold;">AI 🤖</span>';
+                                reqProperty.innerHTML = '<span style="color:#3B82F6; font-weight:bold;">AI 🤖 (No)</span>';
                             } else {
                                 reqProperty.innerHTML = '<span style="color:#EF4444; font-weight:bold;">Yes ⚠️</span>';
                                 needsUpload = true;
@@ -6944,6 +8241,31 @@ showpage
                         metadata.keywords = reorderKeywords(metadata.keywords);
                     }
 
+                    const isAiGeneratedToggle = document.getElementById('toggleAiGenerated')?.checked || false;
+
+                    if (isAiGeneratedToggle) {
+                        let kwArr = metadata.keywords.split(',').map(k => k.trim()).filter(Boolean);
+
+                        kwArr = kwArr.filter(k => k.toLowerCase() !== "ai generated" && k.toLowerCase() !== "generative ai");
+
+                        kwArr.unshift("ai generated", "generative ai");
+
+                        metadata.keywords = kwArr.join(', ');
+
+                        if (!fileData.keywordScores) fileData.keywordScores = {};
+                        fileData.keywordScores["ai generated"] = 100;
+                        fileData.keywordScores["generative ai"] = 100;
+                    }
+
+                    fileData.keywords = metadata.keywords;
+
+                    metaTitle.textContent = metadata.title;
+                    const clarityBtn = document.getElementById(`check-clarity-btn-${card.id}`);
+                    if (clarityBtn && metadata.title) {
+                        clarityBtn.style.display = 'inline-flex';
+                    }
+                    updateKeywordsDisplay(card.id);
+
                     // --- NEW: Update Counts ---
                     const titleCountElem = document.getElementById(`title-count-${card.id}`);
                     if (titleCountElem && metadata.title) {
@@ -6963,7 +8285,10 @@ showpage
                         keywordCountElem.textContent = `(${count})`;
                     }
 
-
+                    fileData.status = 'success';
+                    if (typeof window.scheduleSessionSave === 'function') {
+                        window.scheduleSessionSave();
+                    }
 
                     // 📊 Update Usage Display (Instant local update)
                     if (window.userUsageData) {
@@ -7003,6 +8328,12 @@ showpage
                         }
                     }
 
+                    // --- SPAM SHIELD CHECK (Pro Feature) ---
+                    const spamShieldEnabled = document.getElementById('toggleSpamShield')?.checked || false;
+                    if (spamShieldEnabled) {
+                        checkSpamDuplicates(fileData, card, isPaidPlan);
+                    }
+
                     return metadata;
 
                 } catch (error) {
@@ -7018,115 +8349,134 @@ showpage
             }
 
             // SEO Score Calculation Function (Advanced)
-            function calculateSeoScore(metadata) {
+            window.calculateSeoScore = function (metadata) {
                 let score = 0;
                 const maxScore = 100;
                 let penalties = 0;
+                let suggestions = []; // Each: { text, fixType }
 
                 // 1. Title Length Score (Max 25)
                 const title = (metadata.title || '').trim();
                 const titleLength = title.length;
                 if (titleLength >= 40 && titleLength <= 70) {
-                    score += 25; // Perfect
+                    score += 25;
                 } else if (titleLength >= 20 && titleLength < 40) {
-                    score += 20; // Good
+                    score += 20;
+                    suggestions.push({ text: "💡 Title is short (" + titleLength + " chars). Aim for 40-70 characters.", fixType: null });
                 } else if (titleLength > 70 && titleLength <= 100) {
-                    score += 20; // Good but long
+                    score += 20;
+                    suggestions.push({ text: "💡 Title is too long (" + titleLength + " chars). Trim to under 70.", fixType: "trim_title" });
+                } else if (titleLength > 100) {
+                    score += 10;
+                    suggestions.push({ text: "⚠️ Title is way too long (" + titleLength + " chars). Trim to 40-70.", fixType: "trim_title" });
                 } else if (titleLength > 0) {
-                    score += 10; // Too short/long
+                    score += 10;
+                    suggestions.push({ text: "⚠️ Title length is sub-optimal. Aim for 40-70 characters.", fixType: null });
                 } else {
-                    penalties += 10; // Missing title
+                    penalties += 10;
+                    suggestions.push({ text: "❌ Missing Title.", fixType: null });
                 }
 
                 // 2. Description Length Score (Max 25)
                 const desc = (metadata.description || '').trim();
                 const descLength = desc.length;
                 if (descLength >= 100 && descLength <= 160) {
-                    score += 25; // Perfect
+                    score += 25;
                 } else if (descLength >= 70 && descLength < 100) {
-                    score += 20; // Good
-                } else if (descLength > 160 && descLength <= 200) {
-                    score += 20; // Good but long
+                    score += 20;
+                    suggestions.push({ text: "💡 Description is short (" + descLength + " chars). Add detail (100-160 ideal).", fixType: null });
+                } else if (descLength > 160 && descLength <= 250) {
+                    score += 20;
+                    suggestions.push({ text: "💡 Description is long (" + descLength + " chars). Trim to 100-160.", fixType: "trim_desc" });
+                } else if (descLength > 250) {
+                    score += 10;
+                    suggestions.push({ text: "⚠️ Description is way too long (" + descLength + " chars).", fixType: "trim_desc" });
                 } else if (descLength > 0) {
-                    score += 10; // Too short/long
+                    score += 10;
+                    suggestions.push({ text: "⚠️ Description length is sub-optimal. Aim for 100-160.", fixType: null });
                 } else {
-                    penalties += 10; // Missing description
+                    penalties += 10;
+                    suggestions.push({ text: "❌ Missing Description.", fixType: null });
                 }
 
                 // 3. Keyword Count & Mix Score (Max 50)
-                const keywordsArray = (metadata.keywords || '').split(',').map(k => k.trim()).filter(Boolean);
+                const keywordsRaw = metadata.keywords || '';
+                const keywordsArray = (typeof keywordsRaw === 'string' ? keywordsRaw : keywordsRaw.join(',')).split(',').map(k => k.trim()).filter(Boolean);
                 const totalKeywords = keywordsArray.length;
 
-                // Count types
                 const singleWords = keywordsArray.filter(k => k.split(/\s+/).length === 1).length;
                 const twoWords = keywordsArray.filter(k => k.split(/\s+/).length === 2).length;
                 const multiWords = keywordsArray.filter(k => k.split(/\s+/).length >= 3).length;
 
-                // Percentages
                 const pSingle = totalKeywords > 0 ? (singleWords / totalKeywords) * 100 : 0;
                 const pTwo = totalKeywords > 0 ? (twoWords / totalKeywords) * 100 : 0;
                 const pMulti = totalKeywords > 0 ? (multiWords / totalKeywords) * 100 : 0;
 
-                // A. Quantity Score (Max 20)
-                if (totalKeywords >= 30) score += 20;
-                else if (totalKeywords >= 20) score += 15;
-                else if (totalKeywords >= 10) score += 10;
-                else if (totalKeywords > 0) score += 5;
-                else penalties += 20;
-
-                // B. Mix Quality Score (Max 30)
-                // Ideal: Single: 30-40%, Two: 40-50%, Multi: 10-30%
+                if (totalKeywords >= 30) {
+                    score += 20;
+                } else if (totalKeywords >= 20) {
+                    score += 15;
+                    suggestions.push({ text: "💡 " + totalKeywords + " keywords. Aim for 30+ for max coverage.", fixType: null });
+                } else if (totalKeywords >= 10) {
+                    score += 10;
+                    suggestions.push({ text: "⚠️ Only " + totalKeywords + " keywords. Add more to cover categories.", fixType: null });
+                } else if (totalKeywords > 0) {
+                    score += 5;
+                    suggestions.push({ text: "⚠️ Very few keywords (" + totalKeywords + "). 25+ recommended.", fixType: null });
+                } else {
+                    penalties += 20;
+                    suggestions.push({ text: "❌ Missing Keywords.", fixType: null });
+                }
 
                 let mixScore = 0;
-                // Single word check
-                if (pSingle >= 20 && pSingle <= 50) mixScore += 10;
-                else if (pSingle > 0 && pSingle < 80) mixScore += 5;
-
-                // Two word check (The "Sweet Spot")
-                if (pTwo >= 30 && pTwo <= 60) mixScore += 10;
-                else if (pTwo > 10) mixScore += 5;
-
-                // Multi word check
-                if (pMulti >= 10 && pMulti <= 40) mixScore += 10;
-                else if (pMulti > 0 && pMulti < 60) mixScore += 5;
-
+                if (pSingle >= 20 && pSingle <= 50) { mixScore += 10; }
+                else if (pSingle > 0 && pSingle < 80) { mixScore += 5; suggestions.push({ text: "💡 Balance single-word keywords (" + Math.round(pSingle) + "%, target 20-50%).", fixType: null }); }
+                if (pTwo >= 30 && pTwo <= 60) { mixScore += 10; }
+                else if (pTwo > 10) { mixScore += 5; suggestions.push({ text: "💡 Add more two-word phrases (" + Math.round(pTwo) + "% now, target 30-60%).", fixType: null }); }
+                if (pMulti >= 10 && pMulti <= 40) { mixScore += 10; }
+                else if (pMulti > 0 && pMulti < 60) { mixScore += 5; suggestions.push({ text: "💡 Insert 3+ word long-tail phrases (" + Math.round(pMulti) + "% now, target 10-40%).", fixType: null }); }
                 score += mixScore;
 
                 // 4. Quality Checks & Penalties
-
-                // A. Duplicate Keywords
                 const uniqueKeywords = new Set(keywordsArray.map(k => k.toLowerCase()));
                 if (uniqueKeywords.size < totalKeywords) {
-                    penalties += (totalKeywords - uniqueKeywords.size) * 2; // -2 per duplicate
+                    const duplicatesCount = totalKeywords - uniqueKeywords.size;
+                    penalties += duplicatesCount * 2;
+                    suggestions.push({ text: "❌ " + duplicatesCount + " duplicate keyword(s) found.", fixType: "remove_duplicates" });
                 }
 
-                // B. Title == Description
                 if (titleLength > 0 && title.toLowerCase() === desc.toLowerCase()) {
-                    penalties += 20; // Heavy penalty for lazy metadata
+                    penalties += 20;
+                    suggestions.push({ text: "❌ Title and description are identical.", fixType: null });
                 }
 
-                // C. Repeated words in Title (Keyword stuffing)
                 const titleWords = title.toLowerCase().split(/\s+/);
                 const titleWordCounts = {};
                 titleWords.forEach(w => { if (w.length > 3) titleWordCounts[w] = (titleWordCounts[w] || 0) + 1; });
                 if (Object.values(titleWordCounts).some(c => c > 3)) {
-                    penalties += 10; // Penalty for spammed title
+                    penalties += 10;
+                    suggestions.push({ text: "⚠️ Keyword stuffing in title (repeated words).", fixType: "fix_title_stuffing" });
                 }
 
-                // Final Calculation
                 let finalScore = score - penalties;
-                return Math.max(0, Math.min(100, finalScore));
+                return {
+                    score: Math.max(0, Math.min(100, finalScore)),
+                    suggestions: suggestions
+                };
             }
 
             // SEO Score Meter Update Function
-            function updateSeoMeter(cardId, score) {
+            window.updateSeoMeter = function (cardId, seoData) {
                 const meterContainer = document.getElementById(`seo-meter-${cardId}`);
                 const badge = document.getElementById(`seo-badge-${cardId}`);
                 const progressFill = document.getElementById(`seo-progress-${cardId}`);
+                const suggestionsContainer = document.getElementById(`seo-suggestions-${cardId}`);
 
                 const seoLock = document.getElementById(`seo-lock-${cardId}`);
 
                 if (!meterContainer || !badge || !progressFill) return;
+
+                const score = (typeof seoData === 'object' && seoData !== null) ? seoData.score : (parseInt(seoData) || 0);
 
                 // Check Plan and Apply Blur
                 const currentPlan = window.userUsageData?.plan || 'free';
@@ -7168,6 +8518,22 @@ showpage
                 // Update progress bar
                 progressFill.style.width = `${score}%`;
                 progressFill.className = `seo-progress-fill ${gradeClass}`;
+
+                // Display suggestions with Fix buttons
+                if (suggestionsContainer) {
+                    if (score < 100 && seoData && seoData.suggestions && seoData.suggestions.length > 0) {
+                        suggestionsContainer.innerHTML = seoData.suggestions.map(s => {
+                            const fixBtn = s.fixType
+                                ? ` <button onclick="window.fixSeoIssue('${cardId}','${s.fixType}')" style="margin-left:6px; padding:1px 8px; font-size:0.85em; border:1px solid #10B981; background:rgba(16,185,129,0.15); color:#10B981; border-radius:4px; cursor:pointer; font-weight:700; white-space:nowrap;" onmouseover="this.style.background='#10B981';this.style.color='#fff'" onmouseout="this.style.background='rgba(16,185,129,0.15)';this.style.color='#10B981'">⚡ Fix</button>`
+                                : '';
+                            return `<div style="margin-bottom: 3px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap;"><span style="flex:1;">${s.text}</span>${fixBtn}</div>`;
+                        }).join('');
+                        suggestionsContainer.style.display = 'flex';
+                    } else {
+                        suggestionsContainer.innerHTML = score >= 100 ? '<div style="color:#10B981; font-weight:700;">✅ Perfect SEO! No improvements needed.</div>' : '';
+                        suggestionsContainer.style.display = score >= 100 ? 'flex' : 'none';
+                    }
+                }
 
                 // Show the meter
                 meterContainer.style.display = 'block';
@@ -7294,7 +8660,7 @@ showpage
 
                     if (section === 'healing') {
                         const currentPlan = window.userUsageData?.plan || 'free';
-                        if (currentPlan.toLowerCase() !== 'pro' && currentPlan.toLowerCase() !== 'premium') {
+                        if (currentPlan.toLowerCase() !== 'pro' && currentPlan.toLowerCase() !== 'premium' && currentPlan.toLowerCase() !== 'agency') {
                             alert("Upgrade to PRO/PREMIUM plan. healing features are for pro & premium users only.");
                             if (typeof scrollToPricing === 'function') scrollToPricing();
                             return;
@@ -7303,8 +8669,17 @@ showpage
 
                     if (section === 'sales-prediction') {
                         const currentPlan = window.userUsageData?.plan || 'free';
-                        if (currentPlan.toLowerCase() !== 'pro' && currentPlan.toLowerCase() !== 'premium') {
+                        if (currentPlan.toLowerCase() !== 'pro' && currentPlan.toLowerCase() !== 'premium' && currentPlan.toLowerCase() !== 'agency') {
                             alert("Upgrade to PRO/PREMIUM plan. sales-prediction features are for pro & premium users only.");
+                            if (typeof scrollToPricing === 'function') scrollToPricing();
+                            return;
+                        }
+                    }
+
+                    if (section === 'bg-remove') {
+                        const currentPlan = window.userUsageData?.plan || 'free';
+                        if (currentPlan.toLowerCase() !== 'pro' && currentPlan.toLowerCase() !== 'premium' && currentPlan.toLowerCase() !== 'agency') {
+                            alert("Upgrade to PRO/PREMIUM plan. Remove Background feature is for pro & premium users only.");
                             if (typeof scrollToPricing === 'function') scrollToPricing();
                             return;
                         }
@@ -7327,12 +8702,14 @@ showpage
                     const adminSection = document.getElementById('adminDashboardSection');
                     const healingSection = document.getElementById('imageHealingSection');
                     const salesPredSection = document.getElementById('salesPredictionSection');
+                    const bgRemovalSection = document.getElementById('bgRemovalSection');
 
                     if (calendarSection) calendarSection.style.display = 'none';
                     if (nicheSection) nicheSection.style.display = 'none';
                     if (adminSection) adminSection.style.display = 'none';
                     if (healingSection) healingSection.style.display = 'none';
                     if (salesPredSection) salesPredSection.style.display = 'none';
+                    if (bgRemovalSection) bgRemovalSection.style.display = 'none';
 
                     if (section === 'meta') {
                         document.body.classList.add('mode-metadata');
@@ -7351,6 +8728,11 @@ showpage
                         if (calendarSection) {
                             calendarSection.style.display = 'block';
                             if (typeof initStockCalendar === 'function') initStockCalendar();
+                        }
+
+                        // NEW: Trigger Live Trend Forecaster on Tab Open
+                        if (typeof loadRealTimeTrends === 'function') {
+                            loadRealTimeTrends();
                         }
                     } else if (section === 'healing') {
                         document.body.classList.add('mode-healing');
@@ -7426,24 +8808,29 @@ showpage
                         const profileDoc = await db.collection('users').doc(user.email.toLowerCase()).get();
                         const profileData = profileDoc.exists ? profileDoc.data() : null;
                         dbPlan = (profileData?.plan || '').toLowerCase();
-                        isPaidPlan = (dbPlan === 'pro' || dbPlan === 'premium');
+                        isPaidPlan = (dbPlan === 'pro' || dbPlan === 'premium' || dbPlan === 'agency');
                     } catch (e) { console.warn('Plan check failed:', e); }
                 }
 
                 let apiKey = null;
-                const promptInstruction = "Analyze the provided image in detail and generate three different style prompts for an AI image generator (like Midjourney, Leonardo.Ai, or DALL-E) based on this image.\n" +
-                    "The three styles MUST be:\n" +
-                    "1. realistic: A highly detailed photo-realistic, cinematic, or documentary photography style prompt.\n" +
-                    "2. illustration: An artistic digital illustration, vector graphic, anime, or painting style prompt.\n" +
-                    "3. 3d: A modern 3D render, CGI, digital sculpture, or claymation style prompt.\n\n" +
-                    "You MUST respond ONLY with a valid JSON object matching exactly this format (no explanations, no code block formatting, just the raw JSON):\n" +
-                    "{\n" +
-                    "  \"realistic\": \"[realistic style prompt]\",\n" +
-                    "  \"illustration\": \"[illustration style prompt]\",\n" +
-                    "  \"3d\": \"[3d style prompt]\"\n" +
-                    "}\n" +
-                    "Do NOT include any markdown, backticks, or extra characters in your response. Just return the JSON object.";
+                const promptInstruction = `Analyze the provided image as a forensic graphic designer. Reverse-engineer it into three different highly detailed text-to-image prompts (optimized for Midjourney v6 / DALL-E 3).
 
+CRITICAL INSTRUCTIONS FOR ALL PROMPTS:
+- Text & Typography: Read the exact text. If letters have custom stylization (e.g., an 'E' made only of three horizontal bars without a vertical stem, or specific letters in different colors), describe that exact custom typography in detail.
+- Geometry & Strokes: Differentiate between solid filled shapes and outlined shapes with negative space. Note if lines are disconnected, curved, sharp, or tapered.
+- Layout: Describe the exact placement of the icon relative to the text.
+
+The three styles MUST be:
+1. realistic: A highly detailed, EXACT descriptive replica of the uploaded image. If the image is a flat vector logo, describe it EXACTLY as a flat vector logo on a solid clean background with crisp, sharp edges. Describe the exact geometric shapes (e.g., 'upper wings formed by two disconnected curved orange strokes leaving negative space inside', 'lower wing is a black outline resembling a leaf with a small inner stroke'). Describe the exact text and its unique font modifications. Do NOT add 3D, mockup, or realistic photo elements.
+2. illustration: Transform the image into an artistic digital illustration while maintaining the exact original subject, text, and composition. Describe it using terms like digital painting, cel-shaded, or stylized vector art.
+3. 3d: Transform the image into a modern 3D render. Maintain the exact original subject and text, but add 3D elements like Unreal Engine 5, ray tracing, soft studio lighting, and 3D textures (e.g., matte plastic, glossy acrylic).
+
+Provide ONLY the raw JSON object, exactly like this format. Do not use markdown blocks (\`\`\`json):
+{
+  "realistic": "[your forensic, extremely detailed descriptive prompt here]",
+  "illustration": "[your vivid illustration prompt here]",
+  "3d": "[your 3D render prompt here]"
+}`;
 
                 // ================= server-side PROXY LOGIC =================
                 let proxyUrl = "";
@@ -7580,6 +8967,8 @@ showpage
                 document.body.removeChild(a);
                 URL.revokeObjectURL(url);
             };
+
+
 
             const generateDalleBtn = document.getElementById('generateDalleBtn');
             const dallePrompt = document.getElementById('dallePrompt');
@@ -7725,92 +9114,288 @@ showpage
         display: block;
     }
 
-    /* Login Modal Styles */
     .login-modal {
         position: fixed;
         top: 0;
         left: 0;
-        right: 0;
-        bottom: 0;
-        background: rgba(0, 0, 0, 0.8);
+        width: 100vw;
+        height: 100vh;
         display: flex;
-        align-items: center;
-        justify-content: center;
         z-index: 9999;
-        backdrop-filter: blur(5px);
+        overflow: hidden;
     }
 
     .login-modal.hidden {
         display: none;
     }
 
-    .login-container {
-        background: var(--bg-modal);
-        border-radius: 16px;
-        padding: 40px;
-        max-width: 400px;
-        width: 90%;
-        box-shadow: 0 8px 32px var(--shadow-md);
-        border: 1px solid var(--border-color);
+    .login-split-layout {
+        display: flex;
+        width: 100%;
+        height: 100%;
     }
 
-    /* Initial Loading Overlay Styles */
-    .initial-loading {
-        position: fixed;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
+    /* Left Pane */
+    .login-left-pane {
+        position: relative;
+        width: 50%;
+        background: linear-gradient(135deg, #7B2FF2 0%, #9B59B6 25%, #2196F3 50%, #00BCD4 75%, #7B2FF2 100%);
+        background-size: 400% 400%;
+        animation: loginGradientShift 12s ease infinite;
         display: flex;
         align-items: center;
         justify-content: center;
-        background: rgba(0,0,0,0.7);
-        z-index: 9998;
+        overflow: hidden;
+        padding: 40px;
+    }
+
+    @keyframes loginGradientShift {
+        0% { background-position: 0% 50%; }
+        50% { background-position: 100% 50%; }
+        100% { background-position: 0% 50%; }
+    }
+
+    /* Floating Bubbles */
+    .login-bubble {
+        position: absolute;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.07);
+        border: 1px solid rgba(255, 255, 255, 0.15);
         backdrop-filter: blur(4px);
     }
 
-    .initial-loading-box {
-        background-color: var(--bg-tertiary);
-        border-radius: 14px;
-        padding: 36px 48px;
-        text-align: center;
-        border: 1px solid #334155;
-        box-shadow: 0 12px 48px rgba(0,0,0,0.5);
-        color: var(--text-primary);
-        min-width: 320px;
-        max-width: 520px;
+    .login-bubble-1 {
+        width: 200px; height: 200px;
+        top: -40px; left: -40px;
+        animation: loginBubbleFloat1 8s ease-in-out infinite;
+    }
+    .login-bubble-2 {
+        width: 120px; height: 120px;
+        top: 30%; right: -20px;
+        background: rgba(255, 255, 255, 0.1);
+        animation: loginBubbleFloat2 10s ease-in-out infinite;
+    }
+    .login-bubble-3 {
+        width: 80px; height: 80px;
+        bottom: 20%; left: 15%;
+        background: rgba(255, 255, 255, 0.12);
+        animation: loginBubbleFloat3 7s ease-in-out infinite;
+    }
+    .login-bubble-4 {
+        width: 300px; height: 300px;
+        bottom: -80px; right: -60px;
+        background: rgba(255, 255, 255, 0.05);
+        animation: loginBubbleFloat4 14s ease-in-out infinite;
+    }
+    .login-bubble-5 {
+        width: 50px; height: 50px;
+        top: 55%; left: 50%;
+        background: rgba(255, 255, 255, 0.15);
+        animation: loginBubbleFloat5 6s ease-in-out infinite;
+    }
+    .login-bubble-6 {
+        width: 160px; height: 160px;
+        top: 10%; left: 60%;
+        background: rgba(255, 255, 255, 0.06);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        animation: loginBubbleFloat6 11s ease-in-out infinite;
     }
 
-    .initial-loading-box h1 {
-        color: #F97316;
-        margin: 0 0 6px 0;
-        font-size: 1.8em;
+    @keyframes loginBubbleFloat1 {
+        0%, 100% { transform: translate(0, 0) scale(1); }
+        50% { transform: translate(30px, 40px) scale(1.1); }
+    }
+    @keyframes loginBubbleFloat2 {
+        0%, 100% { transform: translate(0, 0) scale(1); }
+        50% { transform: translate(-25px, 30px) scale(0.9); }
+    }
+    @keyframes loginBubbleFloat3 {
+        0%, 100% { transform: translate(0, 0); }
+        50% { transform: translate(20px, -25px); }
+    }
+    @keyframes loginBubbleFloat4 {
+        0%, 100% { transform: translate(0, 0) scale(1); }
+        50% { transform: translate(-40px, -30px) scale(1.05); }
+    }
+    @keyframes loginBubbleFloat5 {
+        0%, 100% { transform: translate(0, 0); }
+        50% { transform: translate(-15px, 20px); }
+    }
+    @keyframes loginBubbleFloat6 {
+        0%, 100% { transform: translate(0, 0) scale(1); }
+        50% { transform: translate(20px, -35px) scale(1.08); }
     }
 
-    .initial-sub { color: var(--text-primary); margin: 0 0 14px 0; }
+    /* Left pane content */
+    .login-left-content {
+        position: relative;
+        z-index: 2;
+        color: #fff;
+        max-width: 420px;
+        animation: loginSlideInLeft 0.6s ease-out;
+    }
 
-    .initial-icon { font-size: 2.2em; margin-bottom: 10px; display: inline-block; animation: spin 2s linear infinite; }
+    @keyframes loginSlideInLeft {
+        from { opacity: 0; transform: translateX(-30px); }
+        to { opacity: 1; transform: translateX(0); }
+    }
 
-    .initial-desc { color: var(--text-primary); margin: 0; }
-
-    .initial-loading.hidden { display: none; }
-
-    .login-header {
-        text-align: center;
+    .login-left-logo {
+        display: flex;
+        align-items: center;
+        gap: 10px;
         margin-bottom: 30px;
     }
 
-    .login-header h1 {
-        color: var(--accent-orange);
-        font-size: 2em;
-        margin: 0 0 10px 0;
-        letter-spacing: 0.02em;
+    .login-logo-icon {
+        font-size: 1.6em;
+        filter: drop-shadow(0 0 6px rgba(255,255,255,0.4));
     }
 
-    .login-header p {
-        color: var(--text-muted);
+    .login-logo-text {
+        font-size: 1.2em;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        text-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    }
+
+    .login-left-title {
+        font-size: 2.5em;
+        font-weight: 800;
+        line-height: 1.1;
+        margin: 0 0 12px 0;
+        text-shadow: 0 4px 20px rgba(0,0,0,0.15);
+        color: #fff;
+    }
+
+    .login-left-subtitle {
+        font-size: 1.1em;
+        opacity: 0.85;
+        margin: 0 0 35px 0;
+        letter-spacing: 0.03em;
+        color: aquamarine;
+    }
+
+    .login-features-list {
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+        margin-bottom: 40px;
+    }
+
+    .login-feature-item {
+        display: flex;
+        align-items: flex-start;
+        gap: 14px;
+        background: rgba(255, 255, 255, 0.1);
+        border-radius: 12px;
+        padding: 14px 16px;
+        backdrop-filter: blur(8px);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        transition: transform 0.2s ease, background 0.2s ease;
+    }
+
+    .login-feature-item:hover {
+        transform: translateX(6px);
+        background: rgba(255, 255, 255, 0.16);
+    }
+
+    .login-feature-icon {
+        font-size: 1.5em;
+        flex-shrink: 0;
+        margin-top: 2px;
+    }
+
+    .login-feature-item strong {
         font-size: 0.95em;
+        display: block;
+        margin-bottom: 3px;
+    }
+
+    .login-feature-item p {
+        font-size: 0.82em;
         margin: 0;
+        opacity: 0.8;
+        line-height: 1.4;
+    }
+
+    .login-left-footer {
+        font-size: 0.85em;
+        opacity: 0.6;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+    }
+
+    /* Right Pane */
+    .login-right-pane {
+        width: 50%;
+        background: #ffffff;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        position: relative;
+        padding: 40px;
+        overflow-y: auto;
+    }
+
+    .login-close-btn {
+        position: absolute;
+        top: 18px;
+        right: 22px;
+        background: none;
+        border: none;
+        font-size: 1.8em;
+        color: #999;
+        cursor: pointer;
+        width: 36px;
+        height: 36px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 50%;
+        transition: all 0.2s;
+        z-index: 10;
+    }
+
+    .login-close-btn:hover {
+        background: #f0f0f0;
+        color: #333;
+    }
+
+    .login-container {
+        max-width: 380px;
+        width: 100%;
+        animation: loginSlideInRight 0.6s ease-out;
+    }
+
+    @keyframes loginSlideInRight {
+        from { opacity: 0; transform: translateX(30px); }
+        to { opacity: 1; transform: translateX(0); }
+    }
+
+    .login-header {
+        margin-bottom: 8px;
+    }
+
+    .login-greeting {
+        font-size: 1.6em;
+        font-weight: 700;
+        color: #1a1a2e;
+        margin: 0 0 2px 0;
+    }
+
+    .login-time-greeting {
+        font-size: 1.1em;
+        color: #7B2FF2;
+        font-weight: 500;
+        margin: 0 0 20px 0;
+    }
+
+    .login-form-title {
+        font-size: 1.05em;
+        color: #333;
+        margin: 0 0 25px 0;
+        font-weight: 500;
     }
 
     .login-form-group {
@@ -7819,87 +9404,145 @@ showpage
 
     .login-form-group label {
         display: block;
-        color: var(--text-secondary);
-        font-weight: 600;
-        margin-bottom: 8px;
-        font-size: 0.95em;
+        color: #666;
+        font-weight: 500;
+        margin-bottom: 6px;
+        font-size: 0.88em;
+        letter-spacing: 0.02em;
     }
 
     .login-form-group input {
         width: 100%;
-        padding: 12px 14px;
-        background: var(--bg-input);
-        border: 1.5px solid var(--border-color);
-        border-radius: 8px;
-        color: var(--text-primary);
-        font-size: 1em;
+        padding: 10px 2px;
+        background: transparent;
+        border: none;
+        border-bottom: 2px solid #e0e0e0;
+        color: #1a1a2e;
+        font-size: 0.95em;
         box-sizing: border-box;
-        transition: border-color 0.2s, box-shadow 0.2s;
+        transition: border-color 0.3s ease;
+        outline: none;
+        border-radius: 0;
     }
 
     .login-form-group input:focus {
-        outline: none;
-        border-color: #F97316;
-        box-shadow: 0 0 0 2px rgba(249, 115, 22, 0.2);
+        border-bottom-color: #7B2FF2;
     }
 
-    .login-buttons {
+    .login-form-group input::placeholder {
+        color: #bbb;
+    }
+
+    .login-options-row {
         display: flex;
-        gap: 12px;
-        margin-top: 30px;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 22px;
+        font-size: 0.82em;
+    }
+
+    .login-remember {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        color: #666;
+        cursor: pointer;
+    }
+
+    .login-remember input[type="checkbox"] {
+        width: 15px;
+        height: 15px;
+        accent-color: #7B2FF2;
+        cursor: pointer;
+    }
+
+    .login-forgot {
+        color: #7B2FF2;
+        text-decoration: none;
+        font-weight: 500;
+        transition: color 0.2s;
+    }
+
+    .login-forgot:hover {
+        color: #5a1fbf;
+        text-decoration: underline;
     }
 
     .login-button {
-        flex: 1;
-        padding: 12px 16px;
+        width: 100%;
+        padding: 13px 16px;
         border: none;
-        border-radius: 8px;
-        font-weight: 600;
+        border-radius: 6px;
+        font-weight: 700;
         font-size: 0.95em;
         cursor: pointer;
-        transition: all 0.2s ease;
+        transition: all 0.3s ease;
         text-align: center;
+        letter-spacing: 0.08em;
     }
 
     .login-button.primary {
-        background: linear-gradient(90deg, #F97316 60%, #ea580c 100%);
+        background: linear-gradient(135deg, #7B2FF2 0%, #2196F3 100%);
         color: white;
+        box-shadow: 0 4px 15px rgba(123, 47, 242, 0.3);
     }
 
     .login-button.primary:hover {
         transform: translateY(-2px);
-        box-shadow: 0 4px 12px rgba(249, 115, 22, 0.3);
+        box-shadow: 0 6px 22px rgba(123, 47, 242, 0.45);
     }
 
-    .login-button.secondary {
-        background: var(--bg-tertiary);
-        color: var(--text-secondary);
-    }
-
-    .login-button.secondary:hover {
-        background: #4B5563;
+    .login-button.primary:active {
+        transform: translateY(0);
     }
 
     .login-button.google-button {
-        background: linear-gradient(90deg, #FFFFFF 60%, #F3F4F6 100%);
-        color: #1F2937;
-        border: 1.5px solid #E5E7EB;
+        background: #fff;
+        color: #333;
+        border: 1.5px solid #e0e0e0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        font-weight: 600;
+        letter-spacing: 0.02em;
     }
 
     .login-button.google-button:hover {
-        background: linear-gradient(90deg, #F3F4F6 60%, #E5E7EB 100%);
-        transform: translateY(-2px);
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        background: #f7f7f7;
+        transform: translateY(-1px);
+        box-shadow: 0 3px 10px rgba(0, 0, 0, 0.08);
+    }
+
+    .login-divider {
+        display: flex;
+        align-items: center;
+        margin: 22px 0;
+        gap: 12px;
+    }
+
+    .login-divider-line {
+        flex: 1;
+        height: 1px;
+        background: #e0e0e0;
+    }
+
+    .login-divider span {
+        color: #aaa;
+        font-size: 0.8em;
+        font-weight: 500;
+        letter-spacing: 0.05em;
     }
 
     .login-toggle {
         text-align: center;
         margin-top: 20px;
-        color: #94A3B8;
+        color: #888;
+        font-size: 0.9em;
     }
 
     .login-toggle a {
-        color: #F97316;
+        color: #7B2FF2;
         cursor: pointer;
         text-decoration: none;
         font-weight: 600;
@@ -7910,13 +9553,13 @@ showpage
     }
 
     .login-error {
-        background: #7F1D1D;
-        border: 1px solid #EF4444;
-        color: #FECACA;
+        background: #fef2f2;
+        border: 1px solid #fca5a5;
+        color: #b91c1c;
         padding: 12px;
-        border-radius: 6px;
-        margin-bottom: 20px;
-        font-size: 0.9em;
+        border-radius: 8px;
+        margin-bottom: 18px;
+        font-size: 0.88em;
         display: none;
     }
 
@@ -7925,18 +9568,41 @@ showpage
     }
 
     .login-success {
-        background: #064E3B;
-        border: 1px solid #10B981;
-        color: #CCFBF1;
+        background: #f0fdf4;
+        border: 1px solid #86efac;
+        color: #166534;
         padding: 12px;
-        border-radius: 6px;
-        margin-bottom: 20px;
-        font-size: 0.9em;
+        border-radius: 8px;
+        margin-bottom: 18px;
+        font-size: 0.88em;
         display: none;
     }
 
     .login-success.show {
         display: block;
+    }
+
+    /* Responsive: Stack on mobile */
+    @media (max-width: 768px) {
+        .login-split-layout {
+            flex-direction: column;
+        }
+        .login-left-pane {
+            width: 100%;
+            min-height: 220px;
+            padding: 30px 24px;
+        }
+        .login-left-title {
+            font-size: 2em;
+        }
+        .login-features-list {
+            display: none;
+        }
+        .login-right-pane {
+            width: 100%;
+            flex: 1;
+            padding: 30px 24px;
+        }
     }
 
     .user-profile {
@@ -8091,6 +9757,8 @@ showpage
         align-items: center;
         gap: 16px;
         position: relative;
+        overflow-y: auto;
+        height: 580px;
     }
 
     .profile-avatar-section {
@@ -8246,7 +9914,7 @@ showpage
                         scoreHtml = `<span class="keyword-score" style="font-size: 0.85em; margin-left: 5px; font-weight:bold; color: ${scoreColor};" title="Stock Value/Relevance: ${score}">${score}</span>`;
                     }
 
-                    // Add remove button and draggable attributes
+                    // 3. Return arranged structure: [Badge] [Keyword] [Score] [Close Button]
                     return `<span class="meta-keyword-pill draggable" 
                                   draggable="true"
                                   data-index="${index}"
@@ -8256,13 +9924,16 @@ showpage
                                   ondragover="handleDragOver(event)"
                                   ondrop="handleDrop(event)"
                                   onclick="handleKeywordClick(event, '${kw.replace(/'/g, "\\'")}', '${cardId}')"
-                                  style="display:inline-flex; align-items:center;">
-                                ${kw} ${scoreHtml} ${badgeHtml}
-                                <button class="keyword-remove-btn" 
-                                        onclick="event.stopPropagation(); removeKeyword('${cardId}', ${index});" 
-                                        onmousedown="event.stopPropagation();"
-                                        title="Remove">×</button>
-                            </span>`;
+                                  style="display: inline-flex; align-items: center; gap: 2px;">
+                                  ${badgeHtml}
+                                  <span class="keyword-text">${kw}</span>
+                                  ${scoreHtml}
+                                  <button class="keyword-remove-btn" 
+                                          onclick="event.stopPropagation(); removeKeyword('${cardId}', ${index});" 
+                                          onmousedown="event.stopPropagation();"
+                                          title="Remove"
+                                          style="margin-left: 6px;">×</button>
+                             </span>`;
                 }).join('');
 
                 // Update Count
@@ -8506,10 +10177,371 @@ showpage
                 const countElem = document.getElementById(`title-count-${card.id}`);
                 if (countElem) countElem.textContent = `(${count})`;
 
+                // Show/hide clarity check button based on content
+                const clarityBtn = document.getElementById(`check-clarity-btn-${cardId}`);
+                if (clarityBtn) {
+                    if (fileData.title.length > 0) {
+                        clarityBtn.style.display = 'inline-flex';
+                    } else {
+                        clarityBtn.style.display = 'none';
+                    }
+                }
+
                 // Update SEO Score
                 if (typeof calculateSeoScore === 'function' && typeof updateSeoMeter === 'function') {
                     const score = calculateSeoScore(fileData);
                     updateSeoMeter(cardId, score);
+                }
+            };
+
+            window.fixSpamWithAI = async function (cardId) {
+                const card = document.getElementById(cardId);
+                if (!card) return;
+
+                const fileData = uploadedFilesData.find(f => f.id === cardId);
+                if (!fileData) return;
+
+                const warningBanner = card.querySelector('.spam-shield-warning');
+                let originalBtnHtml = '';
+                if (warningBanner) {
+                    const btn = warningBanner.querySelector('button');
+                    if (btn) {
+                        originalBtnHtml = btn.innerHTML;
+                        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Fixing...';
+                        btn.disabled = true;
+                    }
+                }
+
+                let authHeaders = {};
+                const user = auth.currentUser;
+                let accessToken = "";
+                if (user) {
+                    try {
+                        accessToken = await user.getIdToken();
+                        authHeaders["Authorization"] = `Bearer ${accessToken}`;
+                    } catch (e) {
+                        console.warn("Could not get ID token:", e);
+                    }
+                }
+
+                // Gather existing data
+                const currentTitle = fileData.title || "";
+                const currentKeywords = fileData.keywords || "";
+
+                // Gather conflicting titles from other files to avoid them
+                const otherProcessed = uploadedFilesData.filter(f => f.id !== cardId && f.title && f.title !== 'Error');
+                const avoidTitles = otherProcessed.map(f => f.title).join(" || ");
+
+                const promptText = `You are a professional stock photography SEO expert. 
+                The following metadata is triggering a "Duplicate/Spam" warning because it is too similar to other images in the same batch.
+                
+                Current Title: "${currentTitle}"
+                Current Keywords: "${currentKeywords}"
+                Other titles to strictly AVOID copying: "${avoidTitles.substring(0, 400)}"
+                
+                TASK:
+                1. Rewrite the Title to be completely unique, engaging, and SEO-friendly (10-20 words). Do not use the exact same sentence structure as before.
+                2. Shuffle the keywords, replace generic ones with highly specific synonyms, and return 35-45 keywords.
+                
+                Return ONLY valid JSON in this exact format:
+                {"title": "New Unique Title", "keywords": "keyword1, keyword2, keyword3, ..."}
+                Do not include markdown blocks.`;
+
+                try {
+                    const response = await fetch("https://metagen-pro-api.metagenp.workers.dev/generate", {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json",
+                            ...authHeaders
+                        },
+                        body: JSON.stringify({
+                            action: "generate", // Using generic generation action
+                            prompt: promptText,
+                            provider: document.getElementById('aiProviderSelect')?.value || 'groq',
+                            email: user?.email || "unknown",
+                            deviceInfo: navigator.userAgent
+                        })
+                    });
+
+                    if (!response.ok) {
+                        const errData = await response.json().catch(() => ({}));
+                        throw new Error(errData.error || `HTTP ${response.status}`);
+                    }
+
+                    const data = await response.json();
+
+                    let generatedText = data.text || data.metadata || (data.choices && data.choices[0].message.content) || (data.candidates && data.candidates[0].content.parts[0].text) || "";
+
+                    // Clean JSON
+                    let cleanedJsonString = generatedText.replace(/^```json\s*|```$/g, '').trim();
+                    const jsonStart = cleanedJsonString.indexOf('{');
+                    const jsonEnd = cleanedJsonString.lastIndexOf('}');
+                    if (jsonStart !== -1 && jsonEnd !== -1) {
+                        cleanedJsonString = cleanedJsonString.substring(jsonStart, jsonEnd + 1);
+                    }
+
+                    const fixedData = JSON.parse(cleanedJsonString);
+
+                    // Update UI and Data
+                    if (fixedData.title) {
+                        fileData.title = fixedData.title;
+                        const titleEl = card.querySelector('.meta-title');
+                        if (titleEl) {
+                            titleEl.textContent = fixedData.title;
+                            updateTitle(titleEl);
+                        }
+                    }
+
+                    if (fixedData.keywords) {
+                        fileData.keywords = Array.isArray(fixedData.keywords) ? fixedData.keywords.join(', ') : fixedData.keywords;
+
+                        // Reset keyword scores for new keywords
+                        fileData.keywordScores = {};
+                        fileData.keywords.split(',').forEach(k => {
+                            fileData.keywordScores[k.trim().toLowerCase()] = 100;
+                        });
+
+                        updateKeywordsDisplay(cardId);
+                    }
+
+                    // Remove the warning banner if fixed successfully
+                    if (warningBanner) {
+                        warningBanner.remove();
+                    }
+
+                    // Optional: Re-check spam just in case (Will recreate banner if still spam)
+                    checkSpamDuplicates(fileData, card, true);
+
+                } catch (error) {
+                    console.error("AI Spam Fix Error:", error);
+                    alert("Failed to fix spam metadata: " + error.message);
+                    if (warningBanner) {
+                        const btn = warningBanner.querySelector('button');
+                        if (btn) {
+                            btn.innerHTML = originalBtnHtml;
+                            btn.disabled = false;
+                        }
+                    }
+                }
+            };
+
+            window.fixTitleWithAI = async function (cardId) {
+                let currentPlan = 'free';
+                if (window.userUsageData && window.userUsageData.plan) {
+                    currentPlan = window.userUsageData.plan.toLowerCase();
+                }
+                const user = auth.currentUser;
+                if (user && currentPlan === 'free') {
+                    try {
+                        const profileDoc = await db.collection('users').doc(user.email.toLowerCase()).get();
+                        const profileData = profileDoc.exists ? profileDoc.data() : null;
+                        if (profileData && profileData.plan) {
+                            currentPlan = profileData.plan.toLowerCase();
+                        }
+                    } catch (e) {
+                        console.warn('Plan check failed:', e);
+                    }
+                }
+                const isPaidPlan = (currentPlan === 'pro' || currentPlan === 'premium' || currentPlan === 'agency');
+
+                if (!isPaidPlan) {
+                    alert("Upgrade to PRO/PREMIUM plan. AI Fix function are for pro & premium users only.");
+                    if (typeof scrollToPricing === 'function') {
+                        scrollToPricing();
+                    }
+                    return;
+                }
+                const card = document.getElementById(cardId);
+                if (!card) return;
+
+                const fileData = uploadedFilesData.find(f => f.id === cardId);
+                if (!fileData) return;
+
+                const titleText = (fileData.title || "").trim();
+                if (!titleText) {
+                    alert("Please generate a title first.");
+                    return;
+                }
+
+                const fixBtn = document.getElementById(`clarity-fix-btn-${cardId}`);
+                const originalHtml = fixBtn ? fixBtn.innerHTML : '';
+                if (fixBtn) fixBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Fixing...';
+
+                let authHeaders = {};
+                if (user) {
+                    try {
+                        const token = await user.getIdToken();
+                        authHeaders["Authorization"] = `Bearer ${token}`;
+                    } catch (e) {
+                        console.warn("Could not get ID token:", e);
+                    }
+                }
+
+                try {
+                    const response = await fetch("https://metagen-pro-api.metagenp.workers.dev/api/fix-title-clarity", {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json",
+                            ...authHeaders
+                        },
+                        body: JSON.stringify({ title: titleText })
+                    });
+
+                    if (!response.ok) {
+                        const errData = await response.json().catch(() => ({}));
+                        throw new Error(errData.error || `HTTP ${response.status}`);
+                    }
+
+                    const data = await response.json();
+
+                    if (data.fixedTitle) {
+                        fileData.title = data.fixedTitle;
+                        const titleEl = card.querySelector('.meta-title');
+                        if (titleEl) {
+                            titleEl.textContent = data.fixedTitle;
+                            updateTitle(titleEl);
+                        }
+                        // Re-run the clarity check to show updated scores
+                        await checkTitleClarity(cardId);
+                    }
+                } catch (error) {
+                    console.error("AI Fix Error:", error);
+                    alert("Failed to fix title: " + error.message);
+                } finally {
+                    if (fixBtn) fixBtn.innerHTML = originalHtml;
+                }
+            };
+
+            window.checkTitleClarity = async function (cardId) {
+                const card = document.getElementById(cardId);
+                if (!card) return;
+
+                const fileData = uploadedFilesData.find(f => f.id === cardId);
+                if (!fileData) return;
+
+                const titleText = (fileData.title || "").trim();
+                if (!titleText) {
+                    alert("Please write or generate a title first.");
+                    return;
+                }
+
+                const container = document.getElementById(`clarity-checker-container-${cardId}`);
+                const grammarValue = document.getElementById(`clarity-grammar-value-${cardId}`);
+                const grammarBar = document.getElementById(`clarity-grammar-bar-${cardId}`);
+                const appealValue = document.getElementById(`clarity-appeal-value-${cardId}`);
+                const appealBar = document.getElementById(`clarity-appeal-bar-${cardId}`);
+                const feedbackEl = document.getElementById(`clarity-feedback-${cardId}`);
+                const suggestionsEl = document.getElementById(`clarity-suggestions-${cardId}`);
+                const lockOverlay = document.getElementById(`clarity-lock-overlay-${cardId}`);
+
+                if (container) {
+                    container.style.display = 'block';
+                }
+
+                // Temporary loading state
+                if (grammarValue) grammarValue.textContent = "...";
+                if (grammarBar) {
+                    grammarBar.style.width = "20%";
+                    grammarBar.className = "clarity-progress-fill medium";
+                }
+                if (appealValue) appealValue.textContent = "...";
+                if (appealBar) {
+                    appealBar.style.width = "20%";
+                    appealBar.className = "clarity-progress-fill medium";
+                }
+                if (feedbackEl) feedbackEl.innerHTML = '<span style="color: var(--text-secondary);"><i class="fas fa-spinner fa-spin"></i> Analyzing title quality...</span>';
+                if (suggestionsEl) suggestionsEl.innerHTML = "";
+                if (lockOverlay) lockOverlay.style.display = 'none';
+
+                let authHeaders = {};
+                const user = auth.currentUser;
+                if (user) {
+                    try {
+                        const token = await user.getIdToken();
+                        authHeaders["Authorization"] = `Bearer ${token}`;
+                    } catch (e) {
+                        console.warn("Could not get ID token:", e);
+                    }
+                }
+
+                try {
+                    const response = await fetch("https://metagen-pro-api.metagenp.workers.dev/api/check-title-clarity", {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json",
+                            ...authHeaders
+                        },
+                        body: JSON.stringify({ title: titleText })
+                    });
+
+                    if (!response.ok) {
+                        const errData = await response.json().catch(() => ({}));
+                        throw new Error(errData.error || `HTTP ${response.status}`);
+                    }
+
+                    const data = await response.json();
+
+                    const gScore = parseInt(data.grammarScore) || 0;
+                    const aScore = parseInt(data.appealScore) || 0;
+
+                    if (grammarValue) grammarValue.textContent = `${gScore}%`;
+                    if (grammarBar) {
+                        grammarBar.style.width = `${gScore}%`;
+                        grammarBar.className = "clarity-progress-fill " + (gScore >= 80 ? "excellent" : gScore >= 50 ? "medium" : "low");
+                    }
+
+                    if (appealValue) appealValue.textContent = `${aScore}%`;
+                    if (appealBar) {
+                        appealBar.style.width = `${aScore}%`;
+                        appealBar.className = "clarity-progress-fill " + (aScore >= 80 ? "excellent" : aScore >= 50 ? "medium" : "low");
+                    }
+
+                    if (feedbackEl) {
+                        feedbackEl.textContent = data.grammarFeedback || "";
+                    }
+
+                    if (suggestionsEl) {
+                        suggestionsEl.innerHTML = "";
+                        const suggestions = data.appealSuggestions || [];
+                        suggestions.forEach(s => {
+                            if (!s || s.trim().toLowerCase() === "locked") return;
+                            const li = document.createElement("li");
+                            li.textContent = s;
+                            suggestionsEl.appendChild(li);
+                        });
+                    }
+
+                    // Check user tier
+                    let dbPlan = "free";
+                    if (user) {
+                        try {
+                            const profileDoc = await db.collection('users').doc(user.email.toLowerCase()).get();
+                            const profileData = profileDoc.exists ? profileDoc.data() : null;
+                            dbPlan = (profileData?.plan || '').toLowerCase();
+                        } catch (e) { console.warn('Plan check failed:', e); }
+                    }
+                    if (dbPlan !== 'pro' && dbPlan !== 'premium' && dbPlan !== 'agency') dbPlan = 'free';
+                    const isPaidPlan = (dbPlan === 'pro' || dbPlan === 'premium' || dbPlan === 'agency');
+
+                    if (!isPaidPlan) {
+                        if (lockOverlay) lockOverlay.style.display = 'flex';
+                        if (feedbackEl) feedbackEl.style.filter = 'blur(4px)';
+                        if (suggestionsEl) suggestionsEl.style.filter = 'blur(4px)';
+                    } else {
+                        if (lockOverlay) lockOverlay.style.display = 'none';
+                        if (feedbackEl) feedbackEl.style.filter = 'none';
+                        if (suggestionsEl) suggestionsEl.style.filter = 'none';
+                    }
+
+                } catch (error) {
+                    console.error("Clarity Check Error:", error);
+                    if (feedbackEl) {
+                        feedbackEl.innerHTML = `<span style="color: #EF4444;">Error: ${error.message}</span>`;
+                    }
+                    if (grammarValue) grammarValue.textContent = "0%";
+                    if (grammarBar) grammarBar.style.width = "0%";
+                    if (appealValue) appealValue.textContent = "0%";
+                    if (appealBar) appealBar.style.width = "0%";
                 }
             };
 
@@ -9475,14 +11507,25 @@ showpage
                         console.log("Admin email sent.");
 
                         if (userEmail && userEmail.includes("@")) {
-
                             emailjs.send('service_uhnivl8', 'template_3vqxzz2', templateParams)
                                 .then(() => console.log("Auto-reply sent successfully to user."))
                                 .catch((err) => console.error("Auto-reply FAILED:", err));
-
                         } else {
                             console.warn("Auto-reply skipped: User is Guest/Anonymous.");
                         }
+
+                        // --- NEW: UPDATE REVIEW COUNT & RATING DYNAMICALLY ---
+                        let userRating = parseInt(document.getElementById('feedbackRating').value) || 5;
+                        let stats = JSON.parse(localStorage.getItem('metagen_review_stats')) || { count: 1584, totalScore: 1584 * 4.9 };
+
+                        // Increase count and add new score
+                        stats.count += 1;
+                        stats.totalScore += userRating;
+                        localStorage.setItem('metagen_review_stats', JSON.stringify(stats));
+
+                        // Refresh the UI Instantly
+                        if (typeof loadReviewStats === 'function') loadReviewStats();
+                        // -----------------------------------------------------
 
                         feedbackModal.style.display = 'none';
                         const thankYouModal = document.getElementById('thankYouModal');
@@ -9557,7 +11600,7 @@ showpage
                             const profileDoc = await db.collection('users').doc(user.email.toLowerCase()).get();
                             const profileData = profileDoc.exists ? profileDoc.data() : null;
                             currentPlan = (profileData?.plan || 'free').toLowerCase();
-                            isPaidPlan = (currentPlan === 'pro' || currentPlan === 'premium');
+                            isPaidPlan = (currentPlan === 'pro' || currentPlan === 'premium' || currentPlan === 'agency');
                         }
                     } catch (e) {
                         console.warn('Plan check failed for trending:', e);
@@ -9716,21 +11759,46 @@ showpage
 
         // Initialize theme on page load
         function initializeTheme() {
-            const savedTheme = localStorage.getItem('theme');
+            let savedTheme = localStorage.getItem('theme');
             const themeIcon = document.getElementById('themeIcon');
 
-            // Default to Dark Mode unless 'light' is explicitly saved
+            // If user hasn't manually set a theme, detect browser/system preference
+            if (!savedTheme) {
+                if (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) {
+                    savedTheme = 'light';
+                } else {
+                    savedTheme = 'dark';
+                }
+            }
+
+            // Apply the theme
             if (savedTheme === 'light') {
                 document.body.classList.add('light-mode');
                 if (themeIcon) themeIcon.textContent = '☀️';
             } else {
-                // Enforce Dark Mode (Remove class in case it was added elsewhere)
                 document.body.classList.remove('light-mode');
                 if (themeIcon) themeIcon.textContent = '🌙';
             }
 
             // Initialize Animation
             initHeroAnimation();
+        }
+
+        // Auto-switch theme if system preference changes (and user hasn't explicitly set one)
+        if (window.matchMedia) {
+            window.matchMedia('(prefers-color-scheme: light)').addEventListener('change', e => {
+                if (!localStorage.getItem('theme')) {
+                    const themeIcon = document.getElementById('themeIcon');
+                    if (e.matches) {
+                        document.body.classList.add('light-mode');
+                        if (themeIcon) themeIcon.textContent = '☀️';
+                    } else {
+                        document.body.classList.remove('light-mode');
+                        if (themeIcon) themeIcon.textContent = '🌙';
+                    }
+                    updateHeroAnimationTheme();
+                }
+            });
         }
 
         // Toggle theme function
@@ -9767,9 +11835,9 @@ showpage
         }
 
 
-// ===========================================
-// SECTION 2: Niche Research & Translation Logic
-// ===========================================
+        // ===========================================
+        // SECTION 2: Niche Research & Translation Logic
+        // ===========================================
         // ==========================================
         // 🔮 NICHE RESEARCH & TRANSLATION LOGIC
         // ==========================================
@@ -9798,7 +11866,7 @@ showpage
 
                         this.disabled = false;
 
-                        if (currentPlan !== 'pro' && currentPlan !== 'premium') {
+                        if (currentPlan !== 'pro' && currentPlan !== 'premium' && currentPlan !== 'agency') {
                             this.checked = false;
                             alert("Copyright/Trademark Check is a PRO/PREMIUM feature. Please upgrade your plan to use this feature.");
                             if (typeof openUpgradeModal === 'function') openUpgradeModal('pro');
@@ -9821,7 +11889,7 @@ showpage
 
                     if (section === 'healing' || section === 'sales-prediction') {
                         const currentPlan = window.userUsageData?.plan || 'free';
-                        if (currentPlan.toLowerCase() !== 'pro' && currentPlan.toLowerCase() !== 'premium') {
+                        if (currentPlan.toLowerCase() !== 'pro' && currentPlan.toLowerCase() !== 'premium' && currentPlan.toLowerCase() !== 'agency') {
                             if (typeof openUpgradeModal === 'function') openUpgradeModal('pro');
                             return;
                         }
@@ -9888,6 +11956,19 @@ showpage
 
                         document.body.classList.remove('mode-metadata', 'mode-image-prompt', 'mode-niche', 'mode-calendar', 'mode-healing');
                         document.body.classList.add('mode-sales-prediction');
+
+                    } else if (section === 'bg-remove') {
+                        if (calendarSection) calendarSection.style.display = 'none';
+                        if (nicheSection) nicheSection.style.display = 'none';
+                        if (healingSec) healingSec.style.display = 'none';
+                        if (salesPredSec) salesPredSec.style.display = 'none';
+                        if (uploadSection) uploadSection.style.display = 'none';
+                        if (processingArea) processingArea.style.display = 'none';
+                        if (platformSelection) platformSelection.style.display = 'none';
+                        if (platformUploadSection) platformUploadSection.style.display = 'none';
+
+                        document.getElementById('bgRemovalSection').style.display = 'block';
+                        document.body.className = 'mode-bg-remove';
                     } else {
                         // Hide Niche & Calendar, Show others
                         if (calendarSection) calendarSection.style.display = 'none';
@@ -10001,7 +12082,7 @@ showpage
                             const profileDoc = await db.collection('users').doc(user.email.toLowerCase()).get();
                             const profileData = profileDoc.exists ? profileDoc.data() : null;
                             dbPlan = (profileData?.plan || '').toLowerCase();
-                            isPaidPlan = (dbPlan === 'pro' || dbPlan === 'premium');
+                            isPaidPlan = (dbPlan === 'pro' || dbPlan === 'premium' || dbPlan === 'agency');
                         } catch (e) { console.warn('Plan check failed:', e); }
                     }
 
@@ -10129,7 +12210,7 @@ Format Example:
                         // Fallback: Try to fix common trailing comma issue and escaped characters
                         jsonString = jsonString.replace(/,\s*}/g, '}').replace(/,\s*]/g, ']');
                         // Try to handle raw newlines that might have survived
-                        jsonString = jsonString.replace(/\n/g, ' ').replace(/\r/g, ' ');
+                        jsonString = jsonString.replace(/\n/g, ' ').replace(/\n/g, ' ');
 
                         try {
                             niches = JSON.parse(jsonString);
@@ -10402,7 +12483,7 @@ Format Example:
                         userEmail = user.email;
                         accessToken = await user.getIdToken();
                         currentPlan = window.userUsageData?.plan || 'free';
-                        isPaidPlan = (currentPlan === 'pro' || currentPlan === 'premium');
+                        isPaidPlan = (currentPlan === 'pro' || currentPlan === 'premium' || currentPlan === 'agency');
                     }
                 } catch (e) {
                     console.warn('Plan check failed for translation:', e);
@@ -10448,7 +12529,7 @@ Format Example:
                     jsonString = jsonString.substring(jsonStart, jsonEnd + 1);
                 }
 
-                jsonString = jsonString.replace(/[\r\n\t]/g, ' ');
+                jsonString = jsonString.replace(/[\n\t]/g, ' ');
 
                 let translated;
                 try {
@@ -10505,7 +12586,7 @@ Format Example:
             const userEmail = user ? user.email : null;
             const currentPlan = window.userUsageData?.plan || 'free';
 
-            if (currentPlan !== 'pro' && currentPlan !== 'premium') {
+            if (currentPlan !== 'pro' && currentPlan !== 'premium' && currentPlan !== 'agency') {
                 alert("Translate All is a Pro/Premium feature. Please upgrade your plan.");
                 openUpgradeModal('pro');
                 return;
@@ -10562,7 +12643,7 @@ Format Example:
                     if (jsonStart !== -1 && jsonEnd !== -1) {
                         jsonString = jsonString.substring(jsonStart, jsonEnd + 1);
                     }
-                    jsonString = jsonString.replace(/[\r\n\t]/g, ' ');
+                    jsonString = jsonString.replace(/[\n\t]/g, ' ');
 
                     let translated;
                     try {
@@ -10706,7 +12787,8 @@ Format Example:
                             purchasedCredits: status.purchasedCredits || 0,
                             purchasedCreditsUsed: status.purchasedCreditsUsed || 0,
                             teamId: status.teamId || '',
-                            teamRole: status.teamRole || ''
+                            teamRole: status.teamRole || '',
+                            giftCredits: status.giftCredits || 0
                         };
                     }
                 } catch (e) { console.warn("Worker fetch failed, falling back to Firebase:", e); }
@@ -10730,25 +12812,22 @@ Format Example:
 
                 let plan = 'free';
                 if (profile) {
-                    // ১. প্রথমে সরাসরি 'plan' ফিল্ড চেক করা সবচেয়ে নিরাপদ
                     const rawP = String(profile.plan || "").toLowerCase();
-
-                    // ২. বড় লিমিটটিকে আগে প্রাধান্য দিন (Priority: monthlyLimit > legacy fields)
                     let userLimitVal = Number(profile.monthlyLimit || profile.monthly_limit || 0);
 
-                    // ৩. প্ল্যান ডিটেকশন লজিক ফিক্স (বড় সংখ্যা দিয়ে চেক করা হচ্ছে)
-                    if (rawP.includes('premium') || userLimitVal >= 3000) {
+                    if (rawP.includes('agency') || userLimitVal >= 10000) {
+                        plan = 'agency';
+                    } else if (rawP.includes('premium') || userLimitVal >= 3000) {
                         plan = 'premium';
-                    } else if (rawP.includes('pro') || userLimitVal >= 2000 || userLimitVal === 3000) {
+                    } else if (rawP.includes('pro') || userLimitVal >= 2000) {
                         plan = 'pro';
                     } else {
                         plan = 'free';
                     }
                 }
 
-                // ৪. প্ল্যান অনুযায়ী স্ট্যান্ডার্ড লিমিট এবং ডেইলি ক্যাপ সেট করা
-                const monthlyLimit = (plan === 'premium') ? 3000 : (plan === 'pro' ? 2000 : 120);
-                const dailyCap = (plan === 'premium') ? 100 : (plan === 'pro' ? 70 : 10);
+                const monthlyLimit = (plan === 'agency') ? 10000 : (plan === 'premium') ? 3000 : (plan === 'pro' ? 2000 : 120);
+                const dailyCap = (plan === 'agency') ? 500 : (plan === 'premium') ? 100 : (plan === 'pro' ? 70 : 20);
 
                 // --- ৩. অ্যাক্টিভিটি গণনা (বাকি কোড অপরিবর্তিত) ---
                 let dailyCount = 0;
@@ -10764,11 +12843,12 @@ Format Example:
                 return {
                     count: dailyCount,
                     limit: dailyCap,
-                    monthlyCount: dailyCount, // অথবা এখানে মাসিক ব্যবহারের আলাদা কোড দিতে পারেন
+                    monthlyCount: dailyCount,
                     monthlyLimit: monthlyLimit,
                     plan: plan,
                     referralBonus: Number(profile?.referral_bonus || 0),
-                    hasClaimedShareBonus: profile?.has_claimed_share_bonus || false
+                    hasClaimedShareBonus: profile?.has_claimed_share_bonus || false,
+                    giftCredits: Number(profile?.gift_credits || 0)
                 };
             } catch (err) {
                 console.error("Usage fetch Error:", err);
@@ -10815,6 +12895,10 @@ Format Example:
             const msgEl = document.getElementById('limitModalMessage');
             if (msgEl && customMsg) {
                 msgEl.innerHTML = customMsg;
+            }
+            const loginBtn = document.getElementById('limitLoginBtn');
+            if (loginBtn) {
+                loginBtn.style.display = auth.currentUser ? 'none' : 'flex';
             }
             if (modal) {
                 modal.style.display = 'flex';
@@ -10917,17 +13001,7 @@ Format Example:
 
         // --- SIMILARITY CHECKER LOGIC (PREMIUM) ---
 
-        document.getElementById('checkSimilarityButton').onclick = async function () {
-            const usage = window.userUsageData || { plan: 'free' };
-            const currentPlan = (usage.plan || 'free').toLowerCase();
-
-            // ১. প্রিমিয়াম চেক
-            if (currentPlan === 'free') {
-                alert("Similarity Checker is a PRO/PREMIUM feature to protect your account from spam rejection.");
-                if (typeof scrollToPricing === 'function') scrollToPricing();
-                return;
-            }
-
+                 document.getElementById('checkSimilarityButton').onclick = async function () {
             if (window.uploadedFilesData.length < 2) {
                 alert("Upload at least 2 images to check similarity.");
                 return;
@@ -10938,71 +13012,182 @@ Format Example:
             btn.disabled = true;
             btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Analyzing...';
 
-            // ২. ইমেজ হ্যাশ জেনারেট করা
+            // ১. প্রতিটি ইমেজের ২৫৬-বিট dHash জেনারেট করা
             const fileHashes = [];
             for (const fileData of window.uploadedFilesData) {
                 try {
                     const hash = await getImageFingerprint(fileData.id);
-                    fileHashes.push({ id: fileData.id, name: fileData.name, hash: hash });
-                } catch (e) { console.error("Hash failed for", fileData.name); }
-            }
-
-            // ৩. প্রতিটি ইমেজের সাথে তুলনা করা
-            let similarFound = 0;
-            // আগের ওয়ার্নিং ক্লিয়ার করা
-            document.querySelectorAll('.similarity-warning, .similarity-badge').forEach(el => el.remove());
-
-            for (let i = 0; i < fileHashes.length; i++) {
-                for (let j = i + 1; j < fileHashes.length; j++) {
-                    const distance = calculateHammingDistance(fileHashes[i].hash, fileHashes[j].hash);
-                    // Hamming distance কম মানে মিল বেশি (০-৬৪ স্কেলে, ১০ এর নিচে মানে খুব সিমিলার)
-                    if (distance < 12) {
-                        markAsSimilar(fileHashes[j].id, fileHashes[i].name);
-                        similarFound++;
+                    if (hash) {
+                        fileHashes.push({ id: fileData.id, name: fileData.name, hash: hash });
                     }
+                } catch (e) { 
+                    console.error("Hash failed for", fileData.name, e); 
                 }
             }
 
-            btn.disabled = false;
-            btn.innerHTML = originalHTML;
+            // ২. পূর্বের সিমিলারিটি ওয়ার্নিং ব্যাজগুলো রিমুভ করা
+            document.querySelectorAll('.similarity-warning, .similarity-badge').forEach(el => el.remove());
 
-            if (similarFound > 0) {
-                alert(`Found ${similarFound} highly similar images! Red-marked images might be rejected as spam by stock agencies.`);
-            } else {
-                alert("Great! No significant similarity or spam detected in your batch.");
-            }
+            // ৩. ওয়েব ওয়ার্কার দিয়ে হাই-স্পিড Hamming Distance ও Match % বের করা
+            const workerCode = `
+                function calculateHammingDistance(hash1, hash2) {
+                    let distance = 0;
+                    for (let i = 0; i < hash1.length; i++) {
+                        if (hash1[i] !== hash2[i]) distance++;
+                    }
+                    return distance;
+                }
+                
+                self.onmessage = function(e) {
+                    const fileHashes = e.data;
+                    const similarities = [];
+                    for (let i = 0; i < fileHashes.length; i++) {
+                        for (let j = i + 1; j < fileHashes.length; j++) {
+                            const hash1 = fileHashes[i].hash;
+                            const hash2 = fileHashes[j].hash;
+                            
+                            if (!hash1 || !hash2 || hash1.length !== hash2.length) continue;
+                            
+                            const distance = calculateHammingDistance(hash1, hash2);
+                            // ২৫৬-বিট ডিফারেন্স থেকে পার্সেন্টেজ হিসাব
+                            const matchPercent = Math.round((1 - (distance / 256)) * 100);
+                            
+                            // ৭০% বা তার বেশি মিল থাকলে সেটিকে ওয়ার্নিং হিসেবে ধরা হবে
+                            if (matchPercent >= 70) {
+                                similarities.push({
+                                    targetId: fileHashes[j].id,
+                                    sourceName: fileHashes[i].name,
+                                    targetName: fileHashes[j].name,
+                                    matchPercent: matchPercent
+                                });
+                            }
+                        }
+                    }
+                    self.postMessage(similarities);
+                };
+            `;
+            
+            const workerBlob = new Blob([workerCode], { type: 'application/javascript' });
+            const workerUrl = URL.createObjectURL(workerBlob);
+            const worker = new Worker(workerUrl);
+
+            worker.onmessage = (e) => {
+                const similarities = e.data;
+                let similarFound = 0;
+
+                // একই ইমেজের একাধিক ম্যাচ থাকলে সর্বোচ্চ ম্যাচ পার্সেন্টেজটি ফিল্টার করা
+                const bestMatches = {};
+                similarities.forEach(sim => {
+                    if (!bestMatches[sim.targetId] || bestMatches[sim.targetId].matchPercent < sim.matchPercent) {
+                        bestMatches[sim.targetId] = sim;
+                    }
+                });
+
+                Object.values(bestMatches).forEach(sim => {
+                    markAsSimilar(sim.targetId, sim.sourceName, sim.matchPercent);
+                    similarFound++;
+                });
+
+                btn.disabled = false;
+                btn.innerHTML = originalHTML;
+
+                if (similarFound > 0) {
+                    alert("Found " + similarFound + " highly similar images or templates! Highlighted images might be rejected as spam/duplicates by stock agencies.");
+                } else {
+                    alert("Excellent! No significant structural similarity or template duplication detected in your batch.");
+                }
+
+                worker.terminate();
+                URL.revokeObjectURL(workerUrl);
+            };
+
+            worker.onerror = (err) => {
+                console.error("Similarity Checker Worker Error:", err);
+                btn.disabled = false;
+                btn.innerHTML = originalHTML;
+                alert("An error occurred during similarity checking.");
+                worker.terminate();
+                URL.revokeObjectURL(workerUrl);
+            };
+
+            worker.postMessage(fileHashes);
         };
 
-        // ইমেজের ডিজিটাল ফিঙ্গারপ্রিন্ট তৈরি (Average Hash Algorithm)
+        // ২৫৬-বিট ডিফারেন্স হ্যাশ (dHash) জেনারেটর (SVG ও ট্রান্সপারেন্সি সাপোর্টেড)
         async function getImageFingerprint(cardId) {
-            return new Promise((resolve) => {
-                const img = document.querySelector(`#${cardId} .thumbnail-medium`);
+            return new Promise(async (resolve) => {
+                const img = document.querySelector("#" + cardId + " .thumbnail-medium");
+                if (!img) {
+                    resolve("");
+                    return;
+                }
+
+                // ১. ইমেজটি সম্পূর্ণ লোড হওয়া পর্যন্ত অপেক্ষা করা (অ্যাসিনক্রোনাস রেন্ডারিং নিশ্চিত করতে)
+                if (!img.complete || img.naturalWidth === 0) {
+                    await new Promise((res) => {
+                        img.onload = res;
+                        img.onerror = res;
+                        setTimeout(res, 1200); // ১.২ সেকেন্ড ব্যাকআপ সেফটি টাইমাউট
+                    });
+                }
+
+                // ২. ব্রাউজার মেমোরিতে ইমেজ ডিকোড করা
+                if (typeof img.decode === 'function') {
+                    try {
+                        await img.decode();
+                    } catch (e) {
+                        console.warn("Image decode failed, trying standard draw", e);
+                    }
+                }
+
                 const canvas = document.createElement('canvas');
                 const ctx = canvas.getContext('2d');
 
-                // ৮x৮ ছোট ইমেজ তৈরি (কালার ইগনোর করে শুধু স্ট্রাকচার দেখার জন্য)
-                canvas.width = 8;
-                canvas.height = 8;
-                ctx.drawImage(img, 0, 0, 8, 8);
+                // স্ট্রাকচারাল প্যাটার্ন চেক করার জন্য ১৭x১৬ গ্রিড সাইজ
+                canvas.width = 17;
+                canvas.height = 16;
 
-                const imageData = ctx.getImageData(0, 0, 8, 8).data;
-                let grayScale = [];
-                let total = 0;
+                // ৩. সলিড সাদা ব্যাকগ্রাউন্ড ফিল করা (ট্রান্সপারেন্ট ব্যাকগ্রাউন্ডের কালো পিক্সেল সমস্যা দূর করতে)
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(0, 0, 17, 16);
 
-                for (let i = 0; i < imageData.length; i += 4) {
-                    const avg = (imageData[i] + imageData[i + 1] + imageData[i + 2]) / 3;
-                    grayScale.push(avg);
-                    total += avg;
+                // ৪. ক্যানভাসে ইমেজ ড্র করা
+                try {
+                    ctx.drawImage(img, 0, 0, 17, 16);
+                } catch (err) {
+                    console.error("Canvas drawImage failed for card", cardId, err);
+                    resolve("");
+                    return;
                 }
 
-                const averageColor = total / 64;
-                // ১ এবং ০ দিয়ে একটি ৬৪-বিটের হ্যাশ তৈরি করা
-                const hash = grayScale.map(pixel => pixel > averageColor ? '1' : '0').join('');
+                const imgData = ctx.getImageData(0, 0, 17, 16).data;
+                const grayscale = [];
+
+                // ৫. গ্রে-স্কেল কনভার্সন
+                for (let i = 0; i < imgData.length; i += 4) {
+                    const r = imgData[i];
+                    const g = imgData[i + 1];
+                    const b = imgData[i + 2];
+                    const gray = 0.299 * r + 0.587 * g + 0.114 * b;
+                    grayscale.push(gray);
+                }
+
+                // ৬. অনুভূমিক বাউন্ডারি ও পিক্সেল ডিফারেন্স তুলনা (১৬x১৬ = ২৫৬ বিট dHash)
+                let hash = "";
+                for (let row = 0; row < 16; row++) {
+                    for (let col = 0; col < 16; col++) {
+                        const leftIdx = row * 17 + col;
+                        const rightIdx = leftIdx + 1;
+                        const left = grayscale[leftIdx];
+                        const right = grayscale[rightIdx];
+                        hash += (left > right) ? "1" : "0";
+                    }
+                }
                 resolve(hash);
             });
         }
 
-        // দুই হ্যাশের মধ্যে পার্থক্য বের করা
+        // দুই হ্যাশের মধ্যে পার্থক্য বের করার ফাংশন
         function calculateHammingDistance(hash1, hash2) {
             let distance = 0;
             for (let i = 0; i < hash1.length; i++) {
@@ -11011,60 +13196,109 @@ Format Example:
             return distance;
         }
 
-        // সিমিলার ইমেজ মার্ক করা
-        function markAsSimilar(cardId, matchedWithName) {
+        // সিমিলার ইমেজ প্রফেশনাল ব্যাজ দিয়ে মার্ক করা
+        function markAsSimilar(cardId, matchedWithName, matchPercent) {
             const card = document.getElementById(cardId);
             if (card) {
                 card.classList.add('similarity-warning');
+                
+                // মিলের তীব্রতার ওপর ভিত্তি করে কালার ও ঝুঁকি নির্ধারণ
+                let riskText = "Medium Similarity";
+                let riskColor = "#F59E0B"; // কমলা রং
+                
+                if (matchPercent >= 80) {
+                    riskText = "High Spam Risk";
+                    riskColor = "#EF4444"; // লাল রং
+                    card.style.borderColor = "#EF4444";
+                } else {
+                    card.style.borderColor = "#F59E0B";
+                }
+
                 if (!card.querySelector('.similarity-badge')) {
                     const badge = document.createElement('div');
                     badge.className = 'similarity-badge';
-                    badge.innerHTML = `<i class="fas fa-exclamation-triangle"></i> Similar to: ${matchedWithName}`;
+                    // আধুনিক ভিজ্যুয়াল ওভারলে স্টাইল
+                    badge.style.cssText = 'position: absolute; bottom: 45px; color: ' + riskColor + '; padding: 20px; border-radius: 8px; font-size: 0.72em; font-weight: bold; z-index: 10; border: 1px solid ' + riskColor + '; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5); text-align: center; backdrop-filter: blur(4px); margin: -20px 0px 0px 0px; ';
+                    badge.innerHTML = '<i class="fas fa-exclamation-triangle"></i> ' + riskText + ': ' + matchPercent + '%<br><span style="font-size: 0.85em; color: #E2E8F0; font-weight: normal;">Matches: ' + matchedWithName + '</span>';
                     card.querySelector('.card-image-col').appendChild(badge);
                 }
             }
-        }
+        }   
 
         document.addEventListener('DOMContentLoaded', function () {
             const pricingToggle = document.getElementById('pricingToggle');
-            const proPrice = document.querySelector('.pricing-card.popular .price');
-            const premiumPrice = document.querySelector('.pricing-card.premium .price');
-            const monthlyLabel = document.getElementById('monthlyLabel');
-            const yearlyLabel = document.getElementById('yearlyLabel');
+            const currencyToggle = document.getElementById('currencyToggle');
 
-            // Monthly Prices
-            const prices = {
-                pro: { monthly: '<s>$12</s> $6', yearly: '<s>$115</s> $89', m_text: '/ month', y_text: '/ year' },
-                premium: { monthly: '<s>$29</s> $14', yearly: '<s>$278</s> $209', m_text: '/ month', y_text: '/ year' }
+            const freePrice = document.getElementById('freePrice');
+            const proPrice = document.getElementById('proPrice');
+            const premiumPrice = document.getElementById('premiumPrice');
+            const agencyPrice = document.getElementById('agencyPrice');
+
+            const priceData = {
+                free: { usd: '$0', inr: '₹0', bdt: '৳0' },
+                pro: {
+                    usd: { monthly: '<s>$12</s> $9', yearly: '<s>$115</s> $89' },
+                    inr: { monthly: '<s>₹1,000</s> ₹750', yearly: '<s>₹10,000</s> ₹7,500' },
+                    bdt: { monthly: '<s>৳1,400</s> ৳1,050', yearly: '৳14,000 ৳10,500' }
+                },
+                premium: {
+                    usd: { monthly: '<s>$29</s> $23', yearly: '<s>$278</s> $209' },
+                    inr: { monthly: '<s>₹2,500</s> ₹1,950', yearly: '<s>₹23,500</s> ₹17,500' },
+                    bdt: { monthly: '<s>৳3,500</s> ৳2,700', yearly: '৳35,000 ৳26,000' }
+                },
+                agency: {
+                    usd: { monthly: '$49', yearly: '$390' },
+                    inr: { monthly: '₹4,150', yearly: '₹33,000' },
+                    bdt: { monthly: '৳5,800', yearly: '৳46,000' }
+                }
             };
 
-            pricingToggle.addEventListener('change', function () {
-                if (this.checked) {
-                    // Switch to Yearly
-                    proPrice.innerHTML = `${prices.pro.yearly}<span data-i18n="year">${prices.pro.y_text}</span>`;
-                    premiumPrice.innerHTML = `${prices.premium.yearly}<span data-i18n="year">${prices.premium.y_text}</span>`;
+            function updatePricing() {
+                const isYearly = pricingToggle ? pricingToggle.checked : false;
+                const currency = currencyToggle ? currencyToggle.value : 'usd';
+                const period = isYearly ? 'yearly' : 'monthly';
+                const suffix = isYearly ? '/ year' : '/ month';
 
-                    yearlyLabel.style.color = "var(--text-primary)";
-                    yearlyLabel.style.fontWeight = "bold";
-                    monthlyLabel.style.color = "var(--text-muted)";
-                    monthlyLabel.style.fontWeight = "normal";
-                } else {
-                    // Switch to Monthly
-                    proPrice.innerHTML = `${prices.pro.monthly}<span data-i18n="month">${prices.pro.m_text}</span>`;
-                    premiumPrice.innerHTML = `${prices.premium.monthly}<span data-i18n="month">${prices.premium.m_text}</span>`;
+                const monthlyLabel = document.getElementById('monthlyLabel');
+                const yearlyLabel = document.getElementById('yearlyLabel');
 
-                    monthlyLabel.style.color = "var(--text-primary)";
-                    monthlyLabel.style.fontWeight = "bold";
-                    yearlyLabel.style.color = "var(--text-muted)";
-                    yearlyLabel.style.fontWeight = "normal";
+                if (monthlyLabel && yearlyLabel) {
+                    if (isYearly) {
+                        // Yearly সিলেক্ট করা থাকলে
+                        monthlyLabel.style.color = 'var(--text-muted)';
+                        monthlyLabel.style.fontWeight = 'normal';
+
+                        yearlyLabel.style.color = 'var(--text-primary)';
+                        yearlyLabel.style.fontWeight = 'bold';
+                    } else {
+                        // Monthly সিলেক্ট করা থাকলে
+                        monthlyLabel.style.color = 'var(--text-primary)';
+                        monthlyLabel.style.fontWeight = 'bold';
+
+                        yearlyLabel.style.color = 'var(--text-muted)';
+                        yearlyLabel.style.fontWeight = 'normal';
+                    }
                 }
-            });
+
+                // আপডেট ফাংশন
+                const formatPrice = (val) => `${val}<span class="period">${suffix}</span>`;
+
+                if (freePrice) freePrice.innerHTML = formatPrice(priceData.free[currency]);
+                if (proPrice) proPrice.innerHTML = formatPrice(priceData.pro[currency][period]);
+                if (premiumPrice) premiumPrice.innerHTML = formatPrice(priceData.premium[currency][period]);
+                if (agencyPrice) agencyPrice.innerHTML = formatPrice(priceData.agency[currency][period]);
+            }
+
+            if (pricingToggle) pricingToggle.addEventListener('change', updatePricing);
+            if (currencyToggle) currencyToggle.addEventListener('change', updatePricing);
+
+            updatePricing();
         });
 
 
-// ===========================================
-// SECTION 3: Rejection Info Modal
-// ===========================================
+        // ===========================================
+        // SECTION 3: Rejection Info Modal
+        // ===========================================
         // Open Rejection Info Modal
         function openRejectionInfoModal() {
             const modal = document.getElementById('rejectionInfoModal');
@@ -11073,9 +13307,9 @@ Format Example:
             }
         }
 
-// ===========================================
-// SECTION 4: Tour Implementation
-// ===========================================
+        // ===========================================
+        // SECTION 4: Tour Implementation
+        // ===========================================
         // Tour Implementation
         function startMetaGenTour() {
             const driver = window.driver.js.driver;
@@ -11129,3537 +13363,6 @@ Format Example:
             });
             driverObj.drive();
         }
-
-
-// ===========================================
-// SECTION 5: Multi-language Translations
-// ===========================================
-        const translations = {
-            en: {
-                flag: '🇺🇸',
-                name: 'EN',
-                band: 'MetaGen Pro',
-                tagline: 'Metadata, Powered by AI',
-                home: 'Home',
-                features: 'Features',
-                start_tour: 'Start Tour',
-                faq: 'FAQ',
-                menu: 'MENU',
-                blog: 'Blog Post',
-                disclaimer: 'Disclaimer',
-                about: 'About Us',
-                contact: 'Contact Us',
-                legal: 'Legal',
-                select_lang: 'Select Language',
-                general_btn: "General",
-                save_key: 'Save Keys',
-                close: 'Close',
-                get_key: 'Get Key',
-                badge: 'Badge',
-                try_metagen: 'Try MetaGen Free',
-                no_api: 'No API Key required for your trial',
-                ref: 'Unlock Extra Daily Limit!',
-                ref_text: 'Share MetaGen Pro. When someone joins by clicking on your referral link, your daily process limit will increase by +50!',
-                ref_share_btn: 'Share now',
-                watting_for: 'What are you waiting for?',
-                "get_start": "Get Started for Free",
-                "drag_and_drop": "Drag and drop anywhere to upload",
-                "fast": "Fast",
-                "best": "Best",
-                "generate_meta": "Generate Metadata",
-                "delete_select": "Delete Selected",
-                "down_select": "Download Selected", // Fixed logical typo based on key name
-                "translate_select": "Translate Selected",
-                "done": "Done",
-                "processing": "Processing",
-                "analyzing_market": "Analyzing Market Trends...",
-                "ai_is_researching": "AI is researching high-performing concepts for you.",
-                "analyzing": "Analyzing...",
-                "copy_tag": "Copy Tags",
-                "copy_idea": "Copy Idea & Info",
-                "download": "Download",
-                "enter_your_convert_api": "Enter your Convert API key to enable EPS file conversions.",
-                "export_csv": "Export CSV",
-                "export_excel": "Export Excel",
-                "niche_research_cen": "Niche Research Center",
-                "niche_research_tag": "Discover high-demand, low-competition keywords and concepts for your stock portfolio.",
-                "select_category": "Select Category",
-                "market_focus": "Market Focus",
-                "analyze_trend": "Analyze Trends",
-                "ready_to_research": "Ready to Research",
-                "ready_to_research_tag": "Select a category above and click \"Analyze Trends\" to uncover profitable niches.",
-                "quick_suggest": "Quick Suggestions",
-                "label_title": "Title",
-                "label_desc": "Description",
-                "label_keywords": "Keywords",
-                "btn_copy": "Copy",
-                "btn_add": "Add",
-                "placeholder_add_kw": "Add keyword...",
-                "seo_score": "SEO Score",
-                "rejection": "Rejection",
-                "platform_check": "Platform Check",
-                "style": "Style",
-                "mode": "Mode",
-                "translate": "Translate",
-                "go": "Go",
-                "min_title": "Min Title Words",
-                "max_title": "Max Title Words",
-                "min_keywords": "Min Keywords",
-                "max_keywords": "Max Keywords",
-                "min_desc": "Min Description Words",
-                "max_desc": "Max Description Words",
-                "toggle_silhouette": "Silhouette",
-                "toggle_vector": "Vector / Illustration Mode",
-                "toggle_white_bg": "White Background",
-                "toggle_trans_bg": "Transparent Background",
-                "toggle_custom_prompt": "Custom Prompt",
-                "toggle_prohibited": "Prohibited Words",
-                "toggle_single_kw": "Single Word Keywords",
-                "toggle_change_name": "Change File Name",
-                "toggle_name_title": "File Name as Title",
-                "feedback_matters": "Your Feedback Matters",
-                "provide_feedback": "Please provide feedback about the tool?",
-                "issue_type": "Issue Type",
-                "general_feedback": "General Feedback",
-                "bug_report": "Bug Report",
-                "feature_request": "Feature Request",
-                "your_mess": "Your Message",
-                "send_feed": "Send Feedback",
-                "trial_credits": "Trial Credits",
-                "trial_footer": "First 10 images are on us! Add your API key for unlimited use.",
-                eps_meta: 'EPS Metadata Generate & Embed',
-                month: '/ month',
-                pricing: 'Pricing',
-                ftp_upload: 'FTP Direct Upload',
-                ftp_upload_sub_txt: 'Upload files directly to stock sites (Adobe Stock, Shutterstock, Magnific).',
-                upgrade_plan: 'Upgrade Plan',
-                stock_calendar: 'Stock Calendar',
-                get_access: 'Get access',
-                pricing_plan: 'Our Pricing Plan',
-                pricing_sub_txt: 'Choose the perfect plan for your creative workflow.',
-                free_plan: 'Free Plan',
-                free_price: '$0/month',
-                most_popular: 'Most Popular',
-                pro_plan: 'Upgrade to Pro',
-                pro_price: '$12/month',
-                premium_plan: 'Premium Plan',
-                premium_price: '$29/month',
-                '50_image': '120 images/month (Max 10/day for fair usage)',
-                basic_ai_model: 'Basic AI models (Gemini, Mistral, Groq) Use your own API key.',
-                batch_process: 'Batch process: up to 50 files',
-                csv_export: 'CSV Export',
-                ads_support: 'Ads Supported',
-                auto_embed: 'Metadata Auto Embed (JPG/PNG/SVG)',
-                excel_export: 'Excel Export',
-                drag_keyword: 'Drag & Drop Keyword Reordering',
-                copy_trade_check: 'Copyright/Trademark Check',
-                get_started_free: 'Get Started Free',
-                '300_images': '2000 images/month',
-                advance_ai: 'Advanced AI models (API key not required.)',
-                batch_process_pro: 'Batch process: up to 100 files',
-                csv_excel_ex: 'CSV/Excel Export',
-                seo_and_no_ads: 'SEO Analytics & No Ads',
-                support_time: 'Support time 24hours',
-                '1k_image': '3000 images/month',
-                all_pro: 'All Pro Features',
-                batch_process_pre: 'Batch process: up to 300 files',
-                ftp_auto_up: 'FTP/SFTP Auto Upload',
-                vector_eps: 'Direct Vector/EPS conversion',
-                vip_support: 'VIP Support & Early Access',
-                privacy_policy: 'Privacy Policy',
-                terms_of_service: 'Terms of Service',
-                adjustment: 'Adjustment',
-                multi_tool: 'Multi Image Tools',
-                sketch_art: 'Image to Sketch Art',
-                all_tools: 'All Tools',
-                image_enhance: 'AI Image Enhancer',
-                bg_remove: 'AI Background Remover',
-                pixel_check: 'Pixel-Check Studio',
-                text_to_image: 'Text to Image Generator',
-                company: 'Company',
-                free_plan: 'Free plan',
-                note: 'API access will be removed in 7 days. Upgrade to the Pro/Premium plan and use all the features of MetaGen Pro.',
-                platform: 'Platform',
-                add_more: 'Add More File',
-                well_come: 'Welcome Back',
-                login_google: 'Continue with Google',
-                new_user: 'New user?',
-                create_account: 'Create an account',
-                niche_research: 'Niche Research',
-                metadata_generator: 'Metadata Generator',
-                seo_score: 'SEO Score & Analytics',
-                batch_process: 'Super Fast Batch Process',
-                sign_out: 'Sign out',
-                switch_account: 'Switch account',
-                upload_title: 'Upload Images or Videos',
-                drag_drop: 'Drag & drop files here or click to upload',
-                supports: 'Supports JPG, PNG, WEBP, MP4, MOV',
-                max_size: 'Max 50MB per file',
-                privacy_note: 'Your files are processed securely and deleted after 1 hour.',
-                privacy_note_device: 'We analyze files on-device only, data is purged after processing.',
-                upload_limit_info: 'Plan: {{plan}} | Limit: {{limit}} files/day',
-                usage: 'Usage:',
-                "daily_limit": "Daily Process Limit",
-                refer_text: 'Share MetaGen Pro to get +50 extra monthly limit!',
-                "share_get_credit": "Share & Get Process Credit",
-                generate_metadata: 'Generate Metadata',
-                "limit_reached_msg": "You have reached your daily process limit! Upgrade your plan for higher limits or share the tool for a bonus.",
-                export_csv: 'Export to CSV',
-                export_excel: 'Export to Excel',
-                clear_all: 'Clear All',
-                copy_all: 'Copy All',
-                down_eps: 'Download EPS',
-                guides: 'Guides',
-                title: 'Title',
-                description: 'Description',
-                keywords: 'Keywords',
-                categories: 'Categories',
-                already_user: 'Already have an account?',
-                login: 'Login',
-                tools_generator: 'Tools & Generator',
-                trending: '📅 Trending...',
-                customization: 'Customization',
-                settings: 'Settings',
-                select_ai: 'Select AI Provider',
-                manage_api: 'Manage API Keys',
-                convert_api: 'ConvertAPI Key',
-                translation_lang: 'Translation Language',
-                upload_files: 'Upload Files',
-                watch_demo: 'Watch Demo',
-                watch_tagline: 'See how to boost your stock sales in seconds',
-                process_selected: 'Process Selected',
-                batch_quality_check: 'Batch Quality Check',
-                check_quality: 'Quality Check',
-                quality_pending: 'Quality: Pending',
-                process_prompts: 'Process Prompts',
-                embed_metadata: 'Embed Metadata',
-                export: 'Export',
-                batch_translate: 'Batch Translate (Free)',
-                translate_all: 'Translate All (Pro)',
-                test_metadata: 'Test Metadata',
-                save_folder: 'Save to Folder',
-                upload_complete: 'Upload Complete',
-                share_files: 'Share Files',
-                upload_drive: 'Upload to Drive',
-                pause: 'Pause',
-                image_to_prompt: 'Image to Prompt',
-                jpg_png: 'JPG/PNG',
-                svg_eps: 'SVG/EPS/AI',
-                videos: 'Videos',
-                check_copyright: 'Check for Copyright/Trademark:',
-                upload_limit: 'Upload a maximum of 500 files in a single action',
-                resume: 'Resume',
-                send_feedback: 'Send Feedback / Bug Report',
-                view_translated: 'View Translated',
-                view_original: 'View Original',
-                analyze_trends: 'Analyze Trends',
-                downloading: 'Downloading...',
-                translating: 'Translating...',
-                embedding: 'Embedding...',
-                analyzing: 'Analyzing...',
-                processing: 'Processing...',
-                process: 'Process',
-                files: 'Files',
-                prompts: 'Prompts',
-                complete: 'Complete',
-                success: 'Success',
-                fail: 'Failed',
-                saving: 'Saving...',
-                preparing: 'Preparing...',
-                uploading: 'Uploading...',
-                initializing: 'Initializing connection...',
-                "faq_q1": "How to use MetaGen Pro?",
-                "faq_a1": "Upload your stock photos/videos -> Select AI Model -> Click 'Generate Metadata' -> Review and Download!",
-                "faq_q2": "Is MetaGen Pro free? What's the pricing?",
-                "faq_a2": "<p><strong>Free for everyone!</strong> MetaGen Pro offers a robust Free plan (120 images/month, max 25/day). For heavy users, we have <strong>Pro</strong> ($12/mo - 2000 images/month, max 70/day) and <strong>Premium</strong> ($29/mo - 3000 images/month, max 100/day) plans with advanced features like Excel export and direct FTP upload.</p>",
-                "faq_q3": "Is my data safe?",
-                "faq_a3": "Yes, we process all data on-device or via secure AI endpoints and purge it immediately after use.",
-                "faq_q4": "Which formats are supported?",
-                "faq_a4": "Currently we support JPG, PNG, WEBP, MP4, MOV. Support for SVG and EPS is available via ConvertAPI.",
-                "faq_q5": "Can I upgrade my plan?",
-                "faq_a5": "Yes! You can upgrade anytime from the Pricing section. Contact us at metagenp@gmail.com for early access billing details.",
-                "faq_q6": "How can I get more process limits?",
-                "faq_a6": "You can get +50 extra monthly limits for one month by referring your friends! Find your referral link in the profile modal.",
-                "hero_title": "Free AI Metadata Generator & Stock Photo Keywords!",
-                hero_tagline: 'Boost your visibility on Shutterstock, Adobe Stock, and Magnific. Generate SEO-optimized titles, descriptions, and keywords in seconds using advanced AI.',
-                why_choose: 'Why Choose MetaGen Pro?',
-                blog_1: 'Super Fast Batch Processing',
-                blog_tag_1: 'Analyze and keyword hundreds of images in seconds. Save hours of manual work with our optimized batch engine.',
-                blog_2: 'Advanced AI Analysis',
-                blog_tag_2: 'Powered by Advance AI Model for industry-leading image recognition and accurate metadata.',
-                blog_3: 'SEO Optimized Keywords',
-                blog_tag_3: 'Generate high-ranking titles and tags specifically tailored for Shutterstock, Adobe Stock & Magnific algorithms.',
-                blog_4: 'Niche Research',
-                blog_tag_4: 'Discover low-competition, high-demand topics with our built-in Niche Research tool. Find what buyers are searching for.',
-                blog_5: 'Drag & Drop Keyword Reordering',
-                blog_tag_5: 'On stock sites (Adobe Stock, Shutterstock) the first 5-10 keywords are the most important.',
-                blog_6: 'Metadata Embedding',
-                blog_tag_6: 'Embed titles and keywords directly into your JPG/PNG/SVG files (IPTC/XMP). Simply download and upload to any stock agency.',
-                blog_7: 'Multi-Language',
-                blog_tag_7: 'Translate your metadata into 10+ languages instantly. Reach a global audience with localized titles and descriptions.',
-                blog_8: 'Copyright Check',
-                blog_tag_8: 'Avoid rejection! Our AI scans for potential trademark issues and logos in your images before you upload them.',
-                blog_9: 'Export Metadata CSV',
-                blog_tag_9: 'All stock site\'s (Adobe Stock, Shutterstock, Magnific) CSV file export facility.',
-                trusted_all: 'Trusted for All Major Microstock Platforms',
-                it_works: 'How It Works',
-                upload_photos: 'Upload Photos',
-                upload_photos_tag: 'Drag & drop your JPG/PNG files. We automatically read dimensions and tech specs.',
-                select_platfrom: 'Select Platform & AI',
-                select_platfrom_tag: 'Choose your target market (e.g. Adobe Stock) and preferred AI model (Gemini/Groq).',
-                gen_down: 'Generate & Download',
-                gen_down_tag: 'Get SEO-ready titles & keywords instantly. Download CSV or Embed directly.',
-                processing_files: 'Processing Files...',
-                why_choose_stock_title: 'Why Choose MetaGen Pro for Stock Photography?',
-                how_to_use_title: 'How to use Tool?',
-                master_stock_title: 'Master Your Stock Photography with AI-Powered Metadata',
-                trusted_stock_title: 'Trusted by Stock Contributors Across the USA',
-                why_choose_stock_p1: 'In the competitive world of stock photography, discoverability is key. Even the best images won\'t sell if buyers can\'t find them. <strong>MetaGen Pro</strong> is the ultimate <em>AI Metadata Generator</em> designed to solve this problem.',
-                why_choose_stock_p2: 'Unlike manual keywording which is tedious and prone to errors, our tool uses state-of-the-art computer vision to analyze your image\'s subject, mood, lighting, and composition. It then generates 50+ optimized keywords, catchy titles, and detailed descriptions tailored for platforms like <strong>Shutterstock, Adobe Stock, Magnific, and Vecteezy</strong>.',
-                why_choose_stock_p3: 'Whether you are a photographer, illustrator, or AI artist, MetaGen Pro streamlines your workflow. Features like <strong>Image-to-Prompt</strong> help you reverse-engineer successful AI images, while our <strong>Rejection Predictor</strong> helps you fix technical issues before uploading.',
-                why_choose_stock_p4: 'Start maximizing your passive income today with the most advanced, free stock photo tagger available.',
-                "plan_details_title": "Which Plan is Right for You?",
-                "plan_details_free": "Free Plan - Best for Beginners",
-                "plan_details_free_p1": "Our Free Plan is designed for hobbyists and new stock contributors. It allows you to process up to <strong>120 images per month (Max 10/day)</strong>. To keep the service completely free, You get access to our core features including super-fast batch processing (up to 10 files at once), AI metadata generation, and CSV export. Note that advanced features like Metadata Auto-Embed, Excel Export, and Copyright Checks are not included in this plan.",
-                "plan_details_pro": "Pro Plan - For Professionals",
-                "plan_details_pro_p1": "The Pro Plan is built for regular contributors who want to maximize their workflow and save hours of time. With a generous limit of <strong>2000 images/month (Max 70/day)</strong>, you no longer need to bring your own API keys—we handle all AI requests securely on our end. This plan unlocks powerful tools like <strong>Metadata Auto-Embed</strong> directly into your JPEG/PNG/SVG files, Drag & Drop Keyword Reordering, AI Copyright/Trademark checking, and Excel export. It also increases your batch processing limit to 100 files at once and offers a completely ad-free experience.",
-                "plan_details_premium": "Premium Plan - For Power Users & Agencies",
-                "plan_details_premium_p1": "Designed for high-volume creators, vector artists, and agencies, the Premium Plan offers a massive limit of <strong>3000 images/month (Max 100/day)</strong> and a batch limit of 300 files. It includes everything in the Pro plan, plus advanced automation features. You get exclusive access to <strong>Direct Vector/EPS conversion</strong> (no need for 3rd party ConvertAPI keys) and the <strong>FTP/SFTP Auto Upload</strong> feature. This allows you to automatically distribute your processed files and metadata directly to multiple stock agencies (Shutterstock, Adobe Stock, Magnific, etc.) straight from your browser.",
-                "htu_step1_title": "1. Upload Files",
-                "htu_step1_desc": "Drag & drop images (JPG/PNG), vectors (SVG/EPS), or videos to start.",
-                "htu_step2_title": "2. Target Platform",
-                "htu_step2_desc": "Select Shutterstock, Adobe Stock, or Magnific for optimized results.",
-                "htu_step3_title": "3. AI Model Select",
-                "htu_step3_desc": "Choose between Gemini, Mistral, or Groq for image analysis.",
-                "htu_step4_title": "4. Customization",
-                "htu_step4_desc": "Adjust Min/Max words for titles and keywords using sliders.",
-                "htu_step5_title": "5. AI Settings",
-                "htu_step5_desc": "Enable Vector Mode, White BG, or use your own Custom Prompts.",
-                "htu_step6_title": "6. Generate Metadata",
-                "htu_step6_desc": "Click 'Process Selected' to get SEO-ready titles and tags instantly.",
-                "htu_step7_title": "7. Embed Metadata",
-                "htu_step7_desc": "Directly write metadata into your JPG, PNG, or SVG files.",
-                "htu_step8_title": "8. Multi-Translate",
-                "htu_step8_desc": "Translate metadata into 10+ languages for a global market.",
-                "htu_step9_title": "9. Export Results",
-                "htu_step9_desc": "Download all your metadata as CSV or professional Excel sheets.",
-                "htu_step10_title": "10. Save & Drive",
-                "htu_step10_desc": "Save to local folder, share via link, or upload directly to Drive.",
-                master_stock_subtitle1: 'How to Use MetaGen Pro',
-                master_stock_p1: 'Getting started with MetaGen Pro is incredibly simple and requires no technical expertise. First, upload your images by dragging and dropping them into the designated upload area, or click to browse your files. MetaGen Pro supports all major image formats including JPG, PNG, SVG, and EPS, as well as video files. Once your images are uploaded, select your target platform (Shutterstock, Adobe Stock, Magnific, or General) to optimize the metadata specifically for that marketplace.',
-                master_stock_p2: 'Next, configure your preferences using the sidebar settings. You can adjust the number of keywords (we recommend 35-50 for optimal SEO), set title length constraints, and enable special features like Vector Mode for illustrations or White Background detection for product images. The AI provider selection allows you to choose between Google Gemini, Mistral AI, or Groq Llama models based on your API availability and speed preferences.',
-                master_stock_p3: 'After configuration, click the "Process All" button to generate metadata for all uploaded images simultaneously. Our advanced AI analyzes each image\'s visual content, composition, colors, subjects, and context to create highly relevant titles, descriptions, and keyword sets. The entire process typically takes just seconds per image, even when processing hundreds of files in batch mode.',
-                master_stock_subtitle2: 'Benefits of Using This Tool',
-                master_stock_benefit1: '<strong>Time Efficiency:</strong> Manual keywording can take 10-15 minutes per image. MetaGen Pro reduces this to mere seconds, allowing you to keyword hundreds of images in the time it would take to manually process just a few. For professional contributors uploading 50-100 images weekly, this translates to saving 10+ hours every single week.',
-                master_stock_benefit2: '<strong>SEO Optimization:</strong> Our AI doesn\'t just describe what it sees—it understands search intent and marketplace algorithms. Each metadata set includes a strategic mix of broad keywords (high search volume), specific long-tail keywords (high conversion), and trending terms (current demand). The built-in SEO Score meter evaluates your metadata in real-time, ensuring every upload is optimized for maximum discoverability.',
-                master_stock_benefit3: '<strong>Multi-Platform Support:</strong> Different stock agencies have different requirements and preferences. MetaGen Pro adapts to each platform\'s unique algorithm—Shutterstock prefers different keyword structures than Adobe Stock or Magnific. Our platform-specific optimization ensures your images rank well wherever you upload them.',
-                master_stock_benefit4: '<strong>Consistency and Quality:</strong> Eliminate human error and maintain professional standards across your entire portfolio. MetaGen Pro ensures every image has properly formatted metadata, adequate keyword quantity, and appropriate descriptions. The Rejection Predictor feature analyzes your metadata against common rejection criteria, helping you avoid costly submission failures.',
-                master_stock_subtitle3: 'What is Image SEO and Why It Matters',
-                master_stock_seo_p1: 'Image SEO (Search Engine Optimization) is the practice of optimizing image metadata to improve visibility in search results on stock photography platforms and search engines. When a buyer searches for "business meeting" or "tropical beach sunset," the platform\'s algorithm doesn\'t "see" your image—it reads the metadata you\'ve provided. Effective Image SEO is the difference between your work appearing on page 1 versus page 50 of search results.',
-                master_stock_seo_p2: '<strong>The Three Pillars of Image SEO:</strong> First, the <em>Title</em> should be descriptive yet concise (10-20 words), containing your primary keywords while remaining natural and readable. Second, the <em>Description</em> provides context and use cases (30-50 words), helping both algorithms and buyers understand your image\'s commercial applications. Third, <em>Keywords</em> cast a wide net (35-50 terms recommended), capturing various search queries that could lead buyers to your image.',
-                master_stock_seo_p3: '<strong>Keyword Strategy Matters:</strong> The most effective metadata uses a balanced mix: 20-30% single-word keywords (broad reach), 40-50% two-word phrases (medium specificity), and 20-30% long-tail keywords (high conversion). For example, an image of hands using a smartphone should include "hands" (broad), "smartphone interaction" (medium), and "hands tapping mobile app interface" (long-tail). This strategy maximizes your image\'s chances of appearing in both broad and specific searches.',
-                master_stock_seo_p4: '<strong>Search Ranking Factors:</strong> Stock platforms consider multiple factors when ranking search results. Relevance (how well your metadata matches the search query), completeness (having all metadata fields filled properly), and keyword diversity (using varied, related terms) all impact your ranking. Additionally, commercial relevance—describing how buyers can use your image—significantly impacts conversion rates even when your image does rank well.',
-                master_stock_seo_p5: 'MetaGen Pro automates all these best practices, ensuring every image you upload is fully optimized for maximum visibility, downloads, and ultimately, income. Whether you\'re a hobbyist contributor or a full-time stock photographer, proper Image SEO is non-negotiable in today\'s competitive marketplace.',
-                master_stock_cta: '<strong>Ready to boost your stock photography success?</strong> Start using MetaGen Pro today and transform hours of tedious keywording into seconds of automated excellence.',
-                trusted_stock_subtitle: 'Discover why thousands of American photographers and creators rely on MetaGen Pro to boost their stock revenue',
-                review_1_details: '📍 New York, NY • Professional Photographer',
-                review_1_text: '"MetaGen Pro transformed my workflow completely! I used to spend hours keywording my photos for Shutterstock. Now it takes just minutes and my downloads have increased by 40%. The SEO score feature is brilliant!"',
-                review_2_details: '📍 Los Angeles, CA • Content Creator',
-                review_2_text: '"As a full-time content creator, time is money. This tool saves me at least 10 hours per week on metadata entry. The batch processing is lightning fast and the AI-generated keywords are spot-on. Best investment I\'ve made this year!"',
-                review_3_details: '📍 Miami, FL • Stock Contributor',
-                review_3_text: '"I was skeptical at first, but MetaGen Pro exceeded all expectations. The keyword suggestions are incredibly relevant and the multi-language feature helped me reach international buyers. My Adobe Stock earnings doubled in just 3 months!"',
-                review_4_details: '📍 Chicago, IL • Graphic Designer',
-                review_4_text: '"The copyright check feature alone is worth the price! It\'s saved me from potential rejections multiple times. Combined with the automated metadata generation, this tool is a must-have for anyone serious about stock photography."',
-                review_5_details: '📍 Seattle, WA • Nature Photographer',
-                review_5_text: '"I upload hundreds of nature photos every month. MetaGen Pro makes it effortless to manage and optimize all of them. The CSV export feature seamlessly integrates with my workflow. Highly recommend to fellow contributors!"',
-                review_6_details: '📍 Austin, TX • Freelance Videographer',
-                review_6_text: '"Game-changer for video metadata! The AI accurately identifies scenes and generates perfect titles. My Shutterstock video portfolio visibility improved dramatically. Support team is also extremely responsive and helpful."',
-                stat_users: 'Active US Users',
-                stat_satisfaction: 'Satisfaction Rate',
-                stat_images: 'Images Optimized Daily',
-                stat_rating: 'Average Rating',
-                "faq_title": "Frequently Asked Questions — MetaGen Pro",
-                "faq_q1": "🚀 How do I get started with MetaGen Pro?",
-                "faq_a1": "<strong>Step 1:</strong> Sign up or login with your Google account or email.<br><strong>Step 2:</strong> Upload your images (JPG, PNG, SVG, EPS) - up to 500 at once!<br><strong>Step 3:</strong> Select your target platform (Shutterstock, Adobe Stock, etc.) and click 'Generate Metadata'.<br><strong>Step 4:</strong> Review, edit if needed, and download the files with embedded metadata!",
-                "faq_q2": "💰 Is MetaGen Pro free? What is the pricing?",
-                "faq_a2": "<p><strong>Free plan for everyone!</strong> MetaGen Pro offers a powerful free plan (120 images/month, max 25 daily). For heavy usage, we have <strong>Pro</strong> ($12/mo - 2000 images/month, max 70 daily) and <strong>Premium</strong> ($29/mo - 3000 images/month, max 100 daily) plans. Paid plans include advanced features like auto-embedding, Excel export, and direct FTP upload.</p>",
-                "faq_q3": "🔑 Do I need an API key to use MetaGen Pro?",
-                "faq_a3": "<p><strong>No, no API key is required for any plan now!</strong> In all plans, Free, Pro, and Premium, we process metadata using our own servers and Supabase Edge Functions dedicated AI models (advanced AI models).</p><p><strong>Security:</strong> All your data is completely <strong>safe</strong> and is deleted from the server immediately after processing.</p>",
-                "faq_q4": "📁 Which file formats are supported?",
-                "faq_a4": "<p><strong>Supported Formats:</strong></p><ul><li><strong>JPG/JPEG:</strong> Full support with EXIF embedding</li><li><strong>PNG:</strong> Full support with metadata embedding</li><li><strong>SVG:</strong> Full support with XMP metadata embedding</li><li><strong>EPS:</strong> Converted and processed</li></ul><p>Upload up to <strong>500 files</strong> at a time!</p>",
-                "faq_q5": "🎯 Which platforms are supported?",
-                "faq_a5": "<p>Optimized for all major platforms including Shutterstock, Adobe Stock, Magnific, Vecteezy, Pond5, 123RF, and more. Our AI generates metadata according to each platform's rules!</p>",
-                "faq_q6": "📊 What are SEO Score and Keyword Badges?",
-                "faq_a6": "<p><strong>SEO Score:</strong> Measures how well your metadata is optimized for search algorithms.</p><p><strong>Badges:</strong></p><ul><li>🟢 <strong>Green:</strong> One-word keyword (High search volume)</li><li>🟡 <strong>Yellow:</strong> Two-word keyword (Best balance)</li><li>🔵 <strong>Blue:</strong> 3+ word keyword (Specific target)</li></ul>",
-                "faq_q7": "⚡ How does batch processing work?",
-                "faq_a7": "<p>Upload up to 500 images and click 'Process Selected'. Our AI processes all images simultaneously. It's extremely fast—processing 100 images takes about the same time as one!</p>",
-                "faq_q8": "🎨 What is the 'Image to Prompt' feature?",
-                "faq_a8": "<p>It converts your image into a detailed prompt that can be used in Midjourney or DALL-E. Great for understanding the structure of successful stock photos!</p>",
-                "faq_q9": "🔒 Is my data safe? Do you save images?",
-                "faq_a9": "<p><strong>100% Private!</strong> All processing happens in your browser. We never save your images. Data is wiped as soon as the process is complete.</p>",
-                "faq_q10": "🔧 Common Issues and Solutions",
-                "faq_a10": "<ul><li><strong>Server Error:</strong> Check your internet and refresh the page.</li><li><strong>File too large:</strong> Try to keep it under 20MB.</li><li><strong>Slow speed:</strong> Keep other browser tabs closed.</li></ul>",
-                "faq_q11": "🎭 How does the AI Image Generator work?",
-                "faq_a11": "<p>Use the FLUX model to generate images directly. Write a prompt and create unique images for your stock portfolio!</p>",
-                "faq_q12": "💬 How to get help or give feedback?",
-                "faq_a12": "<p>Email us at: <strong>metagenp@gmail.com</strong> or use the in-app feedback button. We try to respond within 12 hours!</p>"
-            },
-
-            bn: {
-                flag: '🇧🇩',
-                name: 'BN',
-                band: 'মেটাজেন প্রো',
-                tagline: 'মেটাডেটা, AI দ্বারা চালিত',
-                home: 'হোম',
-                features: 'ফিচার',
-                start_tour: 'ট্যুর শুরু করুন',
-                faq: 'প্রশ্নাবলী',
-                menu: 'মেনু',
-                blog: 'ব্লগ',
-                disclaimer: 'দাবিত্যাগ',
-                about: 'আমাদের সম্পর্কে',
-                contact: 'যোগাযোগ',
-                legal: 'আইনি',
-                select_lang: 'ভাষা নির্বাচন করুন',
-                general_btn: "সাধারণ",
-                save_key: 'কী সেভ করুন',
-                close: 'বন্ধ করুন',
-                get_key: 'কী পান',
-                trial_credits: 'ট্রায়াল ক্রেডিট',
-                trial_footer: 'প্রথম ১০টি ইমেজ আমাদের পক্ষ থেকে ফ্রি! আনলিমিটেড ব্যবহারের জন্য আপনার API Key যুক্ত করুন।',
-                badge: 'ব্যাজ',
-                try_metagen: 'MetaGen ফ্রি ব্যবহার করুন',
-                no_api: 'আপনার বিনামূল্যের ট্রায়ালের জন্য কোনও API কী প্রয়োজন নেই।',
-                ref: 'ডাবল লিমিট আনলক করুন!',
-                ref_text: 'Metagen Pro. শেয়ার করুন। আপনার রেফারেল লিঙ্কে ক্লিক করে কেউ জয়েন করলেই আপনার প্রতিদিনের লিমিট ৫০ থেকে ১০০ হয়ে যাবে!',
-                ref_share_btn: 'এখনই শেয়ার করুন',
-                watting_for: 'আপনি আর কিসের জন্য অপেক্ষা করছেন?',
-                "get_start": "বিনামূল্যে শুরু করুন",
-                "drag_and_drop": "আপলোড করার জন্য যেকোনো জায়গায় টেনে আনুন",
-                "fast": "দ্রুত",
-                "best": "সেরা",
-                "generate_meta": "মেটাডেটা তৈরি করুন",
-                "delete_select": "নির্বাচিত মুছুন",
-                "down_select": "নির্বাচিত ডাউনলোড",
-                "translate_select": "নির্বাচিত অনুবাদ",
-                "done": "সম্পন্ন",
-                "processing": "প্রক্রিয়া চলছে",
-                "analyzing_market": "বাজারের ট্রেন্ড বিশ্লেষণ করা হচ্ছে...",
-                "ai_is_researching": "AI আপনার জন্য সেরা কনসেপ্টগুলো খুঁজছে।",
-                "analyzing": "বিশ্লেষণ করা হচ্ছে...",
-                "copy_tag": "ট্যাগ কপি করুন",
-                "copy_idea": "আইডিয়া ও তথ্য কপি করুন",
-                "download": "ডাউনলোড",
-                "enter_your_convert_api": "EPS ফাইল কনভার্সন চালু করতে আপনার Convert API কি দিন।",
-                "export_csv": "CSV রপ্তানি করুন",
-                "export_excel": "এক্সপোর্ট এক্সেল",
-                "niche_research_cen": "নিশ রিসার্চ সেন্টার",
-                "niche_research_tag": "আপনার স্টক পোর্টফোলিওর জন্য উচ্চ-চাহিদা কম-প্রতিযোগিতামূলক কীওয়ার্ড এবং ধারণাগুলি আবিষ্কার করুন।",
-                "select_category": "বিভাগ নির্বাচন করুন",
-                "market_focus": "বাজার ফোকাস",
-                "analyze_trend": "ট্রেন্ডস বিশ্লেষণ করুন",
-                "ready_to_research": "গবেষণার জন্য প্রস্তুত",
-                "ready_to_research_tag": "উপরে একটি বিভাগ নির্বাচন করুন এবং লাভজনক নিশগুলি আবিষ্কার করতে \"ট্রেন্ডস বিশ্লেষণ করুন\" এ ক্লিক করুন।",
-                "quick_suggest": "দ্রুত পরামর্শ",
-                "label_title": "শিরোনাম",
-                "label_desc": "বিবরণ",
-                "label_keywords": "কিওয়ার্ড",
-                "btn_copy": "কপি",
-                "btn_add": "যুক্ত করুন",
-                "placeholder_add_kw": "কিওয়ার্ড লিখুন...",
-                "seo_score": "SEO স্কোর",
-                "rejection": "বাতিল হওয়ার সম্ভাবনা",
-                "platform_check": "প্ল্যাটফর্ম চেক",
-                "style": "স্টাইল",
-                "mode": "মোড",
-                "translate": "অনুবাদ",
-                "go": "যান",
-                "min_title": "ন্যূনতম টাইটেল শব্দ",
-                "max_title": "সর্বোচ্চ টাইটেল শব্দ",
-                "min_keywords": "ন্যূনতম কিওয়ার্ড",
-                "max_keywords": "সর্বোচ্চ কিওয়ার্ড",
-                "min_desc": "ন্যূনতম বিবরণ শব্দ",
-                "max_desc": "সর্বোচ্চ বিবরণ শব্দ",
-                "toggle_silhouette": "সিলুয়েট",
-                "toggle_vector": "ভেক্টর / ইলাস্ট্রেশন মোড",
-                "toggle_white_bg": "সাদা ব্যাকগ্রাউন্ড",
-                "toggle_trans_bg": "স্বচ্ছ ব্যাকগ্রাউন্ড",
-                "toggle_custom_prompt": "কাস্টম প্রম্পট",
-                "toggle_prohibited": "নিষিদ্ধ শব্দ বাদ দিন",
-                "toggle_single_kw": "এক শব্দের কিওয়ার্ড",
-                "toggle_change_name": "ফাইলের নাম পরিবর্তন",
-                "toggle_name_title": "ফাইলের নাম টাইটেল হিসেবে",
-                "feedback_matters": "আপনার প্রতিক্রিয়া গুরুত্বপূর্ণ",
-                "provide_feedback": "দয়া করে টুলটি সম্পর্কে প্রতিক্রিয়া জানান?",
-                "issue_type": "সমস্যার ধরণ",
-                "general_feedback": "সাধারণ প্রতিক্রিয়া",
-                "bug_report": "বাগ রিপোর্ট",
-                "feature_request": "বৈশিষ্ট্য অনুরোধ",
-                "your_mess": "আপনার বার্তা",
-                "send_feed": "প্রতিক্রিয়া পাঠান",
-                eps_meta: 'ইপিএস মেটাডেটা জেনারেট এবং এম্বেড করুন',
-                month: '/ মাস',
-                pricing: 'প্রাইসিং',
-                ftp_upload: 'এফটিপি (FTP) সরাসরি আপলোড',
-                ftp_upload_sub_txt: 'সরাসরি স্টক সাইটে ফাইল আপলোড করুন (Adobe Stock, Shutterstock, Magnific)।',
-                upgrade_plan: 'প্ল্যান আপগ্রেড করুন',
-                stock_calendar: 'স্টক ক্যালেন্ডার',
-                get_access: 'অ্যাক্সেস পান',
-                pricing_plan: 'আমাদের প্রাইসিং প্ল্যান',
-                pricing_sub_txt: 'আপনার ক্রিয়েটিভ ওয়ার্কফ্লোর জন্য নিখুঁত প্ল্যানটি বেছে নিন।',
-                free_plan: 'ফ্রি প্ল্যান',
-                free_price: '$0/মাস',
-                most_popular: 'সবচেয়ে জনপ্রিয়',
-                pro_plan: 'প্রো-তে আপগ্রেড করুন',
-                pro_price: '$12/মাস',
-                premium_plan: 'প্রিমিয়াম প্ল্যান',
-                premium_price: '$29/মাস',
-                '50_image': '১২০টি ছবি/মাস (ফেয়ার ইউসেজ এর জন্য দৈনিক ১০টি)',
-                basic_ai_model: 'বেসিক এআই মডেল (Gemini, Mistral, Groq) আপনার নিজস্ব API কী ব্যবহার করুন।',
-                batch_process: 'ব্যাচ প্রসেস: ৫০টি ফাইল পর্যন্ত',
-                csv_export: 'সিএসভি (CSV) এক্সপোর্ট',
-                ads_support: 'বিজ্ঞাপন সমর্থিত',
-                auto_embed: 'মেটাডেটা অটো এম্বেড',
-                excel_export: 'এক্সেল (Excel) এক্সপোর্ট',
-                drag_keyword: 'ড্র্যাগ অ্যান্ড ড্রপ কীওয়ার্ড রিঅর্ডারিং',
-                copy_trade_check: 'কপিরাইট/ট্রেডমার্ক যাচাইকরণ',
-                get_started_free: 'বিনামূল্যে শুরু করুন',
-                '300_images': '২০০০টি ছবি/মাস (দৈনিক ৭০টি)',
-                advance_ai: 'অ্যাডভান্স এআই মডেল (API কী প্রয়োজন নেই।)',
-                batch_process_pro: 'ব্যাচ প্রসেস: ১০০টি ফাইল পর্যন্ত',
-                csv_excel_ex: 'সিএসভি/এক্সেল (CSV/Excel) এক্সপোর্ট',
-                seo_and_no_ads: 'এসইও অ্যানালিটিক্স এবং কোন বিজ্ঞাপন নেই',
-                support_time: '২৪ ঘন্টা সাপোর্ট',
-                '1k_image': '৩০০০টি ছবি/মাস (দৈনিক ১০০টি)',
-                all_pro: 'সমস্ত প্রো ফিচার',
-                batch_process_pre: 'ব্যাচ প্রসেস: ৩০০টি ফাইল পর্যন্ত',
-                ftp_auto_up: 'এফটিপি/এসএফটিপি (FTP/SFTP) অটো আপলোড',
-                vector_eps: 'সরাসরি ভেক্টর/ইপিএস (Vector/EPS) রূপান্তর',
-                vip_support: 'ভিআইপি (VIP) সাপোর্ট এবং আর্লি অ্যাক্সেস',
-                privacy_policy: 'গোপনীয়তা নীতি',
-                terms_of_service: 'পরিষেবার শর্তাবলী',
-                adjustment: 'সমন্বয়',
-                multi_tool: 'মাল্টি ইমেজ টুলস',
-                sketch_art: 'ছবি থেকে স্কেচ আর্ট',
-                all_tools: 'সকল টুলস',
-                image_enhance: 'এআই ইমেজ এনহ্যান্সার',
-                bg_remove: 'এআই ব্যাকগ্রাউন্ড রিমুভার',
-                pixel_check: 'পিক্সেল-চেক স্টুডিও',
-                text_to_image: 'টেক্সট টু ইমেজ জেনারেটর',
-                company: 'কোম্পানি',
-                free_plan: 'ফ্রি প্ল্যান',
-                note: '৭ দিনের মধ্যে এপিআই অ্যাক্সেস বন্ধ করে দেওয়া হবে। প্রো/প্রিমিয়াম প্ল্যানে আপগ্রেড করুন এবং মেটাজেন প্রো-এর সমস্ত ফিচার ব্যবহার করুন।',
-                platform: 'প্ল্যাটফর্ম',
-                add_more: 'আরও ফাইল যুক্ত করুন',
-                login_google: 'Google দিয়ে চালিয়ে যান',
-                new_user: 'নতুন ব্যবহারকারী?',
-                create_account: 'একটি অ্যাকাউন্ট তৈরি করুন',
-                niche_research: 'নিশ রিসার্চ',
-                metadata_generator: 'মেটাডেটা জেনারেটর',
-                seo_score: 'এসইও স্কোর এবং অ্যানালিটিক্স',
-                batch_process: 'সুপার ফাস্ট ব্যাচ প্রসেস',
-                sign_out: 'সাইন আউট',
-                switch_account: 'অ্যাকাউন্ট পরিবর্তন করুন',
-                upload_title: 'ছবি বা ভিডিও আপলোড করুন',
-                drag_drop: 'ফাইল এখানে ড্র্যাগ অ্যান্ড ড্রপ করুন অথবা আপলোড করতে ক্লিক করুন',
-                supports: 'JPG, PNG, WEBP, MP4, MOV সমর্থন করে',
-                max_size: 'প্রতিটি ফাইল সর্বোচ্চ ৫০এমবি',
-                privacy_note: 'আপনার ফাইলগুলো নিরাপদে প্রসেস করা হয় এবং ১ ঘণ্টা পর মুছে ফেলা হয়।',
-                privacy_note_device: 'আমরা আপনার ডিভাইসেই ফাইল বিশ্লেষণ করি, প্রসেসিং শেষে ডেটা মুছে ফেলা হয়।',
-                upload_limit_info: 'প্ল্যান: {{plan}} | সীমা: {{limit}} ছবি/প্রতিদিন',
-                usage: 'ব্যবহার:',
-                "daily_limit": "দৈনিক প্রসেস সীমা",
-                refer_text: 'মেটাজেন প্রো শেয়ার করে ১ মাসের জন্য +৫০ মাসিক সীমা পান!',
-                ref: 'অতিরিক্ত মাসিক সীমা আনলক করুন!',
-                "share_get_credit": "শেয়ার করুন এবং প্রসেস ক্রেডিট পান",
-                generate_metadata: 'মেটাডেটা জেনারেট করুন',
-                "limit_reached_msg": "আপনার দৈনিক প্রসেস সীমা শেষ হয়ে গেছে! উচ্চতর সীমার জন্য আপনার প্ল্যান আপগ্রেড করুন বা বোনাসের জন্য টুলটি শেয়ার করুন।",
-                export_csv: 'CSV এক্সপোর্ট করুন',
-                export_excel: 'Excel এক্সপোর্ট করুন',
-                clear_all: 'সব মুছে ফেলুন',
-                copy_all: 'সব কপি করুন',
-                down_eps: 'ডাউনলোড EPS',
-                guides: 'গাইড',
-                title: 'টাইটেল',
-                description: 'বর্ণনা',
-                keywords: 'কীওয়ার্ড',
-                categories: 'ক্যাটাগরি',
-                already_user: 'আগে থেকেই কি অ্যাকাউন্ট আছে?',
-                login: 'লগইন',
-                well_come: 'আবার স্বাগতম',
-                tools_generator: 'টুলস ও জেনারেটর',
-                trending: '📅 ট্রেন্ডিং...',
-                customization: 'কাস্টমাইজেশন',
-                settings: 'সেটিংস',
-                select_ai: 'AI প্রোভাইডার নির্বাচন করুন',
-                manage_api: 'API কী ম্যানেজ করুন',
-                convert_api: 'ConvertAPI কী',
-                translation_lang: 'অনুবাদ ভাষা',
-                upload_files: 'ফাইল আপলোড করুন',
-                watch_demo: 'ডেমো দেখুন',
-                watch_tagline: 'দেখুন কীভাবে কয়েক সেকেন্ডে আপনার স্টক সেল বাড়ানো যায়',
-                process_selected: 'নির্বাচিত গুলো প্রসেস করুন',
-                batch_quality_check: 'ব্যাচ কোয়ালিটি চেক',
-                check_quality: 'কোয়ালিটি চেক',
-                quality_pending: 'কোয়ালিটি: পেন্ডিং',
-                process_prompts: 'প্রম্পট প্রসেস করুন',
-                embed_metadata: 'মেটাডেটা এম্বেড করুন',
-                export: 'এক্সপোর্ট',
-                batch_translate: 'ব্যাচ ট্রান্সলেট (ফ্রি)',
-                translate_all: 'সব ট্রান্সলেট করুন (Pro)',
-                test_metadata: 'মেটাডেটা টেস্ট করুন',
-                save_folder: 'ফোল্ডারে সেভ করুন',
-                upload_complete: 'আপলোড সম্পন্ন',
-                share_files: 'ফাইল শেয়ার করুন',
-                upload_drive: 'ড্রাইভ আপলোড করুন',
-                pause: 'বিরতি',
-                image_to_prompt: 'ইমেজ থেকে প্রম্পট',
-                jpg_png: 'JPG/PNG',
-                svg_eps: 'SVG/EPS/AI',
-                videos: 'ভিডিও',
-                check_copyright: 'কপিরাইট/ট্রেডমার্ক চেক করুন:',
-                upload_limit: 'একসাথে সর্বোচ্চ ৫০০টি ফাইল আপলোড করুন',
-                resume: 'পুনরায় শুরু করুন',
-                send_feedback: 'ফিডব্যাক / বাগ রিপোর্ট পাঠান',
-                view_translated: 'অনূদিত দেখুন',
-                view_original: 'মূল ফাইল দেখুন',
-                analyze_trends: 'ট্রেন্ড অ্যানালাইসিস করুন',
-                downloading: 'ডাউনলোড হচ্ছে...',
-                translating: 'অনুবাদ হচ্ছে...',
-                embedding: 'এম্বেড হচ্ছে...',
-                analyzing: 'বিশ্লেষণ করা হচ্ছে...',
-                processing: 'প্রসেসিং হচ্ছে...',
-                process: 'প্রসেস',
-                files: 'ফাইল',
-                prompts: 'প্রম্পট',
-                complete: 'সম্পন্ন',
-                success: 'সফল',
-                fail: 'ব্যর্থ',
-                saving: 'সেভ হচ্ছে...',
-                preparing: 'প্রস্তুত করা হচ্ছে...',
-                uploading: 'আপলোড হচ্ছে...',
-                initializing: 'কানেকশন শুরু হচ্ছে...',
-                "hero_title": "ফ্রি এআই মেটাডেটা জেনারেটর এবং স্টক ফটো কিওয়ার্ড!",
-                hero_tagline: 'Shutterstock, Adobe Stock, এবং Magnific-এ আপনার দৃশ্যমানতা বৃদ্ধি করুন। উন্নত AI ব্যবহার করে কয়েক সেকেন্ডের মধ্যে SEO-অপ্টিমাইজ করা শিরোনাম, বিবরণ এবং কীওয়ার্ড তৈরি করুন।',
-                why_choose: 'কেন মেটাজেন প্রো বেছে নেবেন?',
-                blog_1: 'অতি দ্রুত ব্যাচ প্রক্রিয়াকরণ',
-                blog_tag_1: 'কয়েক সেকেন্ডের মধ্যে শত শত ছবি বিশ্লেষণ এবং কীওয়ার্ড করুন। আমাদের অপ্টিমাইজড ব্যাচ ইঞ্জিনের সাহায্যে ঘন্টার পর ঘন্টা ম্যানুয়াল কাজের সাশ্রয় করুন।',
-                blog_2: 'উন্নত এআই বিশ্লেষণ',
-                blog_tag_2: 'শিল্প-সেরা চিত্র শনাক্তকরণ এবং নির্ভুল মেটাডেটার জন্য উন্নত এআই মডেল দ্বারা চালিত।',
-                blog_3: 'SEO অপ্টিমাইজড কীওয়ার্ড',
-                blog_tag_3: 'Shutterstock, Adobe Stock এবং Magnific অ্যালগরিদমের জন্য বিশেষভাবে তৈরি উচ্চ-র্যাঙ্কিং শিরোনাম এবং ট্যাগ তৈরি করুন।',
-                blog_4: 'নিশ রিসার্চ',
-                blog_tag_4: 'আমাদের অন্তর্নির্মিত Niche Research টুলের সাহায্যে কম-প্রতিযোগিতামূলক, উচ্চ-চাহিদাসম্পন্ন বিষয়গুলি আবিষ্কার করুন। ক্রেতারা কী খুঁজছেন তা খুঁজে বের করুন।',
-                blog_5: 'কীওয়ার্ড পুনর্বিন্যাস টেনে আনুন এবং ছেড়ে দিন',
-                blog_tag_5: 'স্টক সাইটগুলিতে (অ্যাডোব স্টক, শাটারস্টক) প্রথম ৫-১০টি কীওয়ার্ড সবচেয়ে গুরুত্বপূর্ণ।',
-                blog_6: 'মেটাডেটা এম্বেডিং',
-                blog_tag_6: 'আপনার JPG/PNG/SVG ফাইলে (IPTC/XMP) সরাসরি শিরোনাম এবং কীওয়ার্ড এম্বেড করুন। কেবল ডাউনলোড করে যেকোনো স্টক এজেন্সিতে আপলোড করুন।',
-                blog_7: 'বহু-ভাষা',
-                blog_tag_7: 'আপনার মেটাডেটা তাৎক্ষণিকভাবে ১০+ ভাষায় অনুবাদ করুন। স্থানীয় শিরোনাম এবং বর্ণনার মাধ্যমে বিশ্বব্যাপী দর্শকদের কাছে পৌঁছান।',
-                blog_8: 'কপিরাইট চেক',
-                blog_tag_8: 'প্রত্যাখ্যান এড়িয়ে চলুন! আমাদের AI আপনার ছবি আপলোড করার আগে সম্ভাব্য ট্রেডমার্ক সমস্যা এবং লোগো স্ক্যান করে।',
-                blog_9: 'মেটাডেটা CSV রপ্তানি করুন',
-                blog_tag_9: 'সকল স্টক সাইটের অ্যাডোবি স্টক, শাটারস্টক, ফ্রিপিক সিএসভি ফাইল এক্সপোর্ট সুবিধা।',
-                trusted_all: 'সকল প্রধান মাইক্রোস্টক প্ল্যাটফর্মের জন্য বিশ্বস্ত',
-                it_works: 'কিভাবে এটা কাজ করে',
-                upload_photos: 'ছবি আপলোড করুন',
-                upload_photos_tag: 'আপনার JPG/PNG ফাইলগুলি টেনে আনুন এবং ছেড়ে দিন। আমরা স্বয়ংক্রিয়ভাবে মাত্রা এবং প্রযুক্তিগত বৈশিষ্ট্যগুলি পড়ি।',
-                select_platfrom: 'প্ল্যাটফর্ম এবং এআই নির্বাচন করুন',
-                select_platfrom_tag: 'আপনার লক্ষ্য বাজার (যেমন অ্যাডোবি স্টক) এবং পছন্দের এআই মডেল (জেমিনি/গ্রোক) বেছে নিন।',
-                gen_down: 'তৈরি করুন এবং ডাউনলোড করুন',
-                gen_down_tag: 'SEO-প্রস্তুত শিরোনাম এবং কীওয়ার্ডগুলি তাৎক্ষণিকভাবে পান। CSV ডাউনলোড করুন অথবা সরাসরি এম্বেড করুন।',
-                processing_files: 'ফাইল প্রসেসিং...',
-                why_choose_stock_title: 'স্টক ফটোগ্রাফির জন্য MetaGen Pro কেন বেছে নেবেন?',
-                how_to_use_title: 'টুল কিভাবে ব্যবহার করবেন?',
-                master_stock_title: 'AI-চালিত মেটাডেটা দিয়ে আপনার স্টক ফটোগ্রাফি দক্ষতা বাড়ান',
-                trusted_stock_title: 'সারা মার্কিন যুক্তরাষ্ট্র জুড়ে স্টক অবদানকারীদের দ্বারা বিশ্বস্ত',
-                why_choose_stock_p1: 'স্টক ফটোগ্রাফির প্রতিযোগিতামূলক বিশ্বে, দৃশ্যমানতাই মূল। ক্রেতারা খুঁজে না পেলে সেরা ছবিও বিক্রি হবে না। <strong>MetaGen Pro</strong> হল এই সমস্যা সমাধানের জন্য তৈরি চূড়ান্ত <em>AI Metadata Generator</em>।',
-                why_choose_stock_p2: 'ম্যানুয়াল কিওয়ার্ডিংয়ের বিপরীতে যা ক্লান্তিকর এবং ভুলের প্রবণতা থাকে, আমাদের টুল আপনার ছবির বিষয়বস্তু, মেজাজ, আলো এবং গঠন বিশ্লেষণ করতে অত্যাধুনিক কম্পিউটার ভিশন ব্যবহার করে। এটি তারপরে <strong>Shutterstock, Adobe Stock, Magnific এবং Vecteezy</strong>-এর মতো প্ল্যাটফর্মগুলোর জন্য ৫০টিরও বেশি অপ্টিমাইজড কিওয়ার্ড, আকর্ষণীয় শিরোনাম এবং বিস্তারিত বিবরণ তৈরি করে।',
-                why_choose_stock_p3: 'আপনি একজন ফটোগ্রাফার, ইলাস্ট্রেটর বা এআই আর্টিস্ট যাই হোন না কেন, MetaGen Pro আপনার কর্মপ্রবাহকে সহজতর করে। <strong>Image-to-Prompt</strong>-এর মতো ফিচারগুলি আপনাকে সফল এআই ছবিগুলো রিভার্স-ইঞ্জিনিয়ার করতে সাহায্য করে, আর আমাদের <strong>Rejection Predictor</strong> আপলোড করার আগেই প্রযুক্তিগত সমস্যাগুলি সমাধান করতে সাহায্য করে।',
-                why_choose_stock_p4: 'আজই উপলব্ধ সবচেয়ে উন্নত, বিনামূল্যের স্টক ফটো ট্যাগারের মাধ্যমে আপনার প্যাসিভ আয় বাড়াতে শুরু করুন।',
-                "plan_details_title": "কোন প্ল্যানটি আপনার জন্য উপযুক্ত?",
-                "plan_details_free": "ফ্রি প্ল্যান - নতুনদের জন্য সেরা",
-                "plan_details_free_p1": "আমাদের ফ্রি প্ল্যানটি শখ করে কাজ করা এবং নতুন স্টক কন্ট্রিবিউটরদের জন্য ডিজাইন করা হয়েছে। এটি আপনাকে প্রতিদিন <strong>১০টি ছবি</strong> পর্যন্ত প্রসেস করার সুবিধা দেয়। পরিষেবাটি সম্পূর্ণ বিনামূল্যে রাখার জন্য, আপনি আমাদের মূল ফিচারগুলো ব্যবহার করতে পারবেন যার মধ্যে রয়েছে সুপার-ফাস্ট ব্যাচ প্রসেসিং (একসাথে ১০টি ফাইল), এআই মেটাডেটা জেনারেশন এবং CSV এক্সপোর্ট। উল্লেখ্য যে, মেটাডেটা অটো-এম্বেড, এক্সেল এক্সপোর্ট এবং কপিরাইট চেকের মতো উন্নত ফিচারগুলো এই প্ল্যানে অন্তর্ভুক্ত নয়।",
-                "plan_details_pro": "প্রো প্ল্যান - পেশাদারদের জন্য",
-                "plan_details_pro_p1": "প্রো প্ল্যানটি নিয়মিত কন্ট্রিবিউটরদের জন্য তৈরি করা হয়েছে যারা তাদের কাজের গতি বাড়াতে এবং অনেক সময় বাঁচাতে চান। প্রতিদিন <strong>৭০টি ছবি</strong> প্রসেস করার বিশাল সুবিধার সাথে, আপনাকে আর নিজের এপিআই (API) কি ব্যবহার করতে হবে না—আমরা আমাদের এন্ড থেকে সমস্ত এআই রিকোয়েস্ট নিরাপদে পরিচালনা করি। এই প্ল্যানটি আপনার জেপিইজি/পিএনজি/এসভিজি (JPEG/PNG/SVG) ফাইলে সরাসরি <strong>মেটাডেটা অটো-এম্বেড</strong>, ড্র্যাগ অ্যান্ড ড্রপ কিওয়ার্ড রিঅর্ডারিং, এআই কপিরাইট/ট্রেডমার্ক চেকিং এবং এক্সেল এক্সপোর্টের মতো শক্তিশালী টুলগুলো আনলক করে। এটি আপনার ব্যাচ প্রসেসিং লিমিট একসাথে ১০০টি ফাইলে বৃদ্ধি করে এবং একটি সম্পূর্ণ বিজ্ঞাপনমুক্ত অভিজ্ঞতা প্রদান করে।",
-                "plan_details_premium": "প্রিমিয়াম প্ল্যান - পাওয়ার ইউজার ও এজেন্সিদের জন্য",
-                "plan_details_premium_p1": "হাই-ভলিউম ক্রিয়েটর, ভেক্টর আর্টিস্ট এবং এজেন্সিদের জন্য ডিজাইন করা প্রিমিয়াম প্ল্যানে প্রতিদিন <strong>১০০টি ছবি</strong> প্রসেস করার এবং একসাথে ৩০০টি ফাইলের ব্যাচ লিমিট রয়েছে। এতে প্রো প্ল্যানের সবকিছু, প্লাস উন্নত অটোমেশন ফিচার অন্তর্ভুক্ত রয়েছে। আপনি <strong>সরাসরি ভেক্টর/ইপিএস (Vector/EPS) কনভার্সন</strong> (কোনো থার্ড পার্টি ConvertAPI কি-এর প্রয়োজন নেই) এবং <strong>FTP/SFTP অটো আপলোড</strong> ফিচারের এক্সক্লুসিভ অ্যাক্সেস পাবেন। এটি আপনাকে আপনার প্রসেস করা ফাইল এবং মেটাডেটা সরাসরি একাধিক স্টক এজেন্সিতে (Shutterstock, Adobe Stock, Magnific, ইত্যাদি) ব্রাউজার থেকেই স্বয়ংক্রিয়ভাবে বিতরণ করার সুবিধা দেয়।",
-                "htu_step1_title": "১. ফাইল আপলোড করুন",
-                "htu_step1_desc": "শুরু করতে ছবি (JPG/PNG), ভেক্টর (SVG/EPS), বা ভিডিও ড্র্যাগ অ্যান্ড ড্রপ করুন।",
-                "htu_step2_title": "২. টার্গেট প্ল্যাটফর্ম",
-                "htu_step2_desc": "অপ্টিমাইজ করা ফলাফলের জন্য Shutterstock, Adobe Stock, বা Magnific নির্বাচন করুন।",
-                "htu_step3_title": "৩. এআই মডেল নির্বাচন",
-                "htu_step3_desc": "ইমেজ অ্যানালাইসিসের জন্য Gemini, Mistral, বা Groq-এর মধ্যে বেছে নিন।",
-                "htu_step4_title": "৪. কাস্টমাইজেশন",
-                "htu_step4_desc": "স্লাইডার ব্যবহার করে টাইটেল এবং কিওয়ার্ডের জন্য সর্বনিম্ন/সর্বোচ্চ শব্দ সেট করুন।",
-                "htu_step5_title": "৫. এআই সেটিংস",
-                "htu_step5_desc": "ভেক্টর মোড, হোয়াইট বিজি (সাদা ব্যাকগ্রাউন্ড) চালু করুন বা আপনার নিজস্ব কাস্টম প্রম্পট ব্যবহার করুন।",
-                "htu_step6_title": "৬. মেটাডেটা জেনারেট করুন",
-                "htu_step6_desc": "এসইও-রেডি টাইটেল এবং ট্যাগ সাথে সাথে পেতে 'Process Selected'-এ ক্লিক করুন।",
-                "htu_step7_title": "৭. মেটাডেটা এম্বেড করুন",
-                "htu_step7_desc": "সরাসরি আপনার JPG, PNG বা SVG ফাইলে মেটাডেটা সেভ করুন।",
-                "htu_step8_title": "৮. মাল্টি-ট্রান্সলেট",
-                "htu_step8_desc": "গ্লোবাল মার্কেটের জন্য মেটাডেটা ১০+ এর বেশি ভাষায় অনুবাদ করুন।",
-                "htu_step9_title": "৯. ফলাফল এক্সপোর্ট করুন",
-                "htu_step9_desc": "আপনার সমস্ত মেটাডেটা CSV বা প্রফেশনাল এক্সেল শিট হিসেবে ডাউনলোড করুন।",
-                "htu_step10_title": "১০. সেভ এবং ড্রাইভ",
-                "htu_step10_desc": "লোকাল ফোল্ডারে সেভ করুন, লিঙ্কের মাধ্যমে শেয়ার করুন, অথবা সরাসরি ড্রাইভে আপলোড করুন।",
-                master_stock_subtitle1: 'MetaGen Pro কীভাবে ব্যবহার করবেন',
-                master_stock_p1: 'MetaGen Pro দিয়ে শুরু করা অবিশ্বাস্যভাবে সহজ এবং কোনও প্রযুক্তিগত দক্ষতার প্রয়োজন নেই। প্রথমে, নির্ধারিত আপলোড এলাকায় ড্র্যাগ এবং ড্রপ করে আপনার ছবি আপলোড করুন, বা ফাইল ব্রাউজ করতে ক্লিক করুন। MetaGen Pro JPG, PNG, SVG এবং EPS সহ সমস্ত প্রধান ইমেজ ফরম্যাট এবং ভিডিও ফাইল সমর্থন করে।',
-                master_stock_p2: 'এরপর, সাইডবার সেটিংস ব্যবহার করে আপনার পছন্দগুলি কনফিগার করুন। আপনি কীওয়ার্ডের সংখ্যা সামঞ্জস্য করতে পারেন (আমরা সেরা এসইও-এর জন্য ৩৫-৫০টি সুপারিশ করি), শিরোনামের দৈর্ঘ্যের সীমাবদ্ধতা সেট করতে পারেন।',
-                master_stock_p3: 'কনফিগারেশনের পরে, সমস্ত আপলোড করা ছবির জন্য একযোগে মেটাডেটা তৈরি করতে "Process All" বোতামে ক্লিক করুন। আমাদের উন্নত এআই প্রতিটি ছবির ভিজ্যুয়াল কন্টেন্ট বিশ্লেষণ করে।',
-                master_stock_subtitle2: 'এই টুল ব্যবহারের সুবিধা',
-                master_stock_benefit1: '<strong>সময়ের দক্ষতা:</strong> ম্যানুয়াল কিওয়ার্ডিংয়ে প্রতি ছবিতে ১০-১৫ মিনিট সময় লাগতে পারে। MetaGen Pro এটি কয়েক সেকেন্ডে কমিয়ে আনে।',
-                master_stock_benefit2: '<strong>SEO অপ্টিমাইজেশন:</strong> আমাদের এআই কেবল যা দেখে তা বর্ণনা করে না—এটি সার্চ ইনটেন্ট এবং মার্কেটপ্লেস অ্যালগরিদম বোঝে।',
-                master_stock_benefit3: '<strong>মাল্টি-প্ল্যাটফর্ম সমর্থন:</strong> বিভিন্ন স্টক এজেন্সির বিভিন্ন প্রয়োজনীয়তা থাকে। MetaGen Pro প্রতিটি প্ল্যাটফর্মের অনন্য অ্যালগরিদমের সাথে খাপ খাইয়ে নেয়।',
-                master_stock_benefit4: '<strong>ধারাবাহিকতা এবং গুণমান:</strong> মানবিক ত্রুটি দূর করুন এবং আপনার পুরো পোর্টফোলিও জুড়ে পেশাদার মান বজায় রাখুন।',
-                master_stock_subtitle3: 'ইমেজ এসইও কী এবং কেন এটি গুরুত্বপূর্ণ',
-                master_stock_seo_p1: 'ইমেজ এসইও (সার্চ ইঞ্জিন অপ্টিমাইজেশন) হল স্টক ফটোগ্রাফি প্ল্যাটফর্ম এবং সার্চ ইঞ্জিনগুলিতে দৃশ্যমানতা উন্নত করার জন্য ইমেজ মেটাডেটা অপ্টিমাইজ করার অনুশীলন।',
-                master_stock_seo_p2: '<strong>ইমেজ এসইও-এর তিনটি স্তম্ভ:</strong> প্রথমত, <em>শিরোনাম</em> বর্ণনামূলক কিন্তু সংক্ষিপ্ত হওয়া উচিত। দ্বিতীয়ত, <em>বিবরণ</em> প্রসঙ্গ প্রদান করে। তৃতীয়ত, <em>কীওয়ার্ড</em> একটি বিস্তৃত জাল তৈরি করে।',
-                master_stock_seo_p3: '<strong>কীওয়ার্ড কৌশল গুরুত্বপূর্ণ:</strong> সবচেয়ে কার্যকর মেটাডেটা একটি সুষম মিশ্রণ ব্যবহার করে: ২০-৩০% একক শব্দের কিওয়ার্ড, ৪০-৫০% দুই শব্দের বাক্যাংশ এবং ২০-৩০% লং-টেইল কিওয়ার্ড।',
-                master_stock_seo_p4: '<strong>সার্চ র‍্যাঙ্কিং ফ্যাক্টর:</strong> স্টক প্ল্যাটফর্মগুলি সার্চ রেজাল্ট র‍্যাঙ্ক করার সময় একাধিক বিষয় বিবেচনা করে। প্রাসঙ্গিকতা, সম্পূর্ণতা এবং কীওয়ার্ড বৈচিত্র্য সবই আপনার র‍্যাঙ্কিংকে প্রভাবিত করে।',
-                master_stock_seo_p5: 'MetaGen Pro এই সমস্ত সেরা অনুশীলনগুলিকে স্বয়ংক্রিয় করে, নিশ্চিত করে যে আপনার আপলোড করা প্রতিটি ছবি সর্বাধিক দৃশ্যমানতা এবং আয়ের জন্য সম্পূর্ণরূপে অপ্টিমাইজ করা হয়েছে।',
-                master_stock_cta: '<strong>আপনার স্টক ফটোগ্রাফি সাফল্য বাড়াতে প্রস্তুত?</strong> আজই MetaGen Pro ব্যবহার শুরু করুন।',
-                trusted_stock_subtitle: 'দেখুন কেন হাজার হাজার আমেরিকান ফটোগ্রাফার এবং নির্মাতা তাদের স্টক আয় বাড়াতে MetaGen Pro-এর উপর নির্ভর করেন',
-                review_1_details: '📍 নিউ ইয়র্ক, এনওয়াই • পেশাদার ফটোগ্রাফার',
-                review_1_text: '"MetaGen Pro আমার কর্মপ্রবাহ পুরোপুরি বদলে দিয়েছে! আমি আগে শাটারস্টকের জন্য আমার ছবি কিওয়ার্ডিং করতে ঘন্টার পর ঘন্টা ব্যয় করতাম। এখন এটি মাত্র কয়েক মিনিট সময় নেয় এবং আমার ডাউনলোড ৪০% বেড়েছে!"',
-                review_2_details: '📍 লস এঞ্জেলেস, সিএ • কন্টেন্ট ক্রিয়েটর',
-                review_2_text: '"একজন পূর্ণকালীন কন্টেন্ট ক্রিয়েটর হিসেবে, সময়ই টাকা। এই টুলটি আমাকে মেটাডেটা এন্ট্রিতে সপ্তাহে অন্তত ১০ ঘন্টা বাঁচায়।"',
-                review_3_details: '📍 মিয়ামি, এফএল • স্টক কন্ট্রিবিউটর',
-                review_3_text: '"আমি প্রথমে সন্দেহবাদী ছিলাম, কিন্তু MetaGen Pro সমস্ত প্রত্যাশা ছাড়িয়ে গেছে। কিওয়ার্ড পরামর্শগুলি অবিশ্বাস্যভাবে প্রাসঙ্গিক।"',
-                review_4_details: '📍 শিকাগো, আইএল • গ্রাফিক ডিজাইনার',
-                review_4_text: '"কপিরাইট চেক ফিচারটি একাই এর মূল্যের সমান! এটি আমাকে একাধিকবার সম্ভাব্য প্রত্যাখ্যান থেকে বাঁচিয়েছে।"',
-                review_5_details: '📍 সিয়াটেল, ডাব্লুএ • নেচার ফটোগ্রাফার',
-                review_5_text: '"আমি প্রতি মাসে শত শত প্রকৃতির ছবি আপলোড করি। MetaGen Pro সেগুলোর সবকটি পরিচালনা এবং অপ্টিমাইজ করা অনায়াস করে তোলে।"',
-                review_6_details: '📍 অস্টিন, টিএক্স • ফ্রিল্যান্স ভিডিওগ্রাফার',
-                review_6_text: '"ভিডিও মেটাডেটার জন্য গেম-চেঞ্জার! এআই নিখুঁতভাবে দৃশ্য শনাক্ত করে এবং নিখুঁত শিরোনাম তৈরি করে।"',
-                stat_users: 'সক্রিয় ইউএস ব্যবহারকারী',
-                stat_satisfaction: 'সন্তুষ্টির হার',
-                stat_images: 'দৈনিক অপ্টিমাইজ করা ছবি',
-                stat_rating: 'গড় রেটিং',
-                "faq_title": "প্রশ্নাবলী — মেটাজেন প্রো",
-                "faq_q1": "🚀 মেটাজেন প্রো কিভাবে শুরু করব?",
-                "faq_a1": "<strong>ধাপ ১:</strong> আপনার গুগল অ্যাকাউন্ট বা ইমেল দিয়ে সাইন আপ বা লগইন করুন।<br><strong>ধাপ ২:</strong> আপনার ছবি (JPG, PNG, SVG, EPS) আপলোড করুন - একসাথে ৫০০টি পর্যন্ত!<br><strong>ধাপ ৩:</strong> আপনার টার্গেট প্ল্যাটফর্ম (Shutterstock, Adobe Stock ইত্যাদি) সিলেক্ট করুন এবং 'Generate Metadata' ক্লিক করুন।<br><strong>ধাপ ৪:</strong> রিভিউ করুন, প্রয়োজনে এডিট করুন এবং ফাইলে মেটাডেটা এম্বেড করে ডাউনলোড করুন!",
-                "faq_q2": "💰 মেটাজেন প্রো কি ফ্রি? এর প্রাইসিং কেমন?",
-                "faq_a2": "<p><strong>ফ্রি প্ল্যান সবার জন্য!</strong> মেটাজেন প্রো-তে একটি শক্তিশালী ফ্রি প্ল্যান রয়েছে (১২০টি ছবি/মাস, দৈনিক সর্বোচ্চ ২৫টি)। তবে ভারী ব্যবহারের জন্য আমাদের <strong>Pro</strong> ($12/মাস - ২০০০টি ছবি/মাস, দৈনিক সর্বোচ্চ ৭০টি) এবং <strong>Premium</strong> ($29/মাস - ৩০০০টি ছবি/মাস, দৈনিক সর্বোচ্চ ১০০টি) প্ল্যান রয়েছে। পেইড প্ল্যানগুলোতে মেটাডেটা অটো-এম্বেড, এক্সেল এক্সপোর্ট এবং সরাসরি FTP আপলোডের মতো উন্নত ফিচারগুলো পাওয়া যায়।</p>",
-                "faq_q3": "🔑 মেটাজেন প্রো ব্যবহার করতে কি কোনো API কী লাগবে?",
-                "faq_a3": "<p><strong>না, এখন কোনো প্ল্যানেই কোনো API কী-এর প্রয়োজন নেই!</strong> Free, Pro, এবং Premium সব প্ল্যানেই আমরা আমাদের নিজস্ব সার্ভার ও Supabase Edge Functions ডেডিকেটেড এআই মডেল (উন্নত AI মডেল) দিয়ে মেটাডেটা প্রসেস করে থাকি।</p><p><strong>নিরাপত্তা:</strong> আপনার সব ডাটা সম্পূর্ণ <strong>নিরাপদ</strong> এবং প্রসেসিং শেষে সাথে সাথে সার্ভার থেকে মুছে ফেলা হয়।</p>",
-                "faq_q4": "📁 কোন কোন ফাইল ফরম্যাট সাপোর্ট করে?",
-                "faq_a4": "<p><strong>সাপোর্টেড ফরম্যাট:</strong></p><ul><li><strong>JPG/JPEG:</strong> EXIF এম্বেডিং সহ ফুল সাপোর্ট</li><li><strong>PNG:</strong> মেটাডেটা এম্বেডিং সহ ফুল সাপোর্ট</li><li><strong>SVG:</strong> XMP মেটাডেটা এম্বেডিং সহ ফুল সাপোর্ট</li><li><strong>EPS:</strong> কনভার্ট হয়ে প্রসেস হয় (ConvertAPI কী প্রয়োজন)</li></ul><p>একসাথে <strong>৫০০টি পর্যন্ত ফাইল</strong> আপলোড করা যায়!</p>",
-                "faq_q5": "🎯 কোন কোন প্ল্যাটফর্ম সাপোর্ট করে?",
-                "faq_a5": "<p>Shutterstock, Adobe Stock, Magnific, Vecteezy, Pond5, 123RF সহ সকল প্রধান প্ল্যাটফর্মের জন্য অপ্টিমাইজড। আমাদের এআই প্রতিটি প্ল্যাটফর্মের নিয়ম অনুযায়ী মেটাডেটা তৈরি করে!</p>",
-                "faq_q6": "📊 SEO স্কোর এবং কিওয়ার্ড ব্যাজ কি?",
-                "faq_a6": "<p><strong>SEO স্কোর:</strong> আপনার মেটাডেটা সার্চ অ্যালগরিদমের জন্য কতটা উপযোগী তা পরিমাপ করে।</p><p><strong>ব্যাজসমূহ:</strong></p><ul><li>🟢 <strong>সবুজ:</strong> এক শব্দের কিওয়ার্ড (বেশি সার্চ হয়)</li><li>🟡 <strong>হলুদ:</strong> দুই শব্দের কিওয়ার্ড (সেরা ব্যালেন্স)</li><li>🔵 <strong>নীল:</strong> ৩+ শব্দের কিওয়ার্ড (নির্দিষ্ট টার্গেট)</li></ul>",
-                "faq_q7": "⚡ ব্যাচ প্রসেসিং কিভাবে কাজ করে?",
-                "faq_a7": "<p>৫০০টি ছবি আপলোড করে 'Process Selected' ক্লিক করুন। আমাদের এআই সব ছবি একসাথে প্রসেস করবে। এটি খুবই দ্রুত—১০০টি ছবি প্রসেস করতে ১টি ছবির সমান সময়ই লাগে!</p>",
-                "faq_q8": "🎨 'Image to Prompt' ফিচারটি কি?",
-                "faq_a8": "<p>এটি আপনার ছবিকে বিস্তারিত প্রম্পটে রূপান্তর করে যা Midjourney বা DALL-E-তে ব্যবহার করা যায়। সফল স্টক ছবির গঠন বোঝার জন্য এটি দারুণ!</p>",
-                "faq_q9": "🔒 আমার ডাটা কি নিরাপদ? আপনারা কি ছবি সেভ করেন?",
-                "faq_a9": "<p><strong>১০০% প্রাইভেট!</strong> সব প্রসেসিং আপনার ব্রাউজারে হয়। আমরা কখনোই আপনার ছবি সেভ করি না। প্রসেস শেষ হওয়ার সাথে সাথে ডাটা মুছে ফেলা হয়।</p>",
-                "faq_q10": "🔧 সাধারণ সমস্যা ও সমাধান",
-                "faq_a10": "<ul><li><strong>Server Error:</strong> ইন্টারনেট সংযোগ চেক করুন এবং পেজ রিফ্রেশ করুন।</li><li><strong>ফাইল বেশি বড়:</strong> ২০ মেগাবাইটের নিচে রাখার চেষ্টা করুন।</li><li><strong>ধীর গতি:</strong> ব্রাউজারের অন্যান্য ট্যাব বন্ধ রাখুন।</li></ul>",
-                "faq_q11": "🎭 এআই ইমেজ জেনারেটর কিভাবে কাজ করে?",
-                "faq_a11": "<p>সরাসরি ছবি তৈরি করতে FLUX মডেল ব্যবহার করুন। প্রম্পট লিখুন এবং আপনার স্টক পোর্টফোলিও-র জন্য ইউনিক ছবি তৈরি করুন!</p>",
-                "faq_q12": "💬 সাহায্য বা ফিডব্যাকের জন্য কি করব?",
-                "faq_a12": "<p>আমাদের ইমেল করুন: <strong>metagenp@gmail.com</strong> অথবা অ্যাপের ফিডব্যাক বাটন ব্যবহার করুন। আমরা ১২ ঘণ্টার মধ্যে উত্তর দেওয়ার চেষ্টা করি!</p>"
-            },
-
-
-            hi: {
-                flag: '🇮🇳',
-                name: 'HI',
-                band: 'मेटाजेन प्रो',
-                tagline: 'मेटाडेटा, एआई द्वारा संचालित',
-                home: 'होम',
-                features: 'विशेषताएं',
-                start_tour: 'टूर शुरू करें',
-                faq: 'सामान्य प्रश्न',
-                menu: 'मेन्यू',
-                blog: 'ब्लॉग',
-                disclaimer: 'अस्वीकरण',
-                about: 'हमारे बारे में',
-                contact: 'संपर्क करें',
-                legal: 'कानूनी',
-                select_lang: 'भाषा चुने',
-                general_btn: "सामान्य",
-                save_key: 'की सेव करें',
-                close: 'बंद करें',
-                get_key: 'की प्राप्त करें',
-                trial_credits: 'ट्रायल क्रेडिट',
-                trial_footer: 'पहले 10 इमेज हमारी ओर से फ्री हैं! असीमित उपयोग के लिए अपना API Key जोड़ें।',
-                badge: 'बैज',
-                try_metagen: 'MetaGen फ्री आज़माएं',
-                no_api: 'आपके निःशुल्क परीक्षण के लिए किसी API कुंजी की आवश्यकता नहीं है।',
-                ref: 'डबल लिमिट अनलॉक करें!',
-                ref_text: 'Metagen Pro. शेयर करें। जब कोई आपके रेफरल लिंक पर क्लिक करके जुड़ता है, तो आपकी दैनिक प्रोसेसिंग लिमिट 50 से बढ़कर 100 हो जाएगी!',
-                ref_share_btn: 'अभी शेयर करें',
-                watting_for: 'आप किस का इंतजार कर रहे हैं?',
-                "get_start": "मुफ़्त में शुरुआत करें",
-                "drag_and_drop": "अपलोड करने के लिए कहीं भी खींचें और छोड़ें",
-                "fast": "तेज़",
-                "best": "सर्वश्रेष्ठ",
-                "generate_meta": "मेटाडेटा जनरेट करें",
-                "delete_select": "चयनित हटाएं",
-                "down_select": "चयनित डाउनलोड करें",
-                "translate_select": "चयनित अनुवाद करें",
-                "done": "संपन्न",
-                "processing": "प्रोसेसिंग",
-                "analyzing_market": "बाज़ार के रुझानों का विश्लेषण किया जा रहा है...",
-                "ai_is_researching": "AI आपके लिए उच्च-प्रदर्शन वाले कॉन्सेप्ट खोज रहा है।",
-                "analyzing": "विश्लेषण किया जा रहा है...",
-                "copy_tag": "टैग कॉपी करें",
-                "copy_idea": "विचार और जानकारी कॉपी करें",
-                "download": "डाउनलोड",
-                "enter_your_convert_api": "EPS फ़ाइल रूपांतरण सक्षम करने के लिए अपनी Convert API कुंजी दर्ज करें।",
-                "export_csv": "CSV निर्यात करें",
-                "export_excel": "Excel निर्यात करें",
-                "niche_research_cen": "नीश रिसर्च सेंटर",
-                "niche_research_tag": "अपने स्टॉक पोर्टफोलियो के लिए उच्च-मांग और कम-प्रतिस्पर्धा वाले कीवर्ड और अवधारणाओं की खोज करें।",
-                "select_category": "श्रेणी चुनें",
-                "market_focus": "बाज़ार फोकस",
-                "analyze_trend": "रुझानों का विश्लेषण करें",
-                "ready_to_research": "शोध के लिए तैयार",
-                "ready_to_research_tag": "ऊपर एक श्रेणी चुनें और लाभदायक नीश खोजने के लिए \"रुझानों का विश्लेषण करें\" पर क्लिक करें।",
-                "quick_suggest": "त्वरित सुझाव",
-                "label_title": "शीर्षक",
-                "label_desc": "विवरण",
-                "label_keywords": "कीवर्ड",
-                "btn_copy": "कॉपी",
-                "btn_add": "जोड़ें",
-                "placeholder_add_kw": "कीवर्ड जोड़ें...",
-                "seo_score": "SEO स्कोर",
-                "rejection": "अस्वीकृति",
-                "platform_check": "प्लेटफ़ॉर्म जांच",
-                "style": "शैली",
-                "mode": "मोड",
-                "translate": "अनुवाद",
-                "go": "जाएं",
-                "min_title": "न्यूनतम शीर्षक शब्द",
-                "max_title": "अधिकतम शीर्षक शब्द",
-                "min_keywords": "न्यूनतम कीवर्ड",
-                "max_keywords": "अधिकतम कीवर्ड",
-                "min_desc": "न्यूनतम विवरण शब्द",
-                "max_desc": "अधिकतम विवरण शब्द",
-                "toggle_silhouette": "सिल्हूट (छाया-चित्र)",
-                "toggle_vector": "वेक्टर / चित्रण मोड",
-                "toggle_white_bg": "सफेद पृष्ठभूमि",
-                "toggle_trans_bg": "पारदर्शी पृष्ठभूमि",
-                "toggle_custom_prompt": "कस्टम प्रॉम्प्ट",
-                "toggle_prohibited": "निषिद्ध शब्द",
-                "toggle_single_kw": "एकल शब्द कीवर्ड",
-                "toggle_change_name": "फ़ाइल का नाम बदलें",
-                "toggle_name_title": "फ़ाइल का नाम शीर्षक के रूप में",
-                "feedback_matters": "आपकी प्रतिक्रिया महत्वपूर्ण है",
-                "provide_feedback": "कृपया टूल के बारे में फ़ीडबैक दें?",
-                "issue_type": "समस्या का प्रकार",
-                "general_feedback": "सामान्य प्रतिक्रिया",
-                "bug_report": "बग रिपोर्ट",
-                "feature_request": "फ़ीचर अनुरोध",
-                "your_mess": "आपका संदेश",
-                "send_feed": "फ़ीडबैक भेजें",
-                eps_meta: 'ईपीएस मेटाडेटा जनरेट और एम्बेड करें',
-                month: '/ महीना',
-                pricing: 'मूल्य निर्धारण',
-                ftp_upload: 'FTP डायरेक्ट अपलोड',
-                ftp_upload_sub_txt: 'स्टॉक साइट्स (Adobe Stock, Shutterstock, Magnific) पर सीधे फाइल अपलोड करें।',
-                upgrade_plan: 'प्लान अपग्रेड करें',
-                stock_calendar: 'स्टॉक कैलेंडर',
-                get_access: 'एक्सेस प्राप्त करें',
-                pricing_plan: 'हमारा प्राइसिंग प्लान',
-                pricing_sub_txt: 'अपने क्रिएटिव वर्कफ़्लो के लिए एकदम सही प्लान चुनें।',
-                free_plan: 'फ्री प्लान',
-                free_price: '$0/महीना',
-                most_popular: 'सबसे लोकप्रिय',
-                pro_plan: 'प्रो में अपग्रेड करें',
-                pro_price: '$12/महीना',
-                premium_plan: 'प्रीमियम प्लान',
-                premium_price: '$29/महीना',
-                '50_image': 'प्रति माह 120 छवियां (उचित उपयोग के लिए प्रतिदिन अधिकतम 10)',
-                basic_ai_model: 'बेसिक एआई मॉडल (Gemini, Mistral, Groq) अपनी खुद की API कुंजी का उपयोग करें।',
-                batch_process: 'बैच प्रोसेस: 50 फ़ाइलों तक',
-                csv_export: 'CSV निर्यात',
-                ads_support: 'विज्ञापन समर्थित',
-                auto_embed: 'मेटाडेटा ऑटो एम्बेड',
-                excel_export: 'Excel निर्यात',
-                drag_keyword: 'ड्रैग एंड ड्रॉप कीवर्ड रीऑर्डरिंग',
-                copy_trade_check: 'कॉपीराइट/ट्रेडमार्क जाँच',
-                get_started_free: 'मुफ़्त में शुरू करें',
-                '300_images': '2000 चित्र/माह',
-                advance_ai: 'उन्नत एआई मॉडल (API कुंजी की आवश्यकता नहीं है।)',
-                batch_process_pro: 'बैच प्रोसेस: 100 फ़ाइलों तक',
-                csv_excel_ex: 'CSV/Excel निर्यात',
-                seo_and_no_ads: 'एसईओ एनालिटिक्स और कोई विज्ञापन नहीं',
-                support_time: 'सपोर्ट का समय 24 घंटे',
-                '1k_image': '3000 चित्र/माह',
-                all_pro: 'सभी प्रो फीचर्स',
-                batch_process_pre: 'बैच प्रोसेस: 300 फ़ाइलों तक',
-                ftp_auto_up: 'FTP/SFTP ऑटो अपलोड',
-                vector_eps: 'डायरेक्ट वेक्टर/EPS रूपांतरण',
-                vip_support: 'VIP सपोर्ट और अर्ली एक्सेस',
-                privacy_policy: 'गोपनीयता नीति',
-                terms_of_service: 'सेवा की शर्तें',
-                adjustment: 'समायोजन',
-                multi_tool: 'मल्टी इमेज टूल्स',
-                sketch_art: 'इमेज से स्केच आर्ट',
-                all_tools: 'सभी टूल्स',
-                image_enhance: 'एआई इमेज एन्हांसर',
-                bg_remove: 'एआई बैकग्राउंड रिमूवर',
-                pixel_check: 'पिक्सेल-चेक स्टूडियो',
-                text_to_image: 'टेक्स्ट टू इमेज जेनरेटर',
-                company: 'कंपनी',
-                free_plan: 'फ्री प्लान',
-                note: '7 दिनों में API एक्सेस हटा दिया जाएगा। प्रो/प्रीमियम प्लान में अपग्रेड करें और MetaGen Pro की सभी सुविधाओं का लाभ उठाएं।',
-                platform: 'प्लेटफ़ॉर्म',
-                add_more: 'और फ़ाइल जोड़ें',
-                login_google: 'गूगल के साथ जारी रखें',
-                new_user: 'नये उपयोगकर्ता?',
-                create_account: 'खाता बनाएं',
-                niche_research: 'नीश रिसर्च',
-                metadata_generator: 'मेटाडेटा जेनरेटर',
-                seo_score: 'SEO स्कोर और एनालिटिक्स',
-                batch_process: 'सुपर फास्ट बैच प्रोसेस',
-                sign_out: 'साइन आउट',
-                switch_account: 'खाता बदलें',
-                upload_title: 'चित्र या वीडियो अपलोड करें',
-                drag_drop: 'फ़ाइलें यहाँ खींचें या अपलोड करने के लिए क्लिक करें',
-                supports: 'JPG, PNG, WEBP, MP4, MOV का समर्थन करता है',
-                max_size: 'अधिकतम 50MB प्रति फ़ाइल',
-                privacy_note: 'आपकी फ़ाइलें सुरक्षित रूप से संसाधित होती हैं और 1 घंटे के बाद हटा दी जाती हैं।',
-                privacy_note_device: 'हम केवल डिवाइस पर फ़ाइलों का विश्लेषण करते हैं, डेटा सर्वर पर सेव नहीं होता।',
-                upload_limit_info: 'फ्री प्लान: 50 फाइलें/दिन',
-                usage: 'उपयोग:',
-                "daily_limit": "दैनिक प्रक्रिया सीमा",
-                refer_text: 'अतिरिक्त 50 सीमा प्राप्त करने के लिए मेटा-जेन प्रो साझा करें!',
-                "share_get_credit": "शेयर करें और प्रोसेस क्रेडिट प्राप्त करें",
-                generate_metadata: 'मेटाडेटा जनरेट करें',
-                "limit_reached_msg": "आपने अपनी दैनिक प्रोग्रेस लिमिट (Daily Process Limit) पूरी कर ली है! अधिक लिमिट के लिए अपना प्लान अपग्रेड करें या बोनस के लिए टूल शेयर करें।",
-                export_csv: 'CSV में निर्यात करें',
-                export_excel: 'Excel में निर्यात करें',
-                clear_all: 'सभी साफ़ करें',
-                copy_all: 'सभी कॉपी करें',
-                down_eps: 'डाउनलोड EPS',
-                guides: 'गाइड',
-                title: 'शीर्षक',
-                description: 'विवरण',
-                keywords: 'कीवर्ड',
-                categories: 'श्रेणियाँ',
-                already_user: 'पहले से खाता है?',
-                login: 'लॉगिन',
-                well_come: 'वापसी पर स्वागत है',
-                tools_generator: 'टूल्स और जेनरेटर',
-                trending: '📅 ट्रेंडिंग...',
-                customization: 'कस्टमाइज़ेशन',
-                settings: 'सेटिंग्स',
-                select_ai: 'AI प्रोवाइडर चुनें',
-                manage_api: 'API कुंजी प्रबंधित करें',
-                convert_api: 'ConvertAPI कुंजी',
-                translation_lang: 'अनुवाद भाषा',
-                upload_files: 'फाइल अपलोड',
-                watch_demo: 'डेमो देखें',
-                watch_tagline: 'कुछ ही सेकंड में अपने स्टॉक की बिक्री बढ़ाने का तरीका जानें',
-                process_selected: 'चयनित प्रोसेस करें',
-                process_prompts: 'प्रॉम्प्ट प्रोसेस करें',
-                embed_metadata: 'मेटाडेटा एम्बेड करें',
-                export: 'निर्यात',
-                batch_translate: 'बैच अनुवाद (फ्री)',
-                translate_all: 'सभी अनुवाद (Pro)',
-                test_metadata: 'मेटाडेटा टेस्ट',
-                save_folder: 'फ़ोल्डर में सहेजें',
-                share_files: 'फ़ाइलें साझा करें',
-                upload_drive: 'ड्राइव पर अपलोड',
-                pause: 'रोकें',
-                image_to_prompt: 'इमेज से प्रॉम्प्ट',
-                jpg_png: 'JPG/PNG',
-                svg_eps: 'SVG/EPS/AI',
-                videos: 'वीडियो',
-                check_copyright: 'कॉपीराइट/ट्रेडमार्क की जाँच करें:',
-                upload_limit: 'एक बार में अधिकतम 500 फाइलें अपलोड करें',
-                resume: 'फिर से शुरू',
-                send_feedback: 'प्रतिक्रिया भेजें / बग रिपोर्ट करें',
-                view_translated: 'अनुवादित देखें',
-                view_original: 'असली देखें',
-                analyze_trends: 'ट्रेंड विश्लेषण',
-                downloading: 'डाउनलोड हो रहा है...',
-                translating: 'अनुवाद हो रहा है...',
-                embedding: 'एम्बेड हो रहा है...',
-                analyzing: 'विश्लेषण हो रहा है...',
-                processing: 'प्रोसेसिंग...',
-                process: 'प्रोसेस',
-                files: 'फाइल',
-                prompts: 'प्रॉम्प्ट',
-                complete: 'पूर्ण',
-                success: 'सफल',
-                fail: 'विफल',
-                saving: 'सहेजा जा रहा है...',
-                preparing: 'तैयार हो रहा है...',
-                uploading: 'अपलोड हो रहा है...',
-                initializing: 'कनेक्शन शुरू हो रहा है...',
-                "hero_title": "निःशुल्क AI मेटाडेटा जेनरेटर और स्टॉक फोटो कीवर्ड!",
-                hero_tagline: 'Shutterstock, Adobe Stock और Magnific पर अपनी दृश्यता बढ़ाएँ। उन्नत AI का उपयोग करके कुछ ही सेकंड में SEO-अनुकूलित शीर्षक, विवरण और कीवर्ड जेनरेट करें।',
-                why_choose: 'MetaGen Pro को क्यों चुनें?',
-                blog_1: 'सुपर फास्ट बैच प्रोसेसिंग',
-                blog_tag_1: 'सेकंडों में सैकड़ों छवियों का विश्लेषण करें और उनमें कीवर्ड डालें। हमारे अनुकूलित बैच इंजन की मदद से मैन्युअल काम में लगने वाले घंटों की बचत करें।',
-                blog_2: 'उन्नत एआई विश्लेषण',
-                blog_tag_2: 'उद्योग जगत में अग्रणी छवि पहचान और सटीक मेटाडेटा के लिए उन्नत एआई मॉडल द्वारा संचालित।',
-                blog_3: 'एसईओ अनुकूलित कीवर्ड',
-                blog_tag_3: 'शटरस्टॉक, एडोब स्टॉक और फ्रीपिक के एल्गोरिदम के लिए विशेष रूप से तैयार किए गए उच्च-रैंकिंग वाले शीर्षक और टैग उत्पन्न करें।',
-                blog_4: 'विशिष्ट अनुसंधान',
-                blog_tag_4: 'हमारे अंतर्निहित नीश रिसर्च टूल की मदद से कम प्रतिस्पर्धा और उच्च मांग वाले विषयों की खोज करें। जानें कि खरीदार क्या खोज रहे हैं।',
-                blog_5: 'कीवर्ड पुनर्व्यवस्थापन के लिए ड्रैग एंड ड्रॉप करें',
-                blog_tag_5: 'स्टॉक साइटों (एडोब स्टॉक, शटरस्टॉक) पर पहले 5-10 कीवर्ड सबसे महत्वपूर्ण होते हैं।',
-                blog_6: 'मेटाडेटा एम्बेडिंग',
-                blog_tag_6: 'अपने JPG/PNG/SVG फ़ाइलों (IPTC/XMP) में सीधे शीर्षक और कीवर्ड एम्बेड करें। बस डाउनलोड करें और किसी भी स्टॉक एजेंसी पर अपलोड करें।',
-                blog_7: 'बहु-भाषा',
-                blog_tag_7: 'अपने मेटाडेटा को तुरंत 10 से अधिक भाषाओं में अनुवादित करें। स्थानीयकृत शीर्षकों और विवरणों के साथ वैश्विक दर्शकों तक पहुंचें।',
-                blog_8: 'कॉपीराइट जाँच',
-                blog_tag_8: 'अस्वीकृति से बचें! हमारी एआई आपकी छवियों को अपलोड करने से पहले उनमें संभावित ट्रेडमार्क संबंधी समस्याओं और लोगो की जांच करती है।',
-                blog_9: 'मेटाडेटा को CSV फ़ाइल में निर्यात करें',
-                blog_tag_9: 'सभी स्टॉक साइटों, जैसे एडोब स्टॉक, शटरस्टॉक और फ्रीपिक, की सीएसवी फाइल एक्सपोर्ट करने की सुविधा।',
-                trusted_all: 'सभी प्रमुख माइक्रोस्टॉक प्लेटफॉर्मों के लिए विश्वसनीय',
-                it_works: 'यह काम किस प्रकार करता है',
-                upload_photos: 'फ़ोटो अपलोड करें',
-                upload_photos_tag: 'अपनी JPG/PNG फ़ाइलों को ड्रैग और ड्रॉप करें। हम स्वचालित रूप से आयाम और तकनीकी विनिर्देश पढ़ लेंगे।',
-                select_platfrom: 'प्लेटफ़ॉर्म और एआई का चयन करें',
-                select_platfrom_tag: 'अपना लक्षित बाजार (जैसे एडोब स्टॉक) और पसंदीदा एआई मॉडल (जेमिनी/ग्रोक) चुनें।',
-                gen_down: 'जनरेट करें और डाउनलोड करें',
-                gen_down_tag: 'तुरंत SEO-अनुकूल शीर्षक और कीवर्ड प्राप्त करें। CSV फ़ाइल डाउनलोड करें या सीधे एम्बेड करें।',
-                processing_files: 'फाइल प्रोसेसिंग...',
-                why_choose_stock_title: 'स्टॉक फोटोग्राफी के लिए MetaGen Pro क्यों चुनें?',
-                how_to_use_title: 'टूल का उपयोग कैसे करें?',
-                master_stock_title: 'AI-संचालित मेटाडेटा के साथ अपनी स्टॉक फोटोग्राफी में महारत हासिल करें',
-                trusted_stock_title: 'संयुक्त राज्य अमेरिका भर में स्टॉक योगदानकर्ताओं द्वारा भरोसेमंद',
-                why_choose_stock_p1: 'स्टॉक फोटोग्राफी की प्रतिस्पर्धी दुनिया में, खोज योग्यता (discoverability) ही सफलता की कुंजी है। बेहतरीन तस्वीरें भी नहीं बिकेंगी यदि खरीदार उन्हें ढूंढ न सकें। <strong>MetaGen Pro</strong> इस समस्या को हल करने के लिए डिज़ाइन किया गया अंतिम <em>AI मेटाडेटा जेनरेटर</em> है।',
-                why_choose_stock_p2: 'मैन्युअल कीवर्डिंग के विपरीत जो थकाऊ और गलतियों से भरी होती है, हमारा टूल आपकी छवि के विषय, मूड, लाइटिंग और कंपोज़िशन का विश्लेषण करने के लिए अत्याधुनिक कंप्यूटर विज़न का उपयोग करता है। इसके बाद यह <strong>Shutterstock, Adobe Stock, Magnific और Vecteezy</strong> जैसे प्लेटफार्मों के लिए तैयार 50+ अनुकूलित कीवर्ड, आकर्षक शीर्षक और विस्तृत विवरण तैयार करता है।',
-                why_choose_stock_p3: 'चाहे आप फोटोग्राफर हों, इलस्ट्रेटर हों, या एआई कलाकार हों, MetaGen Pro आपके वर्कफ़्लो को सरल बनाता है। <strong>Image-to-Prompt</strong> जैसी विशेषताएं आपको सफल एआई छवियों को रिवर्स-इंजीनियर करने में मदद करती हैं, जबकि हमारा <strong>Rejection Predictor</strong> आपको अपलोड करने से पहले तकनीकी समस्याओं को ठीक करने में मदद करता है।',
-                why_choose_stock_p4: 'उपलब्ध सबसे उन्नत, मुफ्त स्टॉक फोटो टैगर के साथ आज ही अपनी पैसिव इनकम को अधिकतम करना शुरू करें।',
-                "plan_details_title": "आपके लिए कौन सा प्लान सही है?",
-                "plan_details_free": "फ्री प्लान - शुरुआती लोगों के लिए सर्वश्रेष्ठ",
-                "plan_details_free_p1": "हमारा फ्री प्लान शौकिया फोटोग्राफरों और नए स्टॉक योगदानकर्ताओं के लिए बनाया गया है। यह आपको प्रति माह <strong>120 छवियों तक (अधिकतम 10/दिन)</strong> प्रोसेस करने की अनुमति देता है। सेवा को पूरी तरह से फ्री रखने के लिए, आपको हमारी मुख्य सुविधाओं तक पहुंच मिलती है, जिनमें सुपर-फास्ट बैच प्रोसेसिंग (एक साथ 10 फाइलों तक), AI मेटाडेटा जनरेशन और CSV एक्सपोर्ट शामिल हैं। ध्यान दें कि मेटाडेटा ऑटो-एम्बेड, एक्सेल एक्सपोर्ट और कॉपीराइट चेक जैसी उन्नत सुविधाएं इस प्लान में शामिल नहीं हैं।",
-                "plan_details_pro": "प्रो प्लान - पेशेवरों के लिए",
-                "plan_details_pro_p1": "प्रो प्लान नियमित योगदानकर्ताओं के लिए बनाया गया है जो अपने वर्कफ़्लो को अधिकतम करना चाहते हैं और घंटों समय बचाना चाहते हैं। प्रतिदिन <strong>70 इमेजेज़</strong> की भारी सीमा के साथ, अब आपको अपनी API कीज़ लाने की आवश्यकता नहीं है—हम सभी AI अनुरोधों को सुरक्षित रूप से अपने एंड पर संभालते हैं। यह प्लान आपके JPEG/PNG/SVG फ़ाइलों में सीधे <strong>मेटाडेटा ऑटो-एम्बेड</strong>, ड्रैग एंड ड्रॉप कीवर्ड रीऑर्डरिंग, AI कॉपीराइट/ट्रेडमार्क चेकिंग और एक्सेल एक्सपोर्ट जैसे शक्तिशाली टूल्स अनलॉक करता है। यह आपकी बैच प्रोसेसिंग सीमा को एक साथ 100 फ़ाइलों तक बढ़ाता है और पूरी तरह से विज्ञापन-मुक्त अनुभव प्रदान करता है।",
-                "plan_details_premium": "प्रीमियम प्लान - पावर यूजर्स और एजेंसियों के लिए",
-                "plan_details_premium_p1": "हाई-वॉल्यूम क्रिएटर्स, वेक्टर कलाकारों और एजेंसियों के लिए डिज़ाइन किया गया, प्रीमियम प्लान प्रतिदिन <strong>100 इमेजेज़</strong> की विशाल सीमा और 300 फ़ाइलों की बैच सीमा प्रदान करता है। इसमें प्रो प्लान की हर चीज़ के साथ उन्नत ऑटोमेशन सुविधाएँ भी शामिल हैं। आपको <strong>डायरेक्ट वेक्टर/EPS रूपांतरण</strong> (किसी थर्ड पार्टी ConvertAPI कीज़ की आवश्यकता नहीं) और <strong>FTP/SFTP ऑटो अपलोड</strong> सुविधा का एक्सक्लूसिव एक्सेस मिलता है। यह आपको अपनी प्रोसेस की गई फ़ाइलों और मेटाडेटा को सीधे अपने ब्राउज़र से कई स्टॉक एजेंसियों (Shutterstock, Adobe Stock, Magnific, आदि) में स्वचालित रूप से वितरित करने की अनुमति देता है।",
-                "htu_step1_title": "1. फ़ाइलें अपलोड करें",
-                "htu_step1_desc": "शुरू करने के लिए छवियाँ (JPG/PNG), वेक्टर (SVG/EPS), या वीडियो को ड्रैग एंड ड्रॉप करें।",
-                "htu_step2_title": "2. टारगेट प्लेटफ़ॉर्म",
-                "htu_step2_desc": "बेहतर परिणामों के लिए Shutterstock, Adobe Stock, या Magnific चुनें।",
-                "htu_step3_title": "3. AI मॉडल चुनें",
-                "htu_step3_desc": "इमेज विश्लेषण के लिए Gemini, Mistral, या Groq के बीच चयन करें।",
-                "htu_step4_title": "4. कस्टमाइज़ेशन",
-                "htu_step4_desc": "स्लाइडर का उपयोग करके शीर्षक और कीवर्ड के लिए न्यूनतम/अधिकतम शब्द सेट करें।",
-                "htu_step5_title": "5. AI सेटिंग्स",
-                "htu_step5_desc": "वेक्टर मोड, व्हाइट बैकग्राउंड (White BG) सक्षम करें, या अपने स्वयं के कस्टम प्रॉम्प्ट का उपयोग करें।",
-                "htu_step6_title": "6. मेटाडेटा जनरेट करें",
-                "htu_step6_desc": "SEO-रेडी शीर्षक और टैग तुरंत प्राप्त करने के लिए 'Process Selected' पर क्लिक करें।",
-                "htu_step7_title": "7. मेटाडेटा एम्बेड करें",
-                "htu_step7_desc": "मेटाडेटा सीधे अपनी JPG, PNG, या SVG फ़ाइलों में लिखें।",
-                "htu_step8_title": "8. मल्टी-ट्रांसलेट",
-                "htu_step8_desc": "ग्लोबल मार्केट के लिए मेटाडेटा का 10+ भाषाओं में अनुवाद करें।",
-                "htu_step9_title": "9. परिणाम एक्सपोर्ट करें",
-                "htu_step9_desc": "अपना सारा मेटाडेटा CSV या पेशेवर एक्सेल शीट के रूप में डाउनलोड करें।",
-                "htu_step10_title": "10. सेव और ड्राइव",
-                "htu_step10_desc": "स्थानीय फ़ोल्डर में सहेजें, लिंक के माध्यम से साझा करें, या सीधे ड्राइव पर अपलोड करें।",
-                master_stock_subtitle1: 'MetaGen Pro का उपयोग कैसे करें',
-                master_stock_p1: 'MetaGen Pro के साथ शुरुआत करना अविश्वसनीय रूप से सरल है और इसके लिए किसी तकनीकी विशेषज्ञता की आवश्यकता नहीं है। सबसे पहले, अपनी छवियों को निर्दिष्ट अपलोड क्षेत्र में खींचकर छोड़ें, या अपनी फ़ाइलों को ब्राउज़ करने के लिए क्लिक करें। MetaGen Pro JPG, PNG, SVG और EPS के साथ-साथ वीडियो फ़ाइलों सहित सभी प्रमुख छवि प्रारूपों का समर्थन करता है। एक बार आपकी छवियां अपलोड हो जाने के बाद, उस मार्केटप्लेस के लिए विशेष रूप से मेटाडेटा को अनुकूलित करने के लिए अपना लक्ष्य प्लेटफ़ॉर्म (Shutterstock, Adobe Stock, Magnific, या General) चुनें।',
-                master_stock_p2: 'इसके बाद, साइडबार सेटिंग्स का उपयोग करके अपनी प्राथमिकताएं कॉन्फ़िगर करें। आप कीवर्ड की संख्या समायोजित कर सकते हैं (हम इष्टतम एसईओ के लिए 35-50 की सिफारिश करते हैं), शीर्षक लंबाई की सीमाएं निर्धारित कर सकते हैं, और चित्रण के लिए वेक्टर मोड या उत्पाद छवियों के लिए व्हाइट बैकग्राउंड डिटेक्शन जैसी विशेष सुविधाओं को सक्षम कर सकते हैं। AI प्रदाता चयन आपको अपनी API उपलब्धता और गति प्राथमिकताओं के आधार पर Google Gemini, Mistral AI, या Groq Llama मॉडल के बीच चयन करने की अनुमति देता है।',
-                master_stock_p3: 'कॉन्फ़िगरेशन के बाद, सभी अपलोड की गई छवियों के लिए एक साथ मेटाडेटा उत्पन्न करने के लिए "Process All" बटन पर क्लिक करें। हमारा उन्नत AI प्रत्येक छवि की दृश्य सामग्री, संरचना, रंग, विषय और संदर्भ का विश्लेषण करके अत्यधिक प्रासंगिक शीर्षक, विवरण और कीवर्ड सेट बनाता है। पूरी प्रक्रिया में आमतौर पर प्रति छवि केवल कुछ सेकंड लगते हैं, यहाँ तक कि बैच मोड में सैकड़ों फ़ाइलों को संसाधित करते समय भी।',
-                master_stock_subtitle2: 'इस टूल का उपयोग करने के लाभ',
-                master_stock_benefit1: '<strong>समय दक्षता:</strong> मैन्युअल कीवर्डिंग में प्रति छवि 10-15 मिनट लग सकते हैं। MetaGen Pro इसे मात्र कुछ सेकंड तक कम कर देता है, जिससे आप सैकड़ों छवियों को उतने ही समय में कीवर्ड कर सकते हैं जितना कि मैन्युअल रूप से कुछ ही संसाधित करने में लगता है। साप्ताहिक रूप से 50-100 चित्र अपलोड करने वाले पेशेवर योगदानकर्ताओं के लिए, इसका मतलब हर हफ्ते 10+ घंटे बचाना है।',
-                master_stock_benefit2: '<strong>SEO अनुकूलन:</strong> हमारा AI केवल वही वर्णन नहीं करता जो वह देखता है—यह खोज उद्देश्य और बाज़ार के एल्गोरिदम को समझता है। प्रत्येक मेटाडेटा सेट में व्यापक कीवर्ड (उच्च खोज मात्रा), विशिष्ट लॉन्ग-टेल कीवर्ड (उच्च रूपांतरण), और ट्रेंडिंग शब्दों (वर्तमान मांग) का रणनीतिक मिश्रण शामिल है। बिल्ट-इन एसईओ स्कोर मीटर वास्तविक समय में आपके मेटाडेटा का मूल्यांकन करता है, यह सुनिश्चित करता है कि प्रत्येक अपलोड अधिकतम दृश्यता के लिए अनुकूलित है।',
-                master_stock_benefit3: '<strong>मल्टी-प्लेटफ़ॉर्म सपोर्ट:</strong> अलग-अलग स्टॉक एजेंसियों की अलग-अलग ज़रूरतें और प्राथमिकताएं होती हैं। MetaGen Pro प्रत्येक प्लेटफ़ॉर्म के अद्वितीय एल्गोरिदम के अनुकूल होता है—Shutterstock को Adobe Stock या Magnific की तुलना में अलग कीवर्ड संरचनाएं पसंद हैं। हमारा प्लेटफ़ॉर्म-विशिष्ट अनुकूलन सुनिश्चित करता है कि आपकी छवियां जहाँ भी आप अपलोड करें, वहां अच्छी रैंक करें।',
-                master_stock_benefit4: '<strong>स्थिरता और गुणवत्ता:</strong> मानवीय भूल को समाप्त करें और अपने पूरे पोर्टफोलियो में पेशेवर मानक बनाए रखें। MetaGen Pro सुनिश्चित करता है कि प्रत्येक छवि में ठीक से स्वरूपित मेटाडेटा, पर्याप्त कीवर्ड मात्रा और उचित विवरण हो। रिजेक्शन प्रिडिक्टर सुविधा सामान्य अस्वीकृति मानदंडों के खिलाफ आपके मेटाडेटा का विश्लेषण करती है, जिससे आपको महंगी सबमिशन विफलताओं से बचने में मदद मिलती।',
-                master_stock_subtitle3: 'इमेज एसईओ क्या है और यह क्यों महत्वपूर्ण है',
-                master_stock_seo_p1: 'इमेज एसईओ (सर्च इंजन ऑप्टिमाइजेशन) स्टॉक फोटोग्राफी प्लेटफॉर्म और सर्च इंजन पर दृश्यता में सुधार के लिए इमेज मेटाडेटा को अनुकूलित करने का अभ्यास है। जब कोई खरीदार "बिजनेस मीटिंग" या "ट्रॉपिकल बीच सनसेट" खोजता है, तो प्लेटफॉर्म का एल्गोरिदम आपकी छवि को "देखता" नहीं है—यह आपके द्वारा प्रदान किए गए मेटाडेटा को पढ़ता है। प्रभावी इमेज एसईओ आपके काम के खोज परिणामों के पेज 1 बनाम पेज 50 पर दिखने के बीच का अंतर है।',
-                master_stock_seo_p2: '<strong>इमेज एसईओ के तीन स्तंभ:</strong> पहला, <em>Title</em> वर्णनात्मक लेकिन संक्षिप्त (10-20 शब्द) होना चाहिए, जिसमें आपके प्राथमिक कीवर्ड हों और प्राकृतिक और पठनीय बने रहें। दूसरा, <em>Description</em> संदर्भ और उपयोग के मामले (30-50 शब्द) प्रदान करता है, जिससे एल्गोरिदम और खरीदार दोनों को आपकी छवि के व्यावसायिक अनुप्रयोगों को समझने में मदद मिलती है। तीसरा, <em>Keywords</em> एक व्यापक जाल बिछाते हैं (35-50 शब्द अनुशंसित), विभिन्न खोज प्रश्नों को कैप्चर करते हैं जो खरीदारों को आपकी छवि तक ले जा सकते हैं।',
-                master_stock_seo_p3: '<strong>कीवर्ड रणनीति मायने रखती है:</strong> सबसे प्रभावी मेटाडेटा एक संतुलित मिश्रण का उपयोग करता है: 20-30% एकल-शब्द कीवर्ड (व्यापक पहुंच), 40-50% दो-शब्द वाक्यांश (मध्यम विशिष्टता), और 20-30% लॉन्ग-टेल कीवर्ड (उच्च रूपांतरण)। उदाहरण के लिए, स्मार्टफोन का उपयोग करने वाले हाथों की एक छवि में "हाथ" (व्यापक), "स्मार्टफोन इंटरैक्शन" (मध्यम), और "मोबाइल ऐप इंटरफ़ेस टैप करने वाले हाथ" (लॉन्ग-टेल) शामिल होने चाहिए। यह रणनीति व्यापक और विशिष्ट दोनों खोजों में आपकी छवि के दिखने की संभावनाओं को अधिकतम करती है।',
-                master_stock_seo_p4: '<strong>खोज रैंकिंग कारक:</strong> स्टॉक प्लेटफॉर्म खोज परिणामों की रैंकिंग करते समय कई कारकों पर विचार करते हैं। प्रासंगिकता (आपका मेटाडेटा खोज क्वेरी से कितनी अच्छी तरह मेल खाता है), पूर्णता (सभी मेटाडेटा फ़ील्ड ठीक से भरे हुए हैं), और कीवर्ड विविधता (विभिन्न, संबंधित शब्दों का उपयोग करना) सभी आपकी रैंकिंग को प्रभावित करते हैं। इसके अतिरिक्त, व्यावसायिक प्रासंगिकता—यह वर्णन करना कि खरीदार आपकी छवि का उपयोग कैसे कर सकते हैं—रूपांतरण दरों को महत्वपूर्ण रूप से प्रभावित करती है, भले ही आपकी छवि अच्छी रैंक करती हो।',
-                master_stock_seo_p5: 'MetaGen Pro इन सभी सर्वोत्तम प्रथाओं को स्वचालित करता है, यह सुनिश्चित करता है कि आपके द्वारा अपलोड की गई प्रत्येक छवि अधिकतम दृश्यता, डाउनलोड और अंततः आय के लिए पूरी तरह से अनुकूलित है। चाहे आप शौकिया योगदानकर्ता हों या पूर्णकालिक स्टॉक फोटोग्राफर, आज के प्रतिस्पर्धी बाजार में उचित इमेज एसईओ अपरिहार्य है।',
-                master_stock_cta: '<strong>अपनी स्टॉक फोटोग्राफी की सफलता को बढ़ावा देने के लिए तैयार हैं?</strong> आज ही MetaGen Pro का उपयोग करना शुरू करें और घंटों की थकाऊ कीवर्डिंग को सेकंडों की स्वचालित उत्कृष्टता में बदलें।',
-                trusted_stock_subtitle: 'जानें कि क्यों हजारों अमेरिकी फोटोग्राफर और निर्माता अपने स्टॉक राजस्व को बढ़ाने के लिए MetaGen Pro पर भरोसा करते हैं',
-                review_1_details: '📍 न्यूयॉर्क, NY • पेशेवर फोटोग्राफर',
-                review_1_text: '"MetaGen Pro ने मेरे वर्कफ़्लो को पूरी तरह से बदल दिया! मैं शटरस्टॉक के लिए अपनी तस्वीरों की कीवर्डिंग में घंटों बिताता था। अब इसमें केवल कुछ मिनट लगते हैं और मेरे डाउनलोड में 40% की वृद्धि हुई है। एसईओ स्कोर सुविधा शानदार है!"',
-                review_2_details: '📍 लॉस एंजिल्स, CA • सामग्री निर्माता',
-                review_2_text: '"एक पूर्णकालिक सामग्री निर्माता के रूप में, समय ही पैसा है। यह टूल मेटाडेटा प्रविष्टि पर मुझे प्रति सप्ताह कम से कम 10 घंटे बचाता है। बैच प्रोसेसिंग बिजली की तरह तेज़ है और एआई-जनित कीवर्ड एकदम सटीक हैं। इस साल मैंने जो सबसे अच्छा निवेश किया है!"',
-                review_3_details: '📍 मियामी, FL • स्टॉक योगदानकर्ता',
-                review_3_text: '"मुझे शुरू में संदेह था, लेकिन MetaGen Pro ने सभी उम्मीदों को पार कर लिया। कीवर्ड सुझाव अविश्वसनीय रूप से प्रासंगिक हैं और बहु-भाषा सुविधा ने मुझे अंतरराष्ट्रीय खरीदारों तक पहुंचने में मदद की। मेरी एडोब स्टॉक कमाई मात्र 3 महीनों में दोगुनी हो गई!"',
-                review_4_details: '📍 शिकागो, IL • ग्राफिक डिजाइनर',
-                review_4_text: '"अकेले कॉपीराइट चेक फीचर ही कीमत के लायक है! इसने मुझे कई बार संभावित रिजेक्शन से बचाया है। स्वचालित मेटाडेटा निर्माण के साथ संयुक्त, यह टूल स्टॉक फोटोग्राफी के बारे में गंभीर किसी भी व्यक्ति के लिए आवश्यक है।"',
-                review_5_details: '📍 सिएटल, WA • प्रकृति फोटोग्राफर',
-                review_5_text: '"मैं हर महीने सैकड़ों प्रकृति तस्वीरें अपलोड करता हूं। MetaGen Pro उन सभी को प्रबंधित और अनुकूलित करना आसान बनाता है। CSV निर्यात सुविधा मेरे वर्कफ़्लो के साथ सहजता से एकीकृत हो जाती है। साथी योगदानकर्ताओं को अत्यधिक अनुशंसा!"',
-                review_6_details: '📍 ऑस्टिन, TX • फ्रीलांस वीडियोग्राफर',
-                review_6_text: '"वीडियो मेटाडेटा के लिए गेम-चेंजर! एआई सटीक रूप से दृश्यों की पहचान करता है और सही शीर्षक उत्पन्न करता है। मेरे शटरस्टॉक वीडियो पोर्टफोलियो की दृश्यता में नाटकीय रूप से सुधार हुआ है। सपोर्ट टीम भी बेहद संवेदनशील और मददगार है।"',
-                stat_users: 'सक्रिय अमेरिकी उपयोगकर्ता',
-                stat_satisfaction: 'संतुष्टि दर',
-                stat_images: 'छवियां प्रतिदिन अनुकूलित',
-                stat_rating: 'औसत रेटिंग',
-                "faq_title": "सामान्य प्रश्न — MetaGen Pro",
-                "faq_q1": "🚀 मैं MetaGen Pro के साथ कैसे शुरुआत करूं?",
-                "faq_a1": "<strong>चरण 1:</strong> अपने Google खाते या ईमेल से साइन अप या लॉग इन करें।<br><strong>चरण 2:</strong> सेटिंग्स में अपनी Google Gemini API कुंजी सेट करें (<a href='https://aistudio.google.com/app/apikey' target='_blank'>Google AI Studio</a> पर एक मुफ्त प्राप्त करें)।<br><strong>चरण 3:</strong> अपनी छवियां (JPG, PNG, SVG, EPS) अपलोड करें - एक साथ 500 फाइलों तक!<br><strong>चरण 4:</strong> अपना लक्षित प्लेटफ़ॉर्म (Shutterstock, Adobe Stock, आदि) चुनें और 'Generate Metadata' पर क्लिक करें।<br><strong>चरण 5:</strong> समीक्षा करें, यदि आवश्यक हो तो संपादित करें, फ़ाइलों में मेटाडेटा एम्बेड करें और डाउनलोड करें!",
-                "faq_q2": "💰 क्या MetaGen Pro मुफ़्त है? इसकी कीमत क्या है?",
-                "faq_a2": "<p><strong>सभी के लिए मुफ़्त!</strong> MetaGen Pro एक दमदार मुफ़्त प्लान (120 इमेज/महीना, अधिकतम 25/दिन) प्रदान करता है। अधिक उपयोग करने वालों के लिए, हमारे पास <strong>प्रो</strong> ($12/महीना - 2000 इमेज/महीना, अधिकतम 70/दिन) और <strong>प्रीमियम</strong> ($29/महीना - 3000 इमेज/महीना, अधिकतम 100/दिन) प्लान हैं जिनमें एक्सेल एक्सपोर्ट और डायरेक्ट FTP अपलोड जैसी उन्नत सुविधाएँ शामिल हैं।</p>",
-                "faq_q3": "🔑 मुझे API कुंजी कैसे मिलेगी? क्या वे सुरक्षित हैं?",
-                "faq_a3": "<p><strong>नहीं, अब किसी भी प्लान के लिए API कुंजी की आवश्यकता नहीं है!</strong> सभी प्लानों में, चाहे वे फ्री हों, प्रो हों या प्रीमियम, हम अपने स्वयं के सर्वर और सुपबेस एज फंक्शंस के समर्पित AI मॉडल (उन्नत AI मॉडल) का उपयोग करके मेटाडेटा संसाधित करते हैं।</p><p><strong>सुरक्षा:</strong> आपका सारा डेटा पूरी तरह से सुरक्षित है और प्रसंस्करण के तुरंत बाद सर्वर से हटा दिया जाता है।</p>",
-                "faq_q4": "📁 कौन से फ़ाइल स्वरूप समर्थित हैं?",
-                "faq_a4": "<p><strong>समर्थित स्वरूप:</strong></p><ul><li><strong>JPG/JPEG:</strong> EXIF एम्बेडिंग के साथ पूर्ण समर्थन</li><li><strong>PNG:</strong> मेटाडेटा एम्बेडिंग के साथ पूर्ण समर्थन</li><li><strong>SVG:</strong> XMP एम्बेडिंग के साथ पूर्ण समर्थन</li><li><strong>EPS:</strong> SVG में परिवर्तित होता है (ConvertAPI कुंजी आवश्यक)</li></ul><p>एक बार में <strong>500 फ़ाइलें</strong> तक अपलोड करें!</p>",
-                "faq_q5": "🎯 कौन से स्टॉक प्लेटफ़ॉर्म समर्थित हैं?",
-                "faq_a5": "<p>सभी प्रमुख प्लेटफ़ॉर्म के लिए अनुकूलित: Shutterstock, Adobe Stock, Magnific, Vecteezy, Pond5, 123RF, iStock, Getty Images, और बहुत कुछ। हमारा AI स्वचालित रूप से प्रत्येक प्लेटफ़ॉर्म की आवश्यकताओं के अनुरूप ढल जाता है!</p>",
-                "faq_q6": "📊 SEO स्कोर और कीवर्ड बैज क्या हैं?",
-                "faq_a6": "<p><strong>SEO स्कोर:</strong> खोज एल्गोरिदम के लिए अनुकूलन को मापता है।</p><p><strong>बैज:</strong></p><ul><li>🟢 <strong>हरा:</strong> एकल-शब्द (उच्च मात्रा)</li><li>🟡 <strong>पीला:</strong> दो-शब्द (सर्वोत्तम संतुलन)</li><li>🔵 <strong>नीला:</strong> 3+ शब्द (लॉन्ग-टेल)</li></ul>",
-                "faq_q7": "⚡ बैच प्रोसेसिंग कैसे काम करती?",
-                "faq_a7": "<p>500 तक छवियां अपलोड करें, 'Process Selected' पर क्लिक करें, और हमारा AI उन्हें समानांतर में संभालता है। यह बिजली की तरह तेज़ है—100 फ़ाइलों में लगभग उतना ही समय लगता है जितना 1 फ़ाइल में!</p>",
-                "faq_q8": "🎨 'Image to Prompt' सुविधा क्या है?",
-                "faq_a8": "<p>यह आपकी छवि को Midjourney या DALL-E जैसे AI जनरेटर के लिए एक विस्तृत प्रॉम्प्ट में बदल देता है। सफल स्टॉक छवियों का विश्लेषण करने के लिए बिल्कुल सही!</p>",
-                "faq_q9": "🔒 क्या मेरा डेटा निजी है? क्या आप मेरी छवियां संग्रहीत करते हैं?",
-                "faq_a9": "<p><strong>100% निजी!</strong> प्रोसेसिंग आपके ब्राउज़र में होती है। हम आपकी छवियों को कभी भी संग्रहीत नहीं करते हैं। प्रोसेसिंग के तुरंत बाद डेटा हटा दिया जाता है।</p>",
-                "faq_q10": "🔧 समस्या निवारण: सामान्य समस्याएं",
-                "faq_a10": "<ul><li><strong>API कुंजी त्रुटि:</strong> सेटिंग्स में अपनी कुंजी जांचें।</li><li><strong>फ़ाइल बहुत बड़ी:</strong> 20MB से कम रखें।</li><li><strong>धीमी प्रोसेसिंग:</strong> अन्य ब्राउज़र टैब बंद करें।</li></ul>",
-                "faq_q11": "🎭 AI इमेज जेनरेटर कैसे काम करता है?",
-                "faq_a11": "<p>सीधे चित्र बनाने के लिए FLUX मॉडल का उपयोग करें। अपनी Together AI कुंजी सेट करें, एक प्रॉम्प्ट दर्ज करें, और अपने स्टॉक पोर्टफोलियो के लिए अद्वितीय चित्र बनाएं!</p>",
-                "faq_q12": "💬 मुझे सहायता कैसे मिल सकती है या प्रतिक्रिया कैसे साझा कर सकता हूँ?",
-                "faq_a12": "<p>हमें <strong>metagenp@gmail.com</strong> पर ईमेल करें या ऐप में फीडबैक बटन का उपयोग करें। हम 12 घंटे के भीतर महत्वपूर्ण समस्याओं का उत्तर देते हैं!</p>"
-            },
-
-            es: {
-                flag: '🇪🇸',
-                name: 'ES',
-                band: 'MetaGen Pro',
-                tagline: 'Metadatos impulsados por IA',
-                home: 'Inicio',
-                features: 'Características',
-                start_tour: 'Iniciar Tour',
-                faq: 'Preguntas Frecuentes',
-                menu: 'MENÚ',
-                blog: 'Blog',
-                disclaimer: 'Descargo de responsabilidad',
-                about: 'Sobre nosotros',
-                contact: 'Contacto',
-                legal: 'Aviso legal',
-                select_lang: 'Seleccionar idioma',
-                general_btn: "General",
-                save_key: 'Guardar',
-                close: 'Cerrar',
-                get_key: 'Obtener clave',
-                badge: 'Insignia',
-                try_metagen: 'Pruebe MetaGen gratis',
-                no_api: 'No se requiere clave API para su prueba gratuita',
-                ref: '¡Desbloquea el límite doble!',
-                ref_text: 'Comparte MetaGen Pro. Cuando alguien se una haciendo clic en tu enlace de referencia, tu límite diario de procesos aumentará de 50 a 100.',
-                ref_share_btn: 'Comparte ahora',
-                watting_for: '¿Que estas esperando?',
-                "get_start": "Empieza gratis",
-                "drag_and_drop": "Arrastre y suelte en cualquier lugar para cargar",
-                "fast": "Rápido",
-                "best": "Mejor",
-                "generate_meta": "Generar metadatos",
-                "delete_select": "Eliminar seleccionados",
-                "down_select": "Descargar seleccionados",
-                "translate_select": "Traducir seleccionados",
-                "done": "Hecho",
-                "processing": "Procesando",
-                "analyzing_market": "Analizando tendencias del mercado...",
-                "ai_is_researching": "La IA está investigando conceptos de alto rendimiento para ti.",
-                "analyzing": "Analizando...",
-                "copy_tag": "Copiar etiquetas",
-                "copy_idea": "Copiar idea e información",
-                "download": "Descargar",
-                "enter_your_convert_api": "Introduce tu clave API de Convert para habilitar conversiones EPS.",
-                "export_csv": "Exportar a CSV",
-                "export_excel": "Exportar a Excel",
-                "niche_research_cen": "Centro de Investigación de Nichos",
-                "niche_research_tag": "Descubra palabras clave y conceptos de alta demanda y baja competencia para su portafolio de stock.",
-                "select_category": "Seleccionar categoría",
-                "market_focus": "Enfoque de mercado",
-                "analyze_trend": "Analizar tendencias",
-                "ready_to_research": "Listo para investigar",
-                "ready_to_research_tag": "Seleccione una categoría arriba y haga clic en \"Analizar tendencias\" para descubrir nichos rentables.",
-                "quick_suggest": "Sugerencias rápidas",
-                "label_title": "Título",
-                "label_desc": "Descripción",
-                "label_keywords": "Palabras clave",
-                "btn_copy": "Copiar",
-                "btn_add": "Añadir",
-                "placeholder_add_kw": "Añadir palabra clave...",
-                "seo_score": "Puntuación SEO",
-                "rejection": "Rechazo",
-                "platform_check": "Verificación de plataforma",
-                "style": "Estilo",
-                "mode": "Modo",
-                "translate": "Traducir",
-                "go": "Ir",
-                "min_title": "Mín. Palabras del Título",
-                "max_title": "Máx. Palabras del Título",
-                "min_keywords": "Mín. Palabras Clave",
-                "max_keywords": "Máx. Palabras Clave",
-                "min_desc": "Mín. Palabras de Descripción",
-                "max_desc": "Máx. Palabras de Descripción",
-                "toggle_silhouette": "Silueta",
-                "toggle_vector": "Vector / Modo Ilustración",
-                "toggle_white_bg": "Fondo Blanco",
-                "toggle_trans_bg": "Fondo Transparente",
-                "toggle_custom_prompt": "Prompt Personalizado",
-                "toggle_prohibited": "Palabras Prohibidas",
-                "toggle_single_kw": "Palabras Clave de Una Sola Palabra",
-                "toggle_change_name": "Cambiar Nombre de Archivo",
-                "toggle_name_title": "Nombre de Archivo como Título",
-                "feedback_matters": "Sus comentarios son importantes",
-                "provide_feedback": "¿Podría dar su opinión sobre la herramienta?",
-                "issue_type": "Tipo de problema",
-                "general_feedback": "Comentarios generales",
-                "bug_report": "Informe de error",
-                "feature_request": "Solicitud de función",
-                "your_mess": "Su mensaje",
-                "send_feed": "Enviar comentarios",
-                eps_meta: 'Generar e incrustar metadatos EPS',
-                month: '/ mes',
-                pricing: 'Precios',
-                ftp_upload: 'Carga directa FTP',
-                ftp_upload_sub_txt: 'Sube archivos directamente a sitios de stock (Adobe Stock, Shutterstock, Magnific).',
-                upgrade_plan: 'Mejorar plan',
-                stock_calendar: 'Calendario de stock',
-                get_access: 'Obtener acceso',
-                pricing_plan: 'Nuestro plan de precios',
-                pricing_sub_txt: 'Elige el plan perfecto para tu flujo de trabajo creativo.',
-                free_plan: 'Plan gratuito',
-                free_price: '$0/mes',
-                most_popular: 'Más popular',
-                pro_plan: 'Actualizar a Pro',
-                pro_price: '$12/mes',
-                premium_plan: 'Plan Premium',
-                premium_price: '$29/mes',
-                '50_image': '120 imágenes al mes (máximo 10 al día para uso legítimo)',
-                basic_ai_model: 'Modelos de IA básicos (Gemini, Mistral, Groq) Usa tu propia clave de API.',
-                batch_process: 'Proceso por lotes: hasta 50 archivos',
-                csv_export: 'Exportación CSV',
-                ads_support: 'Con publicidad',
-                auto_embed: 'Incrustación automática de metadatos',
-                excel_export: 'Exportación a Excel',
-                drag_keyword: 'Reordenamiento de palabras clave (Arrastrar y soltar)',
-                copy_trade_check: 'Comprobación de derechos de autor/marcas comerciales',
-                get_started_free: 'Comenzar gratis',
-                '300_images': '2000 imágenes por mes',
-                advance_ai: 'Modelos de IA avanzados (No se requiere clave de API).',
-                batch_process_pro: 'Proceso por lotes: hasta 100 archivos',
-                csv_excel_ex: 'Exportación CSV/Excel',
-                seo_and_no_ads: 'Análisis SEO y sin anuncios',
-                support_time: 'Soporte 24 horas',
-                '1k_image': '3000 imágenes por mes',
-                all_pro: 'Todas las funciones Pro',
-                batch_process_pre: 'Proceso por lotes: hasta 300 archivos',
-                ftp_auto_up: 'Carga automática FTP/SFTP',
-                vector_eps: 'Conversión directa a Vector/EPS',
-                vip_support: 'Soporte VIP y acceso anticipado',
-                privacy_policy: 'Política de privacidad',
-                terms_of_service: 'Condiciones de servicio',
-                adjustment: 'Ajuste',
-                multi_tool: 'Herramientas multiimagen',
-                sketch_art: 'Imagen a boceto',
-                all_tools: 'Todas las herramientas',
-                image_enhance: 'Mejorador de imagen IA',
-                bg_remove: 'Eliminador de Fondo IA',
-                pixel_check: 'Pixel-Check Studio',
-                text_to_image: 'Generador de texto a imagen',
-                company: 'Compañía',
-                free_plan: 'Plan gratuito',
-                note: 'El acceso a la API se eliminará en 7 días. Actualiza al plan Pro/Premium y disfruta de todas las funciones de MetaGen Pro.',
-                platform: 'Plataforma',
-                add_more: 'Agregar más archivos',
-                login_google: 'Continuar con Google',
-                new_user: '¿Usuario nuevo?',
-                create_account: 'Crear una cuenta',
-                niche_research: 'Investigación de Nicho',
-                metadata_generator: 'Generador de Metadatos',
-                seo_score: 'Puntuación SEO y Análisis',
-                batch_process: 'Proceso por Lotes Súper Rápido',
-                sign_out: 'Cerrar sesión',
-                switch_account: 'Cambiar cuenta',
-                upload_title: 'Subir imágenes o videos',
-                drag_drop: 'Arrastra y suelta archivos aquí o haz clic para subir',
-                supports: 'Soporta JPG, PNG, WEBP, MP4, MOV',
-                max_size: 'Máx 50MB por archivo',
-                privacy_note: 'Sus archivos se procesan de forma segura y se eliminan después de 1 hora.',
-                privacy_note_device: 'Analizamos los archivos únicamente en el dispositivo, no se guardan datos.',
-                upload_limit_info: 'Plan Gratuito: 50 archivos/día',
-                usage: 'Uso:',
-                "daily_limit": "Límite diario de procesos",
-                refer_text: '¡Comparte MetaGen Pro para obtener +50 de límite diario adicional!',
-                "share_get_credit": "Comparte y obtén créditos",
-                generate_metadata: 'Generar Metadatos',
-                "limit_reached_msg": "¡Has alcanzado tu límite diario de procesamiento! Actualiza tu plan para obtener límites más altos o comparte la herramienta para obtener un bono.",
-                export_csv: 'Exportar a CSV',
-                export_excel: 'Exportar a Excel',
-                clear_all: 'Borrar todo',
-                copy_all: 'Copiar todo',
-                down_eps: 'Descargar EPS',
-                guides: 'Guías',
-                title: 'Título',
-                description: 'Descripción',
-                keywords: 'Palabras clave',
-                categories: 'Categorías',
-                already_user: '¿Ya tienes una cuenta?',
-                login: 'Iniciar sesión',
-                well_come: 'Bienvenido de nuevo',
-                tools_generator: 'Herramientas y Generador',
-                trending: '📅 Tendencias...',
-                customization: 'Personalización',
-                settings: 'Configuración',
-                select_ai: 'Seleccionar proveedor de IA',
-                manage_api: 'Gestionar claves API',
-                convert_api: 'Clave ConvertAPI',
-                translation_lang: 'Idioma de traducción',
-                upload_files: 'Subir archivos',
-                watch_demo: 'Ver demostración',
-                watch_tagline: 'Vea cómo aumentar sus ventas de stock en segundos',
-                process_selected: 'Procesar seleccionados',
-                process_prompts: 'Procesar prompts',
-                embed_metadata: 'Incrustar metadatos',
-                export: 'Exportar',
-                batch_translate: 'Traducción por lotes (Gratis)',
-                translate_all: 'Traducir todo (API)',
-                test_metadata: 'Probar metadatos',
-                save_folder: 'Guardar en carpeta',
-                share_files: 'Compartir archivos',
-                upload_drive: 'Subir a Drive',
-                pause: 'Pausa',
-                image_to_prompt: 'Imagen a Prompt',
-                jpg_png: 'JPG/PNG',
-                svg_eps: 'SVG/EPS/AI',
-                videos: 'Videos',
-                check_copyright: 'Comprobar derechos de autor/marca:',
-                upload_limit: 'Subir un máximo de 500 archivos en una sola acción',
-                resume: 'Reanudar',
-                send_feedback: 'Enviar comentarios / Informe de errores',
-                view_translated: 'Ver traducido',
-                view_original: 'Ver original',
-                analyze_trends: 'Analizar tendencias',
-                downloading: 'Descargando...',
-                translating: 'Traduciendo...',
-                embedding: 'Incrustando...',
-                analyzing: 'Analizando...',
-                processing: 'Procesando...',
-                process: 'Procesar',
-                files: 'Archivos',
-                prompts: 'Prompts',
-                complete: 'Completado',
-                success: 'Éxito',
-                fail: 'Fallo',
-                saving: 'Guardando...',
-                preparing: 'Preparando...',
-                uploading: 'Subiendo...',
-                initializing: 'Iniciando conexión...',
-                "hero_title": "¡Generador de metadatos de IA y palabras clave de fotos de stock gratis!",
-                hero_tagline: 'Aumenta tu visibilidad en Shutterstock, Adobe Stock y Magnific. Genera títulos, descripciones y palabras clave optimizadas para SEO en segundos con IA avanzada.',
-                why_choose: '¿Por qué elegir MetaGen Pro?',
-                blog_1: 'Procesamiento por lotes superrápido',
-                blog_tag_1: 'Analiza y asigna palabras clave a cientos de imágenes en segundos. Ahorra horas de trabajo manual con nuestro motor de lotes optimizado.',
-                blog_2: 'Análisis avanzado de IA',
-                blog_tag_2: 'Impulsado por un modelo de IA avanzado para el reconocimiento de imágenes líder en la industria y metadatos precisos.',
-                blog_3: 'Palabras clave optimizadas para SEO',
-                blog_tag_3: 'Genere títulos y etiquetas de alto rango diseñados específicamente para los algoritmos de Shutterstock, Adobe Stock y Magnific.',
-                blog_4: 'Investigación de nichos',
-                blog_tag_4: 'Descubra temas con poca competencia y alta demanda con nuestra herramienta integrada de investigación de nichos. Descubra lo que buscan los compradores.',
-                blog_5: 'Reordenamiento de palabras clave mediante arrastrar y soltar',
-                blog_tag_5: 'En los sitios de stock (Adobe Stock, Shutterstock) las primeras 5 a 10 palabras clave son las más importantes.',
-                blog_6: 'Incorporación de metadatos',
-                blog_tag_6: 'Incruste títulos y palabras clave directamente en sus archivos JPG/PNG/SVG (IPTC/XMP). Simplemente descárguelos y súbalos a cualquier plataforma de archivo.',
-                blog_7: 'Multilingüe',
-                blog_tag_7: 'Traduce tus metadatos a más de 10 idiomas al instante. Llega a una audiencia global con títulos y descripciones localizados.',
-                blog_8: 'Comprobación de derechos de autor',
-                blog_tag_8: '¡Evita el rechazo! Nuestra IA escanea tus imágenes para detectar posibles problemas de marca registrada y logotipos antes de subirlas.',
-                blog_9: 'Exportar metadatos CSV',
-                blog_tag_9: 'Facilidad de exportación de archivos CSV de todos los sitios de stock de Adobe Stock, Shutterstock y Magnific.',
-                trusted_all: 'De confianza para las principales plataformas de microstock',
-                it_works: 'Cómo funciona',
-                upload_photos: 'Subir fotos',
-                upload_photos_tag: 'Arrastra y suelta tus archivos JPG/PNG. Leemos automáticamente las dimensiones y las especificaciones técnicas.',
-                select_platfrom: 'Seleccione Plataforma e IA',
-                select_platfrom_tag: 'Elija su mercado objetivo (por ejemplo, Adobe Stock) y el modelo de IA preferido (Gemini/Groq).',
-                gen_down: 'Generar y descargar',
-                gen_down_tag: 'Obtén títulos y palabras clave optimizados para SEO al instante. Descarga CSV o incrústalos directamente.',
-                processing_files: 'Procesando archivos...',
-                why_choose_stock_title: '¿Por qué elegir MetaGen Pro para fotografía de stock?',
-                how_to_use_title: '¿Cómo usar la herramienta?',
-                master_stock_title: 'Domina tu fotografía de stock con metadatos impulsados por IA',
-                trusted_stock_title: 'Confiado por colaboradores de stock en todo Estados Unidos',
-                why_choose_stock_p1: 'En el competitivo mundo de la fotografía de stock, la capacidad de descubrimiento es clave. Incluso las mejores imágenes no se venderán si los compradores no pueden encontrarlas. <strong>MetaGen Pro</strong> es el <em>Generador de Metadatos de IA</em> definitivo diseñado para resolver este problema.',
-                why_choose_stock_p2: 'A diferencia del etiquetado manual, que es tedioso y propenso a errores, nuestra herramienta utiliza visión por computadora de vanguardia para analizar el sujeto, el estado de ánimo, la iluminación y la composición de su imagen. Luego genera más de 50 palabras clave optimizadas, títulos atractivos y descripciones detalladas adaptadas a plataformas como <strong>Shutterstock, Adobe Stock, Magnific y Vecteezy</strong>.',
-                why_choose_stock_p3: 'Ya sea fotógrafo, ilustrador o artista de IA, MetaGen Pro agiliza su flujo de trabajo. Funciones como <strong>Imagen a Prompt</strong> le ayudan a realizar ingeniería inversa de imágenes de IA exitosas, mientras que nuestro <strong>Predictor de Rechazo</strong> le ayuda a solucionar problemas técnicos antes de cargarlas.',
-                why_choose_stock_p4: 'Comience a maximizar sus ingresos pasivos hoy con el etiquetador de fotos de stock gratuito más avanzado disponible.',
-                "plan_details_title": "¿Qué plan es el adecuado para ti?",
-                "plan_details_free": "Plan Gratuito - Ideal para principiantes",
-                "plan_details_free_p1": "Nuestro Plan Gratuito está diseñado para aficionados y nuevos colaboradores de stock. Te permite procesar hasta <strong>10 imágenes al día</strong>. Para mantener el servicio completamente gratuito, Obtendrás acceso a nuestras funciones principales, incluyendo procesamiento por lotes ultrarrápido (hasta 50 archivos a la vez), generación de metadatos con IA y exportación a CSV. Ten en cuenta que funciones avanzadas como la Incrustación Automática de Metadatos, Exportación a Excel y las Comprobaciones de Derechos de Autor no están incluidas en este plan.",
-                "plan_details_pro": "Plan Pro - Para profesionales",
-                "plan_details_pro_p1": "El Plan Pro está creado para colaboradores habituales que desean maximizar su flujo de trabajo y ahorrar horas de tiempo. Con un generoso límite de <strong>70 imágenes al día</strong>, ya no necesitas traer tus propias claves API: nosotros gestionamos todas las solicitudes de IA de forma segura por nuestra cuenta. Este plan desbloquea herramientas potentes como la <strong>Incrustación Automática de Metadatos</strong> directamente en tus archivos JPEG/PNG/SVG, reordenamiento de palabras clave mediante arrastrar y soltar, comprobación de derechos de autor/marcas registradas con IA y exportación a Excel. También aumenta tu límite de procesamiento por lotes a 100 archivos a la vez y ofrece una experiencia completamente libre de anuncios.",
-                "plan_details_premium": "Plan Premium - Para usuarios avanzados y agencias",
-                "plan_details_premium_p1": "Diseñado para creadores de alto volumen, artistas de vectores y agencias, el Plan Premium ofrece un límite masivo de <strong>100 imágenes al día</strong> y un límite por lote de 300 archivos. Incluye todo lo del plan Pro, además de funciones avanzadas de automatización. Tienes acceso exclusivo a la <strong>Conversión directa de Vectores/EPS</strong> (sin necesidad de claves ConvertAPI de terceros) y a la función de <strong>Subida Automática por FTP/SFTP</strong>. Esto te permite distribuir automáticamente tus archivos procesados y metadatos directamente a múltiples agencias de stock (Shutterstock, Adobe Stock, Magnific, etc.) desde tu navegador.",
-                "htu_step1_title": "1. Subir Archivos",
-                "htu_step1_desc": "Arrastra y suelta imágenes (JPG/PNG), vectores (SVG/EPS) o videos para comenzar.",
-                "htu_step2_title": "2. Plataforma de Destino",
-                "htu_step2_desc": "Selecciona Shutterstock, Adobe Stock o Magnific para obtener resultados optimizados.",
-                "htu_step3_title": "3. Seleccionar Modelo de IA",
-                "htu_step3_desc": "Elige entre Gemini, Mistral o Groq para el análisis de imágenes.",
-                "htu_step4_title": "4. Personalización",
-                "htu_step4_desc": "Ajusta las palabras mínimas/máximas para títulos y palabras clave mediante los controles deslizantes.",
-                "htu_step5_title": "5. Configuración de IA",
-                "htu_step5_desc": "Habilita el Modo Vector, Fondo Blanco o utiliza tus propios Prompts Personalizados.",
-                "htu_step6_title": "6. Generar Metadatos",
-                "htu_step6_desc": "Haz clic en 'Procesar seleccionados' para obtener títulos y etiquetas listos para SEO al instante.",
-                "htu_step7_title": "7. Incrustar Metadatos",
-                "htu_step7_desc": "Escribe metadatos directamente en tus archivos JPG, PNG o SVG.",
-                "htu_step8_title": "8. Traducción Múltiple",
-                "htu_step8_desc": "Traduce los metadatos a más de 10 idiomas para el mercado global.",
-                "htu_step9_title": "9. Exportar Resultados",
-                "htu_step9_desc": "Descarga todos tus metadatos como CSV o en hojas de Excel profesionales.",
-                "htu_step10_title": "10. Guardar y Drive",
-                "htu_step10_desc": "Guarda en una carpeta local, comparte mediante enlace o sube directamente a Google Drive.",
-                master_stock_subtitle1: 'Cómo usar MetaGen Pro',
-                master_stock_p1: 'Comenzar con MetaGen Pro es increíblemente simple y no requiere experiencia técnica. Primero, cargue sus imágenes arrastrándolas y soltándolas en el área de carga designada, o haga clic para buscar sus archivos. MetaGen Pro admite todos los formatos de imagen principales, incluidos JPG, PNG, SVG y EPS, así como archivos de video. Una vez que haya cargado sus imágenes, seleccione su plataforma de destino (Shutterstock, Adobe Stock, Magnific o General) para optimizar los metadatos específicamente para ese mercado.',
-                master_stock_p2: 'Luego, configure sus preferencias usando la configuración de la barra lateral. Puede ajustar la cantidad de palabras clave (recomendamos 35-50 para un SEO óptimo), establecer restricciones de longitud de título y habilitar funciones especiales como el Modo Vector para ilustraciones o la detección de Fondo Blanco para imágenes de productos. La selección del proveedor de IA le permite elegir entre los modelos Google Gemini, Mistral AI o Groq Llama según su disponibilidad de API y preferencias de velocidad.',
-                master_stock_p3: 'Después de la configuración, haga clic en el botón "Procesar todo" para generar metadatos para todas las imágenes cargadas simultáneamente. Nuestra IA avanzada analiza el contenido visual, la composición, los colores, los sujetos y el contexto de cada imagen para crear títulos, descripciones y conjuntos de palabras clave altamente relevantes. El proceso completo generalmente toma solo unos segundos por imagen, incluso cuando se procesan cientos de archivos en modo por lotes.',
-                master_stock_subtitle2: 'Beneficios de usar esta herramienta',
-                master_stock_benefit1: '<strong>Eficiencia de tiempo:</strong> El etiquetado manual puede llevar de 10 a 15 minutos por imagen. MetaGen Pro reduce esto a meros segundos, lo que le permite etiquetar cientos de imágenes en el tiempo que le llevaría procesar manualmente solo unas pocas. Para los colaboradores profesionales que cargan de 50 a 100 imágenes semanalmente, esto se traduce en un ahorro de más de 10 horas cada semana.',
-                master_stock_benefit2: '<strong>Optimización SEO:</strong> Nuestra IA no solo describe lo que ve, sino que comprende la intención de búsqueda y los algoritmos del mercado. Cada conjunto de metadatos incluye una mezcla estratégica de palabras clave amplias (alto volumen de búsqueda), palabras clave específicas de cola larga (alta conversión) y términos de tendencia (demanda actual). El medidor de puntuación SEO integrado evalúa sus metadatos en tiempo real, garantizando que cada carga esté optimizada para una máxima visibilidad.',
-                master_stock_benefit3: '<strong>Soporte multi-plataforma:</strong> Las diferentes agencias de stock tienen diferentes requisitos y preferencias. MetaGen Pro se adapta al algoritmo único de cada plataforma: Shutterstock prefiere estructuras de palabras clave diferentes a las de Adobe Stock o Magnific. Nuestra optimización específica de la plataforma garantiza que sus imágenes se posicionen bien dondequiera que las cargue.',
-                master_stock_benefit4: '<strong>Consistencia y calidad:</strong> Elimine los errores humanos y mantenga estándares profesionales en todo su portafolio. MetaGen Pro garantiza que cada imagen tenga metadatos formateados correctamente, una cantidad adecuada de palabras clave y descripciones apropiadas. La función Predictor de Rechazo analiza sus metadatos frente a los criterios comunes de rechazo, ayudándole a evitar costosos fallos en el envío.',
-                master_stock_subtitle3: '¿Qué es el SEO de imágenes y por qué es importante?',
-                master_stock_seo_p1: 'El SEO de imágenes (optimización para motores de búsqueda) es la práctica de optimizar los metadatos de las imágenes para mejorar la visibilidad en los resultados de búsqueda en las plataformas de fotografía de stock y motores de búsqueda. Cuando un comprador busca "reunión de negocios" o "atardecer en playa tropical", el algoritmo de la plataforma no "ve" su imagen, sino que lee los metadatos que usted ha proporcionado. Un SEO de imágenes eficaz es la diferencia entre que su trabajo aparezca en la página 1 frente a la página 50 de los resultados de búsqueda.',
-                master_stock_seo_p2: '<strong>Los tres pilares del SEO de imágenes:</strong> Primero, el <em>Título</em> debe ser descriptivo pero conciso (10-20 palabras), que contenga sus palabras clave principales y que sea natural y legible. Segundo, la <em>Descripción</em> proporciona contexto y casos de uso (30-50 palabras), ayudando tanto a los algoritmos como a los compradores a comprender las aplicaciones comerciales de su imagen. Tercero, las <em>Palabras clave</em> lanzan una red amplia (se recomiendan de 35 a 50 términos), capturando diversas consultas de búsqueda que podrían llevar a los compradores a su imagen.',
-                master_stock_seo_p3: '<strong>La estrategia de palabras clave importa:</strong> Los metadatos más efectivos utilizan una mezcla equilibrada: 20-30% de palabras clave de una sola palabra (alcance amplio), 40-50% de frases de dos palabras (especificidad media) y 20-30% de palabras clave de cola larga (alta conversión). Por ejemplo, una imagen de manos usando un teléfono inteligente debería incluir "manos" (amplio), "interacción con teléfono inteligente" (medio) y "manos tocando la interfaz de la aplicación móvil" (cola larga). Esta estrategia maximiza las posibilidades de que su imagen aparezca tanto en búsquedas amplias como específicas.',
-                master_stock_seo_p4: '<strong>Factores de posicionamiento en búsqueda:</strong> Las plataformas de stock consideran múltiples factores al clasificar los resultados de búsqueda. La relevancia (qué tan bien coinciden sus metadatos con la consulta de búsqueda), la integridad (tener todos los campos de metadatos completados correctamente) y la diversidad de palabras clave (usar términos variados y relacionados) impactan en su clasificación. Además, la relevancia comercial (describir cómo los compradores pueden usar su imagen) afecta significativamente las tasas de conversión incluso cuando su imagen se posiciona bien.',
-                master_stock_seo_p5: 'MetaGen Pro automatiza todas estas mejores prácticas, garantizando que cada imagen que cargue esté completamente optimizada para una máxima visibilidad, descargas y, en última instancia, ingresos. Ya sea un colaborador aficionado o un fotógrafo de stock a tiempo completo, el SEO de imágenes adecuado no es negociable en el competitivo mercado actual.',
-                master_stock_cta: '<strong>¿Listo para impulsar su éxito en la fotografía de stock?</strong> Comience a usar MetaGen Pro hoy mismo y transforme horas de tedioso etiquetado en segundos de excelencia automatizada.',
-                trusted_stock_subtitle: 'Descubra por qué miles de fotógrafos y creadores estadounidenses confían en MetaGen Pro para aumentar sus ingresos de stock',
-                review_1_details: '📍 Nueva York, NY • Fotógrafa Profesional',
-                review_1_text: '"¡MetaGen Pro transformó mi flujo de trabajo por completo! Solía pasar horas etiquetando mis fotos para Shutterstock. Ahora solo toma minutos y mis descargas han aumentado un 40%. ¡La función de puntuación SEO es brillante!"',
-                review_2_details: '📍 Los Ángeles, CA • Creador de Contenido',
-                review_2_text: '"Como creador de contenido a tiempo completo, el tiempo es dinero. Esta herramienta me ahorra al menos 10 horas a la semana en la entrada de metadatos. El procesamiento por lotes es ultrarrápido y las palabras clave generadas por IA son acertadas. ¡La mejor inversión que he hecho este año!"',
-                review_3_details: '📍 Miami, FL • Colaboradora de Stock',
-                review_3_text: '"Al principio era escéptica, pero MetaGen Pro superó todas las expectativas. Las sugerencias de palabras clave son increíblemente relevantes y la función multi-idioma me ayudó a llegar a compradores internacionales. ¡Mis ganancias en Adobe Stock se duplicaron en solo 3 meses!"',
-                review_4_details: '📍 Chicago, IL • Diseñador Gráfico',
-                review_4_text: '"¡Solo la función de verificación de derechos de autor vale el precio! Me ha salvado de posibles rechazos varias veces. Combinado con la generación automatizada de metadatos, esta herramienta es imprescindible para cualquiera que se tome en serio la fotografía de stock."',
-                review_5_details: '📍 Seattle, WA • Fotógrafa de Naturaleza',
-                review_5_text: '"Cargo cientos de fotos de naturaleza cada mes. MetaGen Pro hace que sea fácil administrar y optimizar todas ellas. La función de exportación CSV se integra perfectamente con mi flujo de trabajo. ¡Altamente recomendado para otros colaboradores!"',
-                review_6_details: '📍 Austin, TX • Videógrafo Freelance',
-                review_6_text: '"¡Un cambio de juego para los metadatos de video! La IA identifica con precisión las escenas y genera títulos perfectos. La visibilidad de mi portafolio de videos de Shutterstock mejoró drásticamente. El equipo de soporte también es extremadamente atento y servicial."',
-                stat_users: 'Usuarios activos en EE. UU.',
-                stat_satisfaction: 'Tasa de satisfacción',
-                stat_images: 'Imágenes optimizadas diariamente',
-                stat_rating: 'Calificación promedio',
-                "faq_title": "Preguntas frecuentes — MetaGen Pro",
-                "faq_q1": "🚀 ¿Cómo empiezo con MetaGen Pro?",
-                "faq_a1": "<strong>Paso 1:</strong> Regístrate o inicia sesión con Google o tu email.<br><strong>Paso 2:</strong> Configura tu clave API de Google Gemini en Ajustes (obtén una gratis en <a href='https://aistudio.google.com/app/apikey' target='_blank'>Google AI Studio</a>).<br><strong>Paso 3:</strong> ¡Sube tus imágenes (JPG, PNG, SVG, EPS) - hasta 500 archivos a la vez!<br><strong>Paso 4:</strong> Selecciona tu plataforma (Shutterstock, Adobe Stock, etc.) y haz clic en 'Generate Metadata'.<br><strong>Paso 5:</strong> Revisa, edita si es necesario, incrusta los metadatos y ¡descarga!",
-                "faq_q2": "💰 ¿Es MetaGen Pro gratuito? ¿Cuál es el precio?",
-                "faq_a2": "<p><strong>¡Planes gratuitos para todos!</strong> Metagen Pro tiene un potente plan gratuito (120 imágenes/mes, máximo 25 diarias). Sin embargo, para un uso intensivo, tenemos los planes <strong>Pro</strong> (12 $/mes - 2000 imágenes/mes, máximo 70 diarias) y <strong>Premium</strong> (29 $/mes - 3000 imágenes/mes, máximo 100 diarias). Los planes de pago ofrecen funciones avanzadas como la incrustación automática de metadatos, la exportación a Excel y la carga directa por FTP.</p>",
-                "faq_q3": "🔑 ¿Cómo obtengo las claves API? ¿Son seguras?",
-                "faq_a3": "<p><strong>¡No, no se requiere ninguna clave API para ningún plan ahora!</strong> En todos los planes, Gratuito, Pro y Premium, procesamos los metadatos utilizando nuestros propios servidores y modelos de IA dedicados de Supabase Edge Functions (modelos de IA avanzados).</p><p><strong>Seguridad:</strong> Todos sus datos son completamente <strong>seguros</strong> y se eliminan del servidor inmediatamente después del procesamiento.</p>",
-                "faq_q4": "📁 ¿Qué formatos de archivo son compatibles?",
-                "faq_a4": "<p><strong>Formatos compatibles:</strong></p><ul><li><strong>JPG/JPEG:</strong> Soporte total con incrustación EXIF</li><li><strong>PNG:</strong> Soporte total con incrustación de metadatos</li><li><strong>SVG:</strong> Soporte total con incrustación XMP</li><li><strong>EPS:</strong> Se convierte a SVG (requiere clave ConvertAPI)</li></ul><p>¡Sube hasta <strong>500 archivos a la vez</strong>!</p>",
-                "faq_q5": "🎯 ¿Qué plataformas de stock son compatibles?",
-                "faq_a5": "<p>Optimizado para: Shutterstock, Adobe Stock, Magnific, Vecteezy, Pond5, 123RF, iStock, Getty Images y más. ¡Nuestra IA se adapta automáticamente a los requisitos de cada plataforma!</p>",
-                "faq_q6": "📊 ¿Qué es la puntuación SEO y las insignias de palabras clave?",
-                "faq_a6": "<p><strong>SEO Score:</strong> Mide la optimización para algoritmos de búsqueda.</p><p><strong>Insignias:</strong></p><ul><li>🟢 <strong>Verde:</strong> Una palabra (Alto volumen)</li><li>🟡 <strong>Amarillo:</strong> Dos palabras (Mejor equilibrio)</li><li>🔵 <strong>Azul:</strong> 3+ palabras (Long-tail)</li></ul>",
-                "faq_q7": "⚡ ¿Cómo funciona el procesamiento por lotes?",
-                "faq_a7": "<p>Sube hasta 500 imágenes, haz clic en 'Process Selected' y nuestra IA las maneja en paralelo. ¡Es ultrarrápido!</p>",
-                "faq_q8": "🎨 ¿Qué es la función 'Image to Prompt'?",
-                "faq_a8": "<p>Convierte tu imagen en un prompt detallado para generadores como Midjourney o DALL-E. ¡Ideal para ingeniería inversa de imágenes exitosas!</p>",
-                "faq_q9": "🔒 ¿Son mis datos privados? ¿Guardan mis imágenes?",
-                "faq_a9": "<p><strong>¡100% Privado!</strong> El procesamiento ocurre en tu navegador. NUNCA guardamos tus imágenes. Los datos se borran tras el proceso.</p>",
-                "faq_q10": "🔧 Solución de problemas comunes",
-                "faq_a10": "<ul><li><strong>Error de clave API:</strong> Revisa tu clave en Ajustes.</li><li><strong>Archivo muy grande:</strong> Manténlo bajo 20MB.</li><li><strong>Proceso lento:</strong> Cierra otras pestañas del navegador.</li></ul>",
-                "faq_q11": "🎭 ¿Cómo funciona el generador de imágenes IA?",
-                "faq_a11": "<p>Usa modelos FLUX para crear imágenes. Configura tu clave de Together AI, escribe un prompt y genera imágenes únicas para tu portafolio.</p>",
-                "faq_q12": "💬 ¿Cómo obtengo ayuda o envío comentarios?",
-                "faq_a12": "<p>Escríbenos a <strong>metagenp@gmail.com</strong> o usa el botón de Feedback. ¡Respondemos en menos de 12 horas a problemas críticos!</p>"
-            },
-
-            pt: {
-                flag: '🇧🇷',
-                name: 'PT',
-                band: 'MetaGen Pro',
-                tagline: 'Metadados, Impulsionados por IA',
-                home: 'Início',
-                features: 'Recursos',
-                start_tour: 'Iniciar Tour',
-                faq: 'FAQ',
-                menu: 'MENU',
-                blog: 'Postagem do Blog',
-                disclaimer: 'Isenção de Responsabilidade',
-                about: 'Sobre Nós',
-                contact: 'Contate-nos',
-                legal: 'Legal',
-                select_lang: 'Selecione o idioma',
-                general_btn: "General",
-                save_key: 'Guardar',
-                close: 'Fechar',
-                get_key: 'Obter chave',
-                badge: 'Emblema',
-                try_metagen: 'Experimente o MetaGen gratuitamente',
-                no_api: 'Não é necessária nenhuma chave API para o seu teste gratuito.',
-                watting_for: 'O que você está esperando?',
-                "get_start": "Comece gratuitamente",
-                "drag_and_drop": "Arraste e solte em qualquer lugar para fazer o upload.",
-                "fast": "Rápido",
-                "best": "Melhor",
-                "generate_meta": "Gerar Metadatos",
-                "delete_select": "Excluir Selecionados",
-                "down_select": "Baixar Selecionados",
-                "translate_select": "Traduzir Selecionados",
-                "done": "Concluído",
-                "processing": "Processando",
-                "analyzing_market": "Analisando tendências de mercado...",
-                "ai_is_researching": "A IA está pesquisando conceitos de alto desempenho para você.",
-                "analyzing": "Analisando...",
-                "copy_tag": "Copiar tags",
-                "copy_idea": "Copiar ideia e informações",
-                "download": "Baixar",
-                "enter_your_convert_api": "Insira sua chave de API do Convert para ativar conversões de arquivos EPS.",
-                "export_csv": "Exportar para CSV",
-                "export_excel": "Exportar para Excel",
-                "niche_research_cen": "Centro de Pesquisa de Nicho",
-                "niche_research_tag": "Descubra palavras-chave e conceitos de alta demanda e baixa concorrência para seu portfólio de stock.",
-                "select_category": "Selecionar Categoria",
-                "market_focus": "Foco de Mercado",
-                "analyze_trend": "Analisar Tendências",
-                "ready_to_research": "Pronto para Pesquisar",
-                "ready_to_research_tag": "Selecione uma categoria acima e clique em \"Analisar Tendências\" para descobrir nichos lucrativos.",
-                "quick_suggest": "Sugestões Rápidas",
-                "label_title": "Título",
-                "label_desc": "Descrição",
-                "label_keywords": "Palavras-chave",
-                "btn_copy": "Copiar",
-                "btn_add": "Adicionar",
-                "placeholder_add_kw": "Adicionar palavra-chave...",
-                "seo_score": "Pontuação SEO",
-                "rejection": "Rejeição",
-                "platform_check": "Verificação de plataforma",
-                "style": "Estilo",
-                "mode": "Modo",
-                "translate": "Traduzir",
-                "go": "Ir",
-                "min_title": "Mín. Palavras do Título",
-                "max_title": "Máx. Palavras do Título",
-                "min_keywords": "Mín. Palavras-chave",
-                "max_keywords": "Máx. Palavras-chave",
-                "min_desc": "Mín. Palavras da Descrição",
-                "max_desc": "Máx. Palavras da Descrição",
-                "toggle_silhouette": "Silhueta",
-                "toggle_vector": "Vetor / Modo Ilustração",
-                "toggle_white_bg": "Fundo Branco",
-                "toggle_trans_bg": "Fundo Transparente",
-                "toggle_custom_prompt": "Prompt Personalizado",
-                "toggle_prohibited": "Palavras Proibidas",
-                "toggle_single_kw": "Palavras-chave Únicas",
-                "toggle_change_name": "Alterar Nome do Arquivo",
-                "toggle_name_title": "Nome do Arquivo como Título",
-                "feedback_matters": "O seu feedback é importante",
-                "provide_feedback": "Por favor, forneça feedback sobre a ferramenta?",
-                "issue_type": "Tipo de problema",
-                "general_feedback": "Feedback geral",
-                "bug_report": "Relatório de erro",
-                "feature_request": "Pedido de recurso",
-                "your_mess": "A sua mensagem",
-                "send_feed": "Enviar feedback",
-                eps_meta: 'Gerar e incorporar metadados EPS',
-                month: '/ mês',
-                pricing: 'Preços',
-                ftp_upload: 'Upload Direto FTP',
-                ftp_upload_sub_txt: 'Faça upload de arquivos diretamente para sites de banco de imagens (Adobe Stock, Shutterstock, Magnific).',
-                upgrade_plan: 'Fazer upgrade do plano',
-                stock_calendar: 'Calendário de Stock',
-                get_access: 'Obter acesso',
-                pricing_plan: 'Nosso Plano de Preços',
-                pricing_sub_txt: 'Escolha o plano perfeito para o seu fluxo de trabalho criativo.',
-                free_plan: 'Plano Gratuito',
-                free_price: '$0/mês',
-                most_popular: 'Mais popular',
-                pro_plan: 'Atualizar para Pro',
-                pro_price: '$12/mês',
-                premium_plan: 'Plano Premium',
-                premium_price: '$29/mês',
-                '50_image': '120 imagens por mês (máximo de 10 por dia para uma utilização justa)',
-                basic_ai_model: 'Modelos de IA básicos (Gemini, Mistral, Groq) Use sua própria chave de API.',
-                batch_process: 'Processamento em lote: até 50 arquivos',
-                csv_export: 'Exportação CSV',
-                ads_support: 'Com suporte a anúncios',
-                auto_embed: 'Incorporação automática de metadados',
-                excel_export: 'Exportação para Excel',
-                drag_keyword: 'Reordenação de palavras-chave (Arrastar e Soltar)',
-                copy_trade_check: 'Verificação de direitos autorais/marcas registradas',
-                get_started_free: 'Comece grátis',
-                '300_images': '2000 imagens/mês',
-                advance_ai: 'Modelos de IA avançados (Não é necessária chave de API).',
-                batch_process_pro: 'Processamento em lote: até 100 arquivos',
-                csv_excel_ex: 'Exportação CSV/Excel',
-                seo_and_no_ads: 'Análise de SEO e Sem anúncios',
-                support_time: 'Suporte 24 horas',
-                '1k_image': '3000 imagens/mês',
-                all_pro: 'Todos os recursos Pro',
-                batch_process_pre: 'Processamento em lote: até 300 arquivos',
-                ftp_auto_up: 'Upload automático FTP/SFTP',
-                vector_eps: 'Conversão direta de Vetor/EPS',
-                vip_support: 'Suporte VIP e Acesso Antecipado',
-                privacy_policy: 'Política de Privacidade',
-                terms_of_service: 'Termos de Serviço',
-                adjustment: 'Ajuste',
-                multi_tool: 'Ferramentas Multi Imagem',
-                sketch_art: 'Imagem para Arte de Esboço',
-                all_tools: 'Todas as Ferramentas',
-                image_enhance: 'Melhorador de Imagem IA',
-                bg_remove: 'Removedor de Fundo IA',
-                pixel_check: 'Pixel-Check Studio',
-                text_to_image: 'Gerador de Texto para Imagem',
-                company: 'Empresa',
-                free_plan: 'Plano Gratuito',
-                note: 'O acesso à API será removido dentro de 7 dias. Atualize para o plano Pro/Premium e utilize todas as funcionalidades do MetaGen Pro.',
-                platform: 'Plataforma',
-                add_more: 'Adicionar Mais Arquivos',
-                well_come: 'Bem-vindo de Volta',
-                login_google: 'Continuar com Google',
-                new_user: 'Novo usuário?',
-                create_account: 'Criar uma conta',
-                niche_research: 'Pesquisa de Nicho',
-                metadata_generator: 'Gerador de Metadados',
-                seo_score: 'Pontuação SEO e Análise',
-                batch_process: 'Processo em Lote Super Rápido',
-                sign_out: 'Sair',
-                switch_account: 'Trocar conta',
-                upload_title: 'Carregar Imagens ou Vídeos',
-                drag_drop: 'Arraste e solte arquivos aqui ou clique para carregar',
-                supports: 'Suporta JPG, PNG, WEBP, MP4, MOV',
-                max_size: 'Máx 50MB por arquivo',
-                privacy_note: 'Seus arquivos são processados com segurança e excluídos após 1 hora.',
-                privacy_note_device: 'Analisamos arquivos apenas no dispositivo, os dados são eliminados após o processamento.',
-                upload_limit_info: 'Plano Gratuito: 50 arquivos/dia',
-                usage: 'Uso:',
-                "daily_limit": "Limite Diário de Processos",
-                refer_text: '¡Comparte MetaGen Pro para obtener +50 de límite diario extra!',
-                "share_get_credit": "Compartilhe e Ganhe Créditos",
-                generate_metadata: 'Gerar Metadados',
-                "limit_reached_msg": "Você atingiu seu limite diário de processamento! Atualize seu plano para limites maiores ou compartilhe a ferramenta para obter um bônus.",
-                export_csv: 'Exportar para CSV',
-                export_excel: 'Exportar para Excel',
-                clear_all: 'Limpar Tudo',
-                copy_all: 'Copiar Tudo',
-                down_eps: 'Baixar EPS',
-                guides: 'Guides',
-                title: 'Título',
-                description: 'Descrição',
-                keywords: 'Palavras-chave',
-                categories: 'Categorias',
-                already_user: 'Já tem uma conta?',
-                login: 'Entrar',
-                tools_generator: 'Ferramentas e Gerador',
-                trending: '📅 Tendências...',
-                customization: 'Personalização',
-                settings: 'Configurações',
-                select_ai: 'Selecionar Provedor de IA',
-                manage_api: 'Gerenciar Chaves API',
-                convert_api: 'Chave ConvertAPI',
-                translation_lang: 'Idioma de Tradução',
-                upload_files: 'Carregar Arquivos',
-                watch_demo: 'Assistir Demo',
-                watch_tagline: 'Veja como aumentar suas vendas de stock em segundos',
-                process_selected: 'Processar Selecionados',
-                process_prompts: 'Processar Prompts',
-                embed_metadata: 'Incorporar Metadados',
-                export: 'Exportar',
-                batch_translate: 'Tradução em Lote (Grátis)',
-                translate_all: 'Traduzir Tudo (API)',
-                test_metadata: 'Testar Metadados',
-                save_folder: 'Salvar na Pasta',
-                share_files: 'Compartilhar Arquivos',
-                upload_drive: 'Carregar no Drive',
-                pause: 'Pausar',
-                image_to_prompt: 'Imagem para Prompt',
-                jpg_png: 'JPG/PNG',
-                svg_eps: 'SVG/EPS/AI',
-                videos: 'Vídeos',
-                check_copyright: 'Verificar Direitos Autorais/Marca:',
-                upload_limit: 'Carregue no máximo 500 arquivos em uma única ação',
-                resume: 'Retomar',
-                send_feedback: 'Enviar feedback / Relatório de erros',
-                view_translated: 'Ver Traduzido',
-                view_original: 'Ver Original',
-                analyze_trends: 'Analisar Tendências',
-                downloading: 'Baixando...',
-                translating: 'Traduzindo...',
-                embedding: 'Incorporando...',
-                analyzing: 'Analisando...',
-                processing: 'Processando...',
-                process: 'Processar',
-                files: 'Arquivos',
-                prompts: 'Prompts',
-                complete: 'Completo',
-                success: 'Sucesso',
-                fail: 'Falha',
-                saving: 'Salvando...',
-                preparing: 'Preparando...',
-                uploading: 'Carregando...',
-                initializing: 'Inicializando conexão...',
-                processing_files: 'Processando Arquivos...',
-                "hero_title": "Gerador de Metadados IA Gratuito e Palavras-chave para Fotos de Stock!",
-                hero_tagline: 'Aumente sua visibilidade no Shutterstock, Adobe Stock e Magnific. Gere títulos, descrições e palavras-chave otimizados para SEO em segundos usando IA avançada.',
-                why_choose: 'Por que escolher MetaGen Pro?',
-                blog_1: 'Processamento em Lote Super Rápido',
-                blog_tag_1: 'Analise e coloque palavras-chave em centenas de imagens em segundos. Economize horas de trabalho manual com nosso mecanismo de lote otimizado.',
-                blog_2: 'Análise de IA Avançada',
-                blog_tag_2: 'Impulsionado por Gemini 1.5 Pro, Mistral e Llama 3 para reconhecimento de imagem líder da indústria e metadados precisos.',
-                blog_3: 'Palavras-chave Otimizadas para SEO',
-                blog_tag_3: 'Gere títulos e tags de alta classificação especificamente adaptados para os algoritmos do Shutterstock, Adobe Stock e Magnific.',
-                blog_4: 'Pesquisa de Nicho',
-                blog_tag_4: 'Descubra tópicos de baixa concorrência e alta demanda com nossa ferramenta de Pesquisa de Nicho integrada. Descubra o que os compradores estão pesquisando.',
-                blog_5: 'Reordenação de Palavras-chave Arrastar e Soltar',
-                blog_tag_5: 'Em sites de stock (Adobe Stock, Shutterstock), as primeiras 5-10 palavras-chave são as mais importantes.',
-                blog_6: 'Incorporação de Metadados',
-                blog_tag_6: 'Incorpore títulos e palavras-chave diretamente em seus arquivos JPG/PNG/SVG (IPTC/XMP). Basta baixar e carregar em qualquer agência de stock.',
-                blog_7: 'Multilíngue',
-                blog_tag_7: 'Traduza seus metadados para mais de 10 idiomas instantaneamente. Alcance um público global com títulos e descrições localizados.',
-                blog_8: 'Verificação de Direitos Autorais',
-                blog_tag_8: 'Evite rejeição! Nossa IA verifica possíveis problemas de marca registrada e logotipos em suas imagens antes de carregá-las.',
-                blog_9: 'Exportar Metadados CSV',
-                blog_tag_9: 'Facilidade de exportação de arquivo CSV para todos os sites de stock (Adobe Stock, Shutterstock, Magnific).',
-                trusted_all: 'Confiável para todas as principais plataformas Microstock',
-                it_works: 'Como Funciona',
-                upload_photos: 'Carregar Fotos',
-                upload_photos_tag: 'Arraste e solte seus arquivos JPG/PNG. Lemos automaticamente as dimensões e especificações técnicas.',
-                select_platfrom: 'Selecionar Plataforma e IA',
-                select_platfrom_tag: 'Escolha seu mercado alvo (ex: Adobe Stock) e modelo de IA preferido (Gemini/Groq).',
-                gen_down: 'Gerar e Baixar',
-                gen_down_tag: 'Obtenha títulos e palavras-chave prontos para SEO instantaneamente. Baixe CSV ou Incorpore diretamente.',
-                why_choose_stock_title: 'Por que escolher o MetaGen Pro para fotografia de stock?',
-                how_to_use_title: 'Como usar a ferramenta?',
-                master_stock_title: 'Domine sua fotografia de stock com metadados impulsionados por IA',
-                trusted_stock_title: 'Confiável por colaboradores de stock em todos os Estados Unidos',
-                why_choose_stock_p1: 'No competitivo mundo da fotografia de stock, a capacidade de descoberta é fundamental. Mesmo as melhores imagens não serão vendidas se os compradores não as encontrarem. <strong>MetaGen Pro</strong> é o <em>Gerador de Metadados de IA</em> definitivo, projetado para resolver este problema.',
-                why_choose_stock_p2: 'Diferente da atribuição de palavras-chave manual, que é cansativa e propensa a erros, a nossa ferramenta utiliza visão computacional de ponta para analisar o assunto, o clima, a iluminação e a composição da sua imagem. Em seguida, gera mais de 50 palavras-chave otimizadas, títulos atraentes e descrições detalhadas adaptadas a plataformas como <strong>Shutterstock, Adobe Stock, Magnific e Vecteezy</strong>.',
-                why_choose_stock_p3: 'Quer seja fotógrafo, ilustrador ou artista de IA, o MetaGen Pro agiliza o seu fluxo de trabalho. Recursos como <strong>Imagem para Prompt</strong> ajudam a fazer engenharia reversa de imagens de IA bem-sucedidas, enquanto o nosso <strong>Preditores de Rejeição</strong> ajuda a corrigir problemas técnicos antes do upload.',
-                why_choose_stock_p4: 'Comece a maximizar o seu rendimento passivo hoje com o marcador de fotos de stock gratuito mais avançado do mercado.',
-                "plan_details_title": "Qual plano é o ideal para você?",
-                "plan_details_free": "Plano Grátis - O melhor para iniciantes",
-                "plan_details_free_p1": "Nosso Plano Grátis foi projetado para hobbistas e novos colaboradores de bancos de imagens. Ele permite que você processe até <strong>10 imagens por dia</strong>. Para manter o serviço totalmente gratuito, incluindo processamento em lote super-rápido (até 10 arquivos de uma vez), geração de metadados com IA e exportação para CSV. Observe que recursos avançados como Incorporação Automática de Metadados, Exportação para Excel e Verificações de Direitos Autorais não estão incluídos neste plano.",
-                "plan_details_pro": "Plano Pro - Para Profissionais",
-                "plan_details_pro_p1": "O Plano Pro foi criado para colaboradores regulares que desejam maximizar seu fluxo de trabalho e economizar horas de tempo. Com um limite generoso de <strong>70 imagens por dia</strong>, você não precisa mais trazer suas próprias chaves de API — nós gerenciamos todas as solicitações de IA com segurança do nosso lado. Este plano desbloqueia ferramentas poderosas como a <strong>Incorporação Automática de Metadados</strong> diretamente em seus arquivos JPEG/PNG/SVG, Reordenação de Palavras-chave do tipo Arrastar e Soltar, Verificação de Direitos Autorais/Marcas com IA e exportação para Excel. Ele também aumenta seu limite de processamento em lote para 100 arquivos de uma vez e oferece uma experiência totalmente sem anúncios.",
-                "plan_details_premium": "Plano Premium - Para usuários avançados e agências",
-                "plan_details_premium_p1": "Projetado para criadores de alto volume, artistas de vetores e agências, o Plano Premium oferece um limite massivo de <strong>100 imagens por dia</strong> e um limite de lote de 300 arquivos. Inclui tudo do plano Pro, além de recursos avançados de automação. Você obtém acesso exclusivo à <strong>Conversão Direta de Vetores/EPS</strong> (sem necessidade de chaves ConvertAPI de terceiros) e ao recurso de <strong>Upload Automático via FTP/SFTP</strong>. Isso permite que você distribua automaticamente seus arquivos e metadados processados para diversas agências de banco de imagens (Shutterstock, Adobe Stock, Magnific, etc.) direto do seu navegador.",
-                "htu_step1_title": "1. Fazer upload de arquivos",
-                "htu_step1_desc": "Arraste e solte imagens (JPG/PNG), vetores (SVG/EPS) ou vídeos para começar.",
-                "htu_step2_title": "2. Plataforma de Destino",
-                "htu_step2_desc": "Selecione Shutterstock, Adobe Stock ou Magnific para resultados otimizados.",
-                "htu_step3_title": "3. Selecionar Modelo de IA",
-                "htu_step3_desc": "Escolha entre Gemini, Mistral ou Groq para a análise das imagens.",
-                "htu_step4_title": "4. Personalização",
-                "htu_step4_desc": "Ajuste as palavras mínimas/máximas para títulos e palavras-chave usando os controles deslizantes.",
-                "htu_step5_title": "5. Configurações de IA",
-                "htu_step5_desc": "Ative o Modo Vetorial, Fundo Branco ou use seus próprios Prompts Personalizados.",
-                "htu_step6_title": "6. Gerar Metadados",
-                "htu_step6_desc": "Clique em 'Processar Selecionados' para obter títulos e tags prontos para SEO instantaneamente.",
-                "htu_step7_title": "7. Incorporar Metadados",
-                "htu_step7_desc": "Escreva metadados diretamente em seus arquivos JPG, PNG ou SVG.",
-                "htu_step8_title": "8. Tradução Múltipla",
-                "htu_step8_desc": "Traduza os metadados para mais de 10 idiomas para o mercado global.",
-                "htu_step9_title": "9. Exportar Resultados",
-                "htu_step9_desc": "Baixe todos os seus metadados em CSV ou planilhas profissionais do Excel.",
-                "htu_step10_title": "10. Salvar e Drive",
-                "htu_step10_desc": "Salve em uma pasta local, compartilhe via link ou faça o upload direto para o Google Drive.",
-                master_stock_subtitle1: 'Como usar o MetaGen Pro',
-                master_stock_p1: 'Começar a usar o MetaGen Pro é incrivelmente simples e não requer conhecimentos técnicos. Primeiro, carregue as suas imagens arrastando-as e soltando-as na área de upload designada, ou clique para navegar pelos seus ficheiros. O MetaGen Pro suporta todos os principais formatos de imagem, incluindo JPG, PNG, SVG e EPS, bem como ficheiros de vídeo. Assim que as suas imagens forem carregadas, selecione a sua plataforma alvo (Shutterstock, Adobe Stock, Magnific ou Geral) para otimizar os metadados especificamente para esse mercado.',
-                master_stock_p2: 'Em seguida, configure as suas preferências nas configurações da barra lateral. Pode ajustar o número de palavras-chave (recomendamos 35-50 para um SEO ideal), definir limites de comprimento de título e ativar recursos especiais como o Modo Vetor para ilustrações ou a detecção de Fundo Branco para imagens de produtos. A seleção do fornecedor de IA permite escolher entre os modelos Google Gemini, Mistral AI ou Groq Llama com base na disponibilidade da sua API e preferências de velocidade.',
-                master_stock_p3: 'Após a configuração, clique no botão "Processar Tudo" para gerar metadados para todas as imagens carregadas simultaneamente. A nossa IA avançada analisa o conteúdo visual, a composição, as cores, os assuntos e o contexto de cada imagem para criar títulos, descrições e conjuntos de palavras-chave altamente relevantes. Todo o processo leva geralmente apenas alguns segundos por imagem, mesmo ao processar centenas de ficheiros em modo lote.',
-                master_stock_subtitle2: 'Benefícios de usar esta ferramenta',
-                master_stock_benefit1: '<strong>Eficiência de Tempo:</strong> A atribuição de palavras-chave manual pode levar de 10 a 15 minutos por imagem. O MetaGen Pro reduz isto para meros segundos, permitindo-lhe colocar palavras-chave em centenas de imagens no tempo que levaria a processar manualmente apenas algumas. Para colaboradores profissionais que carregam 50-100 imagens semanalmente, isto traduz-se numa poupança de mais de 10 horas por semana.',
-                master_stock_benefit2: '<strong>Otimização de SEO:</strong> A nossa IA não descreve apenas o que vê — ela entende a intenção de pesquisa e os algoritmos do mercado. Cada conjunto de metadados inclui uma mistura estratégica de palavras-chave amplas (alto volume de pesquisa), palavras-chave específicas de cauda longa (alta conversão) e termos de tendência (procura atual). O medidor de SEO Score integrado avalia os seus metadados em tempo real, garantindo que cada upload seja otimizado para a máxima visibilidade.',
-                master_stock_benefit3: '<strong>Suporte Multi-plataforma:</strong> Diferentes agências de stock têm diferentes requisitos e preferências. O MetaGen Pro adapta-se ao algoritmo único de cada plataforma — a Shutterstock prefere estruturas de palavras-chave diferentes da Adobe Stock ou da Magnific. A nossa otimização específica da plataforma garante que as suas imagens tenham uma boa classificação onde quer que as carregue.',
-                master_stock_benefit4: '<strong>Consistência e Qualidade:</strong> Elimine o erro humano e mantenha padrões profissionais em todo o seu portfólio. O MetaGen Pro garante que cada imagem tenha metadados formatados corretamente, quantidade adequada de palavras-chave e descrições apropriadas. O recurso Preditores de Rejeição analisa os seus metadados em relação aos critérios comuns de rejeição, ajudando-o a evitar falhas de submissão dispendiosas.',
-                master_stock_subtitle3: 'O que é SEO de imagem e por que é importante',
-                master_stock_seo_p1: 'SEO de imagem (Search Engine Optimization) é a prática de otimizar metadados de imagem para melhorar a visibilidade nos resultados de pesquisa em plataformas de fotografia de stock e motores de busca. Quando um comprador pesquisa "reunião de negócios" ou "pôr do sol em praia tropical", o algoritmo da plataforma não "vê" a sua imagem — ele lê os metadados que você forneceu. Um SEO de imagem eficaz é a diferença entre o seu trabalho aparecer na página 1 versus na página 50 dos resultados de pesquisa.',
-                master_stock_seo_p2: '<strong>Os Três Pilares do SEO de Imagem:</strong> Primeiro, o <em>Título</em> deve ser descritivo, mas conciso (10-20 palavras), contendo as suas palavras-chave primárias e mantendo-se natural e legível. Segundo, a <em>Descrição</em> fornece contexto e casos de uso (30-50 palavras), ajudando algoritmos e compradores a entender as aplicações comerciais da sua imagem. Terceiro, as <em>Palavras-chave</em> lançam uma rede ampla (35-50 termos recomendados), capturando várias consultas de pesquisa que podem levar os compradores à sua imagem.',
-                master_stock_seo_p3: '<strong>A Estratégia de Palavras-chave Importa:</strong> Os metadados mais eficazes usam uma mistura equilibrada: 20-30% de palavras-chave de uma única palavra (alcance amplo), 40-50% de frases de duas palavras (especificidade média) e 20-30% de palavras-chave de cauda longa (alta conversão). Por exemplo, uma imagem de mãos a usar um smartphone deve incluir "mãos" (amplo), "interação com smartphone" (médio) e "mãos a tocar na interface de aplicação móvel" (cauda longa). Esta estratégia maximiza as chances de a sua imagem aparecer em pesquisas amplas e específicas.',
-                master_stock_seo_p4: '<strong>Fatores de Classificação de Pesquisa:</strong> As plataformas de stock consideram múltiplos fatores ao classificar os resultados de pesquisa. A relevância (quão bem os seus metadados correspondem à consulta de pesquisa), a integridade (ter todos os campos de metadatos preenchidos corretamente) e a diversidade de palavras-chave (usar termos variados e relacionados) afetam a sua classificação. Além disso, a relevância comercial — descrever como os compradores podem usar a sua imagem — afeta significativamente as taxas de conversão, mesmo quando a sua imagem tem uma boa classificação.',
-                master_stock_seo_p5: 'O MetaGen Pro automatiza todas estas melhores práticas, garantindo que cada imagem que você carrega esteja totalmente otimizada para máxima visibilidade, downloads e, consequentemente, lucro. Quer seja um colaborador amador ou um fotógrafo de stock a tempo inteiro, o SEO de imagem adequado é inegociável no mercado competitivo de hoje.',
-                master_stock_cta: '<strong>Pronto para impulsionar o seu sucesso na fotografia de stock?</strong> Comece a usar o MetaGen Pro hoje e transforme horas de atribuição de palavras-chave cansativa em segundos de excelência automatizada.',
-                trusted_stock_subtitle: 'Descubra por que milhares de fotógrafos e criadores americanos confiam no MetaGen Pro para aumentar a sua receita de stock',
-                review_1_details: '📍 Nova Iorque, NY • Fotógrafa Profissional',
-                review_1_text: '"O MetaGen Pro transformou completamente o meu fluxo de trabalho! Eu costumava passar horas a colocar palavras-chave nas minhas fotos para a Shutterstock. Agora leva apenas minutos e os meus downloads aumentaram 40%. O recurso de SEO score é brilhante!"',
-                review_2_details: '📍 Los Angeles, CA • Criador de Conteúdo',
-                review_2_text: '"Como criador de conteúdo a tempo inteiro, tempo é dinheiro. Esta ferramenta poupa-me pelo menos 10 horas por semana na inserção de metadados. O processamento em lote é rápido como um relâmpago e as palavras-chave geradas por IA são precisas. O melhor investimento que fiz este ano!"',
-                review_3_details: '📍 Miami, FL • Colaborador de Stock',
-                review_3_text: '"Eu estava cético ao início, mas o MetaGen Pro superou todas as expectativas. As sugestões de palavras-chave são incrivelmente relevantes e o recurso multi-idioma ajudou-me a chegar a compradores internacionais. Os meus ganhos no Adobe Stock duplicaram em apenas 3 meses!"',
-                review_4_details: '📍 Chicago, IL • Designer Gráfico',
-                review_4_text: '"Só o recurso de verificação de direitos de autor já vale o preço! Salvou-me de possíveis rejeições várias vezes. Combinado com a geração automatizada de metadados, esta ferramenta é essencial para quem leva a sério a fotografia de stock."',
-                review_5_details: '📍 Seattle, WA • Fotógrafa de Natureza',
-                review_5_text: '"Eu carrego centenas de fotos de natureza todos os meses. O MetaGen Pro torna fácil gerir e otimizar todas elas. O recurso de exportação CSV integra-se perfeitamente com o meu fluxo de trabalho. Recomendo vivamente a outros colaboradores!"',
-                review_6_details: '📍 Austin, TX • Videógrafo Freelancer',
-                review_6_text: '"Uma revolução para metadados de vídeo! A IA identifica com precisão as cenas e gera títulos perfeitos. A visibilidade do meu portfólio de vídeos na Shutterstock melhorou drasticamente. A equipa de suporte também é extremamente rápida e prestável."',
-                stat_users: 'Utilizadores Ativos nos EUA',
-                stat_satisfaction: 'Taxa de Satisfação',
-                stat_images: 'Imagens Otimizadas Diariamente',
-                stat_rating: 'Avaliação Média',
-                "faq_title": "Perguntas Frequentes — MetaGen Pro",
-                "faq_q1": "🚀 Como começo a usar o MetaGen Pro?",
-                "faq_a1": "<strong>Passo 1:</strong> Cadastre-se ou faça login com Google ou e-mail.<br><strong>Passo 2:</strong> Configure sua chave API do Google Gemini em Ajustes (obtenha uma grátis no <a href='https://aistudio.google.com/app/apikey' target='_blank'>Google AI Studio</a>).<br><strong>Passo 3:</strong> Envie suas imagens (JPG, PNG, SVG, EPS) - até 500 arquivos de uma vez!<br><strong>Passo 4:</strong> Selecione sua plataforma (Shutterstock, Adobe Stock, etc.) e clique em 'Generate Metadata'.<br><strong>Passo 5:</strong> Revise, edite se necessário, incorpore os metadados e baixe!",
-                "faq_q2": "💰 O MetaGen Pro é gratuito? Qual o preço?",
-                "faq_a2": "<p><strong>Planos gratuitos para todos!</strong> O Metagen Pro oferece um plano gratuito robusto (120 imagens/mês, máximo de 25 por dia). No entanto, para uma utilização intensa, temos os planos <strong>Pro</strong> (12 dólares/mês - 2000 imagens/mês, máximo de 70 por dia) e <strong>Premium</strong> (29 dólares/mês - 3000 imagens/mês, máximo de 100 por dia). Os planos pagos oferecem funcionalidades avançadas, como a incorporação automática de metadados, a exportação para Excel e o carregamento direto via FTP.</p>",
-                "faq_q3": "🔑 Como obtenho as chaves API? São seguras?",
-                "faq_a3": "<p><strong>Não, não é necessária nenhuma chave API para qualquer plano agora!</strong> Em todos os planos, Gratuito, Pro e Premium, processamos metadados utilizando os nossos próprios servidores e modelos de IA dedicados do Supabase Edge Functions (modelos de IA avançados).</p><p><strong>Segurança:</strong> Todos os seus dados estão completamente <strong>seguros</strong> e são eliminados do servidor imediatamente após o processamento.</p>",
-                "faq_q4": "📁 Quais formatos de arquivo são suportados?",
-                "faq_a4": "<p><strong>Formatos:</strong> JPG/JPEG (com EXIF), PNG, SVG (com XMP) e EPS (via ConvertAPI).</p><p>Envie até <strong>500 arquivos simultâneos</strong>!</p>",
-                "faq_q5": "🎯 Quais plataformas de stock são suportadas?",
-                "faq_a5": "<p>Otimizado para: Shutterstock, Adobe Stock, Magnific, Vecteezy, Pond5, 123RF, iStock e mais. A IA adapta-se automaticamente aos requisitos de cada site!</p>",
-                "faq_q6": "📊 O que é o SEO Score e os selos de palavras-chave?",
-                "faq_a6": "<p><strong>SEO Score:</strong> Mede a otimização para busca.</p><p><strong>Selos:</strong></p><ul><li>🟢 <strong>Verde:</strong> Uma palavra</li><li>🟡 <strong>Amarelo:</strong> Duas palavras</li><li>🔵 <strong>Azul:</strong> 3+ palavras (Long-tail)</li></ul>",
-                "faq_q7": "⚡ Como funciona o processamento em lote?",
-                "faq_a7": "<p>Envie até 500 imagens e clique em 'Process Selected'. Nossa IA processa tudo em paralelo. É super rápido!</p>",
-                "faq_q8": "🎨 O que é a função 'Image to Prompt'?",
-                "faq_a8": "<p>Converte sua imagem em um prompt detalhado para Midjourney ou DALL-E. Perfeito para analisar imagens de sucesso!</p>",
-                "faq_q9": "🔒 Meus dados são privados? Vocês guardam minhas imagens?",
-                "faq_a9": "<p><strong>100% Privado!</strong> O processamento ocorre no navegador. NUNCA guardamos suas imagens. Os dados são apagados após o uso.</p>",
-                "faq_q10": "🔧 Solução de problemas comuns",
-                "faq_a10": "<ul><li><strong>Erro de API:</strong> Verifique a chave em Ajustes.</li><li><strong>Arquivo grande:</strong> Use menos de 20MB.</li><li><strong>Lentidão:</strong> Feche outras abas.</li></ul>",
-                "faq_q11": "🎭 Como funciona o gerador de imagens IA?",
-                "faq_a11": "<p>Use modelos FLUX para criar imagens. Configure sua chave Together AI e gere imagens exclusivas para seu portfólio!</p>",
-                "faq_q12": "💬 Como obtenho ajuda?",
-                "faq_a12": "<p>E-mail: <strong>metagenp@gmail.com</strong> ou use o botão Feedback. Respondemos em até 12 horas!</p>"
-            },
-
-            id: {
-                flag: '🇮🇩',
-                name: 'ID',
-                band: 'MetaGen Pro',
-                tagline: 'Metadata, Didukung oleh AI',
-                home: 'Beranda',
-                features: 'Fitur',
-                start_tour: 'Mulai Tur',
-                faq: 'FAQ',
-                menu: 'MENU',
-                blog: 'Postingan Blog',
-                disclaimer: 'Penyangkalan',
-                about: 'Tentang Kami',
-                contact: 'Hubungi Kami',
-                legal: 'Legal',
-                select_lang: 'Pilih Bahasa',
-                general_btn: "Umum",
-                save_key: 'Simpan',
-                close: 'Tutup',
-                get_key: 'Dapatkan kunci',
-                badge: 'Lencana',
-                try_metagen: 'Coba MetaGen Gratis',
-                no_api: 'Tidak diperlukan Kunci API untuk uji coba gratis Anda.',
-                watting_for: 'Apa yang kamu tunggu?',
-                "get_start": "Mulai Gratis",
-                "drag_and_drop": "Seret dan lepas ke mana saja untuk mengunggah",
-                "fast": "Cepat",
-                "best": "Terbaik",
-                "generate_meta": "Hasilkan Metadata",
-                "delete_select": "Hapus Terpilih",
-                "down_select": "Unduh Terpilih",
-                "translate_select": "Terjemahkan Terpilih",
-                "done": "Selesai",
-                "processing": "Memproses",
-                "analyzing_market": "Menganalisis Tren Pasar...",
-                "ai_is_researching": "AI sedang meneliti konsep berkinerja tinggi untuk Anda.",
-                "analyzing": "Menganalisis...",
-                "copy_tag": "Salin Tag",
-                "copy_idea": "Salin Ide & Info",
-                "download": "Unduh",
-                "enter_your_convert_api": "Masukkan kunci API Convert Anda untuk mengaktifkan konversi file EPS.",
-                "export_csv": "Ekspor CSV",
-                "export_excel": "Ekspor Excel",
-                "niche_research_cen": "Pusat Riset Niche",
-                "niche_research_tag": "Temukan kata kunci dan konsep dengan permintaan tinggi dan persaingan rendah untuk portofolio stok Anda.",
-                "select_category": "Pilih Kategori",
-                "market_focus": "Fokus Pasar",
-                "analyze_trend": "Analisis Tren",
-                "ready_to_research": "Siap untuk Riset",
-                "ready_to_research_tag": "Pilih kategori di atas dan klik \"Analisis Tren\" untuk mengungkap niche yang menguntungkan.",
-                "quick_suggest": "Saran Cepat",
-                "label_title": "Judul",
-                "label_desc": "Deskripsi",
-                "label_keywords": "Kata Kunci",
-                "btn_copy": "Salin",
-                "btn_add": "Tambah",
-                "placeholder_add_kw": "Tambah kata kunci...",
-                "seo_score": "Skor SEO",
-                "rejection": "Penolakan",
-                "platform_check": "Cek Platform",
-                "style": "Gaya",
-                "mode": "Mode",
-                "translate": "Terjemahkan",
-                "go": "Lanjut",
-                "min_title": "Min Kata Judul",
-                "max_title": "Maks Kata Judul",
-                "min_keywords": "Min Kata Kunci",
-                "max_keywords": "Maks Kata Kunci",
-                "min_desc": "Min Kata Deskripsi",
-                "max_desc": "Maks Kata Deskripsi",
-                "toggle_silhouette": "Siluet",
-                "toggle_vector": "Vektor / Mode Ilustrasi",
-                "toggle_white_bg": "Latar Belakang Putih",
-                "toggle_trans_bg": "Latar Belakang Transparan",
-                "toggle_custom_prompt": "Prompt Khusus",
-                "toggle_prohibited": "Kata-kata Terlarang",
-                "toggle_single_kw": "Kata Kunci Satu Kata",
-                "toggle_change_name": "Ubah Nama File",
-                "toggle_name_title": "Nama File sebagai Judul",
-                "feedback_matters": "Umpan balik Anda penting",
-                "provide_feedback": "Silakan berikan umpan balik tentang alat ini?",
-                "issue_type": "Jenis Masalah",
-                "general_feedback": "Umpan balik umum",
-                "bug_report": "Laporan bug",
-                "feature_request": "Permintaan fitur",
-                "your_mess": "Pesan Anda",
-                "send_feed": "Kirim umpan balik",
-                eps_meta: 'Buat & Sematkan Metadata EPS',
-                month: '/ bulan',
-                pricing: 'Harga',
-                ftp_upload: 'Unggah Langsung FTP',
-                ftp_upload_sub_txt: 'Unggah file langsung ke situs stok (Adobe Stock, Shutterstock, Magnific).',
-                upgrade_plan: 'Tingkatkan Paket',
-                stock_calendar: 'Kalender Stok',
-                get_access: 'Dapatkan akses',
-                pricing_plan: 'Paket Harga Kami',
-                pricing_sub_txt: 'Pilih paket sempurna untuk alur kerja kreatif Anda.',
-                free_plan: 'Paket Gratis',
-                free_price: '$0/bulan',
-                most_popular: 'Paling Populer',
-                pro_plan: 'Tingkatkan ke Pro',
-                pro_price: '$12/bulan',
-                premium_plan: 'Paket Premium',
-                premium_price: '$29/bulan',
-                '50_image': '120 gambar per bulan (maksimum 10 per hari untuk penggunaan wajar)',
-                basic_ai_model: 'Model AI dasar (Gemini, Mistral, Groq) Gunakan kunci API Anda sendiri.',
-                batch_process: 'Proses batch: hingga 50 file',
-                csv_export: 'Ekspor CSV',
-                ads_support: 'Didukung Iklan',
-                auto_embed: 'Semat Otomatis Metadata',
-                excel_export: 'Ekspor Excel',
-                drag_keyword: 'Seret & Lepas Susun Ulang Kata Kunci',
-                copy_trade_check: 'Pemeriksaan Hak Cipta/Merek Dagang',
-                get_started_free: 'Mulai Gratis',
-                '300_images': '2000 gambar/bulan',
-                advance_ai: 'Model AI lanjutan (Kunci API tidak diperlukan).',
-                batch_process_pro: 'Proses batch: hingga 100 file',
-                csv_excel_ex: 'Ekspor CSV/Excel',
-                seo_and_no_ads: 'Analitik SEO & Tanpa Iklan',
-                support_time: 'Waktu dukungan 24 jam',
-                '1k_image': '3000 gambar/bulan',
-                all_pro: 'Semua Fitur Pro',
-                batch_process_pre: 'Proses batch: hingga 300 file',
-                ftp_auto_up: 'Unggah Otomatis FTP/SFTP',
-                vector_eps: 'Konversi Vektor/EPS Langsung',
-                vip_support: 'Dukungan VIP & Akses Awal',
-                privacy_policy: 'Kebijakan Privasi',
-                terms_of_service: 'Ketentuan Layanan',
-                adjustment: 'Penyesuaian',
-                multi_tool: 'Alat Multi Gambar',
-                sketch_art: 'Gambar ke Seni Sketsa',
-                all_tools: 'Semua Alat',
-                image_enhance: 'Peningkat Gambar AI',
-                bg_remove: 'Penghapus Latar Belakang AI',
-                pixel_check: 'Studio Pixel-Check',
-                text_to_image: 'Generator Teks ke Gambar',
-                company: 'Perusahaan',
-                free_plan: 'Paket Gratis',
-                note: 'Akses API akan dihapus dalam 7 hari. Tingkatkan ke paket Pro/Premium dan gunakan semua fitur MetaGen Pro.',
-                platform: 'Platform',
-                add_more: 'Tambah File Lain',
-                well_come: 'Selamat Datang Kembali',
-                login_google: 'Lanjutkan dengan Google',
-                new_user: 'Pengguna baru?',
-                create_account: 'Buat akun',
-                niche_research: 'Riset Niche',
-                metadata_generator: 'Generator Metadata',
-                seo_score: 'Skor SEO & Analitik',
-                batch_process: 'Proses Batch Super Cepat',
-                sign_out: 'Keluar',
-                switch_account: 'Ganti akun',
-                upload_title: 'Unggah Gambar atau Video',
-                drag_drop: 'Seret & lepas file di sini atau klik untuk mengunggah',
-                supports: 'Mendukung JPG, PNG, WEBP, MP4, MOV',
-                max_size: 'Maks 50MB per file',
-                privacy_note: 'File Anda diproses dengan aman dan dihapus setelah 1 jam.',
-                privacy_note_device: 'Kami menganalisis file hanya di perangkat, data dihapus setelah pemrosesan.',
-                upload_limit_info: 'Paket Gratis: 50 file/hari',
-                usage: 'Penggunaan:',
-                "daily_limit": "Batas Proses Harian",
-                refer_text: 'Bagikan MetaGen Pro untuk mendapatkan +50 batas harian tambahan!',
-                "share_get_credit": "Bagikan & Dapatkan Kredit",
-                generate_metadata: 'Hasilkan Metadata',
-                "limit_reached_msg": "Anda telah mencapai batas pemrosesan harian Anda! Tingkatkan paket Anda untuk batas yang lebih tinggi atau bagikan alat ini untuk mendapatkan bonus.",
-                export_csv: 'Ekspor ke CSV',
-                export_excel: 'Ekspor ke Excel',
-                clear_all: 'Hapus Semua',
-                copy_all: 'Salin Semua',
-                down_eps: 'Unduh EPS',
-                guides: 'Panduan',
-                title: 'Judul',
-                description: 'Deskripsi',
-                keywords: 'Kata Kunci',
-                categories: 'Kategori',
-                already_user: 'Sudah punya akun?',
-                login: 'Masuk',
-                tools_generator: 'Alat & Generator',
-                trending: '📅 Sedang Tren...',
-                customization: 'Kustomisasi',
-                settings: 'Pengaturan',
-                select_ai: 'Pilih Penyedia AI',
-                manage_api: 'Kelola Kunci API',
-                convert_api: 'Kunci ConvertAPI',
-                translation_lang: 'Bahasa Terjemahan',
-                upload_files: 'Unggah File',
-                watch_demo: 'Tonton Demo',
-                watch_tagline: 'Lihat cara meningkatkan penjualan stok Anda dalam hitungan detik',
-                process_selected: 'Proses Terpilih',
-                process_prompts: 'Proses Prompt',
-                embed_metadata: 'Sematkan Metadata',
-                export: 'Ekspor',
-                batch_translate: 'Terjemahan Batch (Gratis)',
-                translate_all: 'Terjemahkan Semua (API)',
-                test_metadata: 'Uji Metadata',
-                save_folder: 'Simpan ke Folder',
-                share_files: 'Bagikan File',
-                upload_drive: 'Unggah ke Drive',
-                pause: 'Jeda',
-                image_to_prompt: 'Gambar ke Prompt',
-                jpg_png: 'JPG/PNG',
-                svg_eps: 'SVG/EPS/AI',
-                videos: 'Video',
-                check_copyright: 'Periksa Hak Cipta/Merek Dagang:',
-                upload_limit: 'Unggah maksimal 500 file dalam satu tindakan',
-                resume: 'Lanjutkan',
-                send_feedback: 'Kirim Masukan / Laporan Bug',
-                view_translated: 'Lihat Terjemahan',
-                view_original: 'Lihat Asli',
-                analyze_trends: 'Analisis Tren',
-                downloading: 'Mengunduh...',
-                translating: 'Menerjemahkan...',
-                embedding: 'Menyematkan...',
-                analyzing: 'Menganalisis...',
-                processing: 'Memproses...',
-                process: 'Proses',
-                files: 'File',
-                prompts: 'Prompt',
-                complete: 'Selesai',
-                success: 'Berhasil',
-                fail: 'Gagal',
-                saving: 'Menyimpan...',
-                preparing: 'Menyiapkan...',
-                uploading: 'Mengunggah...',
-                initializing: 'Menginisialisasi koneksi...',
-                processing_files: 'Memproses File...',
-                "hero_title": "Generator Metadata AI Gratis & Kata Kunci Stok Foto!",
-                hero_tagline: 'Tingkatkan visibilitas Anda di Shutterstock, Adobe Stock, dan Magnific. Hasilkan judul, deskripsi, dan kata kunci yang dioptimalkan SEO dalam hitungan detik menggunakan AI canggih.',
-                why_choose: 'Mengapa Memilih MetaGen Pro?',
-                blog_1: 'Pemrosesan Batch Super Cepat',
-                blog_tag_1: 'Analisis dan beri kata kunci ratusan gambar dalam hitungan detik. Hemat jam kerja manual dengan mesin batch kami yang optimal.',
-                blog_2: 'Analisis AI Canggih',
-                blog_tag_2: 'Didukung oleh Gemini 1.5 Pro, Mistral & Llama 3 untuk pengenalan gambar terkemuka di industri dan metadata yang akurat.',
-                blog_3: 'Kata Kunci yang Dioptimalkan SEO',
-                blog_tag_3: 'Hasilkan judul dan tag peringkat tinggi yang disesuaikan khusus untuk algoritma Shutterstock, Adobe Stock & Magnific.',
-                blog_4: 'Riset Niche',
-                blog_tag_4: 'Temukan topik dengan persaingan rendah dan permintaan tinggi dengan alat Riset Niche bawaan kami. Temukan apa yang dicari pembeli.',
-                blog_5: 'Pemesanan Ulang Kata Kunci Seret & Lepas',
-                blog_tag_5: 'Di situs stok (Adobe Stock, Shutterstock), 5-10 kata kunci pertama adalah yang paling penting.',
-                blog_6: 'Penyematan Metadata',
-                blog_tag_6: 'Sematkan judul dan kata kunci langsung ke file JPG/PNG/SVG Anda (IPTC/XMP). Cukup unduh dan unggah ke agensi stok mana pun.',
-                blog_7: 'Multi-Bahasa',
-                blog_tag_7: 'Terjemahkan metadata Anda ke 10+ bahasa secara instan. Jangkau audiens global dengan judul dan deskripsi yang dilokalkan.',
-                blog_8: 'Pemeriksaan Hak Cipta',
-                blog_tag_8: 'Hindari penolakan! AI kami memindai potensi masalah merek dagang dan logo di gambar Anda sebelum Anda mengunggahnya.',
-                blog_9: 'Ekspor Metadata CSV',
-                blog_tag_9: 'Fasilitas ekspor file CSV untuk semua situs stok (Adobe Stock, Shutterstock, Magnific).',
-                trusted_all: 'Terpercaya untuk Semua Platform Microstock Utama',
-                it_works: 'Cara Kerjanya',
-                upload_photos: 'Unggah Foto',
-                upload_photos_tag: 'Seret & lepas file JPG/PNG Anda. Kami secara otomatis membaca dimensi dan spesifikasi teknis.',
-                select_platfrom: 'Pilih Platform & AI',
-                select_platfrom_tag: 'Pilih target pasar Anda (misalnya Adobe Stock) dan model AI pilihan (Gemini/Groq).',
-                gen_down: 'Hasilkan & Unduh',
-                gen_down_tag: 'Dapatkan judul & kata kunci siap SEO secara instan. Unduh CSV atau Sematkan secara langsung.',
-                why_choose_stock_title: 'Mengapa Memilih MetaGen Pro untuk Fotografi Stok?',
-                how_to_use_title: 'Cara Menggunakan Alat?',
-                master_stock_title: 'Kuasai Fotografi Stok Anda dengan Metadata Bertenaga AI',
-                trusted_stock_title: 'Dipercaya oleh Kontributor Stok di Seluruh Amerika Serikat',
-                why_choose_stock_p1: 'Dalam dunia fotografi stok yang kompetitif, ketertemukan (discoverability) adalah kunci. Bahkan gambar terbaik pun tidak akan laku jika pembeli tidak dapat menemukannya. <strong>MetaGen Pro</strong> adalah <em>Generator Metadata AI</em> terbaik yang dirancang untuk memecahkan masalah ini.',
-                why_choose_stock_p2: 'Berbeda dengan pemberian kata kunci manual yang membosankan dan rentan kesalahan, alat kami menggunakan visi komputer tercanggih untuk menganalisis subjek, suasana, pencahayaan, dan komposisi gambar Anda. Alat ini kemudian menghasilkan 50+ kata kunci yang dioptimalkan, judul yang menarik, dan deskripsi mendalam yang disesuaikan untuk platform seperti <strong>Shutterstock, Adobe Stock, Magnific, dan Vecteezy</strong>.',
-                why_choose_stock_p3: 'Baik Anda seorang fotografer, ilustrator, atau seniman AI, MetaGen Pro merampingkan alur kerja Anda. Fitur seperti <strong>Gambar-ke-Prompt</strong> membantu Anda merekayasa balik gambar AI yang sukses, sementara <strong>Prediktor Penolakan</strong> kami membantu Anda memperbaiki masalah teknis sebelum diunggah.',
-                why_choose_stock_p4: 'Mulailah memaksimalkan pendapatan pasif Anda hari ini dengan penanda foto stok gratis tercanggih yang tersedia.',
-                "plan_details_title": "Paket Mana yang Tepat untuk Anda?",
-                "plan_details_free": "Paket Gratis - Terbaik untuk Pemula",
-                "plan_details_free_p1": "Paket Gratis kami dirancang untuk penghobi dan kontributor stok baru. Ini memungkinkan Anda untuk memproses hingga <strong>10 gambar per hari</strong>. Agar layanan tetap gratis sepenuhnya, Anda mendapatkan akses ke fitur inti kami termasuk pemrosesan batch super cepat (hingga 10 file sekaligus), pembuatan metadata AI, dan ekspor CSV. Harap dicatat bahwa fitur lanjutan seperti Penyematan Otomatis Metadata, Ekspor Excel, dan Pemeriksaan Hak Cipta tidak termasuk dalam paket ini.",
-                "plan_details_pro": "Paket Pro - Untuk Profesional",
-                "plan_details_pro_p1": "Paket Pro dibuat untuk kontributor reguler yang ingin memaksimalkan alur kerja mereka dan menghemat waktu berjam-jam. Dengan batas besar <strong>70 gambar per hari</strong>, Anda tidak perlu lagi membawa kunci API Anda sendiri—kami menangani semua permintaan AI dengan aman di pihak kami. Paket ini membuka alat canggih seperti <strong>Penyematan Otomatis Metadata</strong> langsung ke file JPEG/PNG/SVG Anda, Mengatur Ulang Kata Kunci dengan Seret & Lepas, pemeriksaan Hak Cipta/Merek Dagang AI, dan ekspor Excel. Ini juga meningkatkan batas pemrosesan batch Anda menjadi 100 file sekaligus dan menawarkan pengalaman yang benar-benar bebas iklan.",
-                "plan_details_premium": "Paket Premium - Untuk Pengguna Berat & Agensi",
-                "plan_details_premium_p1": "Dirancang untuk kreator bervolume tinggi, seniman vektor, dan agensi, Paket Premium menawarkan batas masif sebesar <strong>100 gambar per hari</strong> dan batas batch 300 file. Ini mencakup semua yang ada di paket Pro, ditambah fitur otomatisasi tingkat lanjut. Anda mendapatkan akses eksklusif ke <strong>Konversi Vektor/EPS Langsung</strong> (tidak perlu kunci ConvertAPI pihak ke-3) dan fitur <strong>Unggah Otomatis FTP/SFTP</strong>. Ini memungkinkan Anda untuk mendistribusikan file dan metadata yang diproses secara otomatis langsung ke berbagai agensi stok (Shutterstock, Adobe Stock, Magnific, dll.) langsung dari browser Anda.",
-                "htu_step1_title": "1. Unggah File",
-                "htu_step1_desc": "Seret & lepas gambar (JPG/PNG), vektor (SVG/EPS), atau video untuk memulai.",
-                "htu_step2_title": "2. Platform Target",
-                "htu_step2_desc": "Pilih Shutterstock, Adobe Stock, atau Magnific untuk hasil yang dioptimalkan.",
-                "htu_step3_title": "3. Pilih Model AI",
-                "htu_step3_desc": "Pilih antara Gemini, Mistral, atau Groq untuk analisis gambar.",
-                "htu_step4_title": "4. Kustomisasi",
-                "htu_step4_desc": "Sesuaikan batas Min/Maks kata untuk judul dan kata kunci menggunakan penggeser.",
-                "htu_step5_title": "5. Pengaturan AI",
-                "htu_step5_desc": "Aktifkan Mode Vektor, Background Putih, atau gunakan Prompt Kustom Anda sendiri.",
-                "htu_step6_title": "6. Buat Metadata",
-                "htu_step6_desc": "Klik 'Proses yang Dipilih' untuk langsung mendapatkan judul dan tag yang siap untuk SEO.",
-                "htu_step7_title": "7. Sematkan Metadata",
-                "htu_step7_desc": "Tulis metadata secara langsung ke dalam file JPG, PNG, atau SVG Anda.",
-                "htu_step8_title": "8. Multi-Terjemahan",
-                "htu_step8_desc": "Terjemahkan metadata ke 10+ bahasa untuk pasar global.",
-                "htu_step9_title": "9. Ekspor Hasil",
-                "htu_step9_desc": "Unduh semua metadata Anda sebagai CSV atau lembar Excel profesional.",
-                "htu_step10_title": "10. Simpan & Drive",
-                "htu_step10_desc": "Simpan ke folder lokal, bagikan melalui tautan, atau unggah langsung ke Drive.",
-                master_stock_subtitle1: 'Cara Menggunakan MetaGen Pro',
-                master_stock_p1: 'Memulai dengan MetaGen Pro sangatlah sederhana dan tidak memerlukan keahlian teknis. Pertama, unggah gambar Anda dengan menyeret dan meletakkannya ke area unggah yang ditentukan, atau klik untuk menelusuri file Anda. MetaGen Pro mendukung semua format gambar utama termasuk JPG, PNG, SVG, dan EPS, serta file video. Setelah gambar Anda diunggah, pilih platform target Anda (Shutterstock, Adobe Stock, Magnific, atau Umum) untuk mengoptimalkan metadata khusus untuk pasar tersebut.',
-                master_stock_p2: 'Selanjutnya, konfigurasikan preferensi Anda menggunakan pengaturan sidebar. Anda dapat menyesuaikan jumlah kata kunci (kami merekomendasikan 35-50 untuk SEO optimal), menetapkan batasan panjang judul, dan mengaktifkan fitur khusus seperti Mode Vektor untuk ilustrasi atau deteksi Latar Belakang Putih untuk gambar produk. Pemilihan penyedia AI memungkinkan Anda memilih antara model Google Gemini, Mistral AI, atau Groq Llama berdasarkan ketersediaan API dan preferensi kecepatan Anda.',
-                master_stock_p3: 'Setelah konfigurasi, klik tombol "Proses Semua" untuk menghasilkan metadata untuk semua gambar yang diunggah secara bersamaan. AI canggih kami menganalisis konten visual, komposisi, warna, subjek, dan konteks setiap gambar untuk membuat judul, deskripsi, dan set kata kunci yang sangat relevan. Seluruh proses biasanya hanya memakan waktu beberapa detik per gambar, bahkan saat memproses ratusan file dalam mode batch.',
-                master_stock_subtitle2: 'Manfaat Menggunakan Alat Ini',
-                master_stock_benefit1: '<strong>Efisiensi Waktu:</strong> Pemberian kata kunci manual dapat memakan waktu 10-15 menit per gambar. MetaGen Pro menguranginya menjadi hanya beberapa detik, memungkinkan Anda memberi kata kunci pada ratusan gambar dalam waktu yang diperlukan untuk memproses beberapa gambar secara manual. Bagi kontributor profesional yang mengunggah 50-100 gambar setiap minggu, ini berarti menghemat lebih dari 10 jam setiap minggunya.',
-                master_stock_benefit2: '<strong>Optimasi SEO:</strong> AI kami tidak hanya mendeskripsikan apa yang dilihatnya—ia memahami maksud pencarian dan algoritma pasar. Setiap set metadata mencakup campuran strategis kata kunci luas (volume pencarian tinggi), kata kunci ekor panjang spesifik (konversi tinggi), dan istilah yang sedang tren (permintaan saat ini). Pengukur SEO Score bawaan mengevaluasi metadata Anda secara real-time, memastikan setiap unggahan dioptimalkan untuk visibilitas maksimum.',
-                master_stock_benefit3: '<strong>Dukungan Multi-Platform:</strong> Agen stok yang berbeda memiliki persyaratan dan preferensi yang berbeda. MetaGen Pro beradaptasi dengan algoritma unik setiap platform—Shutterstock lebih menyukai struktur kata kunci yang berbeda dari Adobe Stock atau Magnific. Optimasi khusus platform kami memastikan gambar Anda berperingkat baik di mana pun Anda mengunggahnya.',
-                master_stock_benefit4: '<strong>Konsistensi dan Kualitas:</strong> Hilangkan kesalahan manusia dan pertahankan standar profesional di seluruh portofolio Anda. MetaGen Pro memastikan setiap gambar memiliki metadata yang diformat dengan benar, jumlah kata kunci yang memadai, dan deskripsi yang sesuai. Fitur Prediktor Penolakan menganalisis metadata Anda terhadap kriteria penolakan umum, membantu Anda menghindari kegagalan pengiriman yang merugikan.',
-                master_stock_subtitle3: 'Apa itu SEO Gambar dan Mengapa Itu Penting',
-                master_stock_seo_p1: 'SEO Gambar (Search Engine Optimization) adalah praktik mengoptimalkan metadata gambar untuk meningkatkan visibilitas dalam hasil pencarian di platform fotografi stok dan mesin pencari. Ketika pembeli mencari "pertemuan bisnis" atau "matahari terbenam pantai tropis," algoritma platform tidak "melihat" gambar Anda—ia membaca metadata yang Anda berikan. SEO Gambar yang efektif adalah perbedaan antara karya Anda muncul di halaman 1 versus halaman 50 hasil pencarian.',
-                master_stock_seo_p2: '<strong>Tiga Pilar SEO Gambar:</strong> Pertama, <em>Judul</em> harus deskriptif namun ringkas (10-20 kata), berisi kata kunci utama Anda dengan tetap alami dan mudah dibaca. Kedua, <em>Deskripsi</em> memberikan konteks dan kasus penggunaan (30-50 kata), membantu algoritma dan pembeli memahami aplikasi komersial gambar Anda. Ketiga, <em>Kata Kunci</em> menjangkau jaringan yang luas (disarankan 35-50 istilah), menangkap berbagai kueri pencarian yang dapat mengarahkan pembeli ke gambar Anda.',
-                master_stock_seo_p3: '<strong>Strategi Kata Kunci Itu Penting:</strong> Metadata yang paling efektif menggunakan campuran yang seimbang: 20-30% kata kunci satu kata (jangkauan luas), 40-50% frasa dua kata (spesifisitas sedang), dan 20-30% kata kunci ekor panjang (konversi tinggi). Misalnya, gambar tangan yang menggunakan ponsel cerdas harus menyertakan "tangan" (luas), "interaksi ponsel cerdas" (sedang), dan "tangan mengetuk antarmuka aplikasi seluler" (ekor panjang). Strategi ini memaksimalkan peluang gambar Anda muncul di pencarian luas dan spesifik.',
-                master_stock_seo_p4: '<strong>Faktor Peringkat Pencarian:</strong> Platform stok mempertimbangkan banyak faktor saat menentukan peringkat hasil pencarian. Relevansi (seberapa baik metadata Anda cocok dengan kueri pencarian), kelengkapan (semua bidang metadata terisi dengan benar), dan keragaman kata kunci (menggunakan istilah yang bervariasi dan terkait) semuanya memengaruhi peringkat Anda. Selain itu, relevansi komersial—mendeskripsikan bagaimana pembeli dapat menggunakan gambar Anda—berdampak signifikan pada tingkat konversi bahkan ketika gambar Anda berperingkat baik.',
-                master_stock_seo_p5: 'MetaGen Pro mengotomatiskan semua praktik terbaik ini, memastikan setiap gambar yang Anda unggah dioptimalkan sepenuhnya untuk visibilitas maksimum, unduhan, dan pada akhirnya, penghasilan. Baik Anda kontributor hobi atau fotografer stok purna waktu, SEO Gambar yang tepat tidak dapat ditawar di pasar kompetitif saat ini.',
-                master_stock_cta: '<strong>Siap meningkatkan kesuksesan fotografi stok Anda?</strong> Mulailah menggunakan MetaGen Pro hari ini dan ubah berjam-jam pemberian kata kunci yang membosankan menjadi keunggulan otomatis dalam hitungan detik.',
-                trusted_stock_subtitle: 'Temukan mengapa ribuan fotografer dan kreator Amerika mengandalkan MetaGen Pro untuk meningkatkan pendapatan stok mereka',
-                review_1_details: '📍 New York, NY • Fotografer Profesional',
-                review_1_text: '"MetaGen Pro mengubah alur kerja saya sepenuhnya! Saya terbiasa menghabiskan waktu berjam-jam memberi kata kunci pada foto saya untuk Shutterstock. Sekarang hanya butuh beberapa menit dan unduhan saya meningkat sebesar 40%. Fitur skor SEO-nya brilian!"',
-                review_2_details: '📍 Los Angeles, CA • Kreator Konten',
-                review_2_text: '"Sebagai kreator konten penuh waktu, waktu adalah uang. Alat ini menghemat setidaknya 10 jam per minggu untuk entri metadata. Pemrosesan batch-nya sangat cepat dan kata kunci yang dihasilkan AI sangat tepat. Investasi terbaik yang saya buat tahun ini!"',
-                review_3_details: '📍 Miami, FL • Kontributor Stok',
-                review_3_text: '"Awalnya saya skeptis, tapi MetaGen Pro melampaui semua ekspektasi. Saran kata kuncinya sangat relevan dan fitur multi-bahasa membantu saya menjangkau pembeli internasional. Penghasilan Adobe Stock saya naik dua kali lipat hanya dalam 3 bulan!"',
-                review_4_details: '📍 Chicago, IL • Desainer Grafis',
-                review_4_text: '"Fitur cek hak cipta saja sudah sebanding dengan harganya! Ini telah menyelamatkan saya dari potensi penolakan berkali-kali. Dikombinasikan dengan pembuatan metadata otomatis, alat ini wajib dimiliki bagi siapa pun yang serius dengan fotografi stok."',
-                review_5_details: '📍 Seattle, WA • Fotografer Alam',
-                review_5_text: '"Saya mengunggah ratusan foto alam setiap bulan. MetaGen Pro memudahkan pengelolaan dan pengoptimalan semuanya. Fitur ekspor CSV-nya terintegrasi dengan mulus dengan alur kerja saya. Sangat direkomendasikan untuk sesama kontributor!"',
-                review_6_details: '📍 Austin, TX • Videografer Lepas',
-                review_6_text: '"Pengubah permainan untuk metadata video! AI secara akurat mengidentifikasi adegan dan menghasilkan judul yang sempurna. Visibilitas portofolio video Shutterstock saya meningkat drastis. Tim dukungan juga sangat responsif dan membantu."',
-                stat_users: 'Pengguna Aktif AS',
-                stat_satisfaction: 'Tingkat Kepuasan',
-                stat_images: 'Gambar Dioptimalkan Setiap Hari',
-                stat_rating: 'Peringkat Rata-rata',
-                "faq_title": "Pertanyaan Umum — MetaGen Pro",
-                "faq_q1": "🚀 Bagaimana cara memulai MetaGen Pro?",
-                "faq_a1": "<strong>Langkah 1:</strong> Daftar atau masuk dengan akun Google atau email.<br><strong>Langkah 2:</strong> Atur kunci API Google Gemini di Pengaturan (gratis di <a href='https://aistudio.google.com/app/apikey' target='_blank'>Google AI Studio</a>).<br><strong>Langkah 3:</strong> Unggah gambar Anda (JPG, PNG, SVG, EPS) - hingga 500 file sekaligus!<br><strong>Langkah 4:</strong> Pilih platform target (Shutterstock, Adobe Stock, dll) dan klik 'Generate Metadata'.<br><strong>Langkah 5:</strong> Tinjau, edit jika perlu, tanam metadata ke file, dan unduh!",
-                "faq_q2": "💰 Apakah MetaGen Pro gratis? Berapa harganya?",
-                "faq_a2": "<p><strong>Paket gratis untuk semua orang!</strong> Metagen Pro memiliki paket gratis yang mumpuni (120 gambar/bulan, maksimal 25 per hari). Namun, untuk penggunaan yang intensif, kami memiliki paket <strong>Pro</strong> ($12/bulan - 2000 gambar/bulan, maksimal 70 per hari) dan <strong>Premium</strong> ($29/bulan - 3000 gambar/bulan, maksimal 100 per hari). Paket berbayar menawarkan fitur-fitur canggih seperti penyematan metadata otomatis, ekspor Excel, dan unggahan FTP langsung.</p>",
-                "faq_q3": "🔑 Bagaimana cara mendapatkan kunci API? Apakah aman?",
-                "faq_a3": "<p><strong>Tidak, kunci API tidak diperlukan untuk paket apa pun sekarang!</strong> Di semua paket, Gratis, Pro, dan Premium, kami memproses metadata menggunakan server kami sendiri dan model AI khusus Supabase Edge Functions (model AI canggih).</p><p><strong>Keamanan:</strong> Semua data Anda sepenuhnya <strong>aman</strong> dan dihapus dari server segera setelah diproses.</p>",
-                "faq_q4": "📁 Format file apa saja yang didukung?",
-                "faq_a4": "<p><strong>Format:</strong> JPG/JPEG (dengan EXIF), PNG, SVG (dengan XMP), dan EPS (via ConvertAPI).</p><p>Unggah hingga <strong>500 file sekaligus</strong>!</p>",
-                "faq_q5": "🎯 Platform stok mana saja yang didukung?",
-                "faq_a5": "<p>Dioptimalkan untuk: Shutterstock, Adobe Stock, Magnific, Vecteezy, Pond5, 123RF, iStock, dan lainnya. AI kami otomatis menyesuaikan dengan syarat tiap platform!</p>",
-                "faq_q6": "📊 Apa itu SEO Score dan lencana kata kunci?",
-                "faq_a6": "<p><strong>SEO Score:</strong> Mengukur optimasi pencarian.</p><p><strong>Lencana:</strong></p><ul><li>🟢 <strong>Hijau:</strong> Satu kata</li><li>🟡 <strong>Kuning:</strong> Dua kata</li><li>🔵 <strong>Biru:</strong> 3+ kata</li></ul>",
-                "faq_q7": "⚡ Bagaimana cara kerja pemrosesan batch?",
-                "faq_a7": "<p>Unggah hingga 500 gambar, klik 'Process Selected'. AI kami memproses semuanya secara paralel. Sangat cepat!</p>",
-                "faq_q8": "🎨 Apa itu fitur 'Image to Prompt'?",
-                "faq_a8": "<p>Mengubah gambar menjadi prompt detail untuk AI generator seperti Midjourney atau DALL-E. Cocok untuk riset gambar stok sukses!</p>",
-                "faq_q9": "🔒 Apakah data saya pribadi?",
-                "faq_a9": "<p><strong>100% Pribadi!</strong> Pemrosesan di browser Anda. Kami TIDAK PERNAH menyimpan gambar Anda. Data langsung dihapus setelah selesai.</p>",
-                "faq_q10": "🔧 Troubleshooting: Masalah umum",
-                "faq_a10": "<ul><li><strong>Error API:</strong> Cek kunci di Pengaturan.</li><li><strong>File besar:</strong> Maksimal 20MB.</li><li><strong>Lambat:</strong> Tutup tab browser lain.</li></ul>",
-                "faq_q11": "🎭 Bagaimana cara kerja AI Image Generator?",
-                "faq_a11": "<p>Gunakan model FLUX untuk membuat gambar. Masukkan kunci Together AI dan buat gambar unik untuk portofolio Anda!</p>",
-                "faq_q12": "💬 Butuh bantuan?",
-                "faq_a12": "<p>Email ke <strong>metagenp@gmail.com</strong> atau gunakan tombol Feedback. Kami balas dalam 12 jam!</p>"
-            },
-
-            de: {
-                flag: '🇩🇪',
-                name: 'DE',
-                band: 'MetaGen Pro',
-                tagline: 'Metadaten, angetrieben durch KI',
-                home: 'Startseite',
-                features: 'Funktionen',
-                start_tour: 'Tour starten',
-                faq: 'FAQ',
-                menu: 'MENÜ',
-                blog: 'Blog-Beitrag',
-                disclaimer: 'Haftungsausschluss',
-                about: 'Über uns',
-                contact: 'Kontakt',
-                legal: 'Rechtliches',
-                select_lang: 'Wählen Sie Sprache aus',
-                general_btn: "Allgemein",
-                save_key: 'Speichern',
-                close: 'Schließen',
-                get_key: 'Schlüssel abrufen',
-                badge: 'Abzeichen',
-                try_metagen: 'Probieren Sie MetaGen kostenlos aus',
-                no_api: 'Für Ihre kostenlose Testversion ist kein API-Schlüssel erforderlich.',
-                watting_for: 'Worauf wartest du noch?',
-                "get_start": "Jetzt kostenlos loslegen",
-                "drag_and_drop": "Per Drag & Drop an eine beliebige Stelle ziehen, um die Datei hochzuladen",
-                "fast": "Schnell",
-                "best": "Beste",
-                "generate_meta": "Metadaten generieren",
-                "delete_select": "Ausgewählte löschen",
-                "down_select": "Ausgewählte herunterladen",
-                "translate_select": "Ausgewählte übersetzen",
-                "done": "Fertig",
-                "processing": "Verarbeitung",
-                "analyzing_market": "Markttrends werden analysiert...",
-                "ai_is_researching": "Die KI recherchiert leistungsstarke Konzepte für Sie.",
-                "analyzing": "Analysieren...",
-                "copy_tag": "Tags kopieren",
-                "copy_idea": "Idee & Infos kopieren",
-                "download": "Herunterladen",
-                "enter_your_convert_api": "Geben Sie Ihren Convert-API-Schlüssel ein, um EPS-Konvertierungen zu aktivieren.",
-                "export_csv": "Als CSV exportieren",
-                "export_excel": "Als Excel exportieren",
-                "niche_research_cen": "Nischen-Forschungszentrum",
-                "niche_research_tag": "Entdecken Sie Keywords und Konzepte mit hoher Nachfrage und geringem Wettbewerb für Ihr Stock-Portfolio.",
-                "select_category": "Kategorie auswählen",
-                "market_focus": "Marktfokus",
-                "analyze_trend": "Trends analysieren",
-                "ready_to_research": "Bereit zur Recherche",
-                "ready_to_research_tag": "Wählen Sie oben eine Kategorie aus und klicken Sie auf \"Trends analysieren\", um profitable Nischen zu entdecken.",
-                "quick_suggest": "Schnelle Vorschläge",
-                "label_title": "Titel",
-                "label_desc": "Beschreibung",
-                "label_keywords": "Schlüsselwörter",
-                "btn_copy": "Kopieren",
-                "btn_add": "Hinzufügen",
-                "placeholder_add_kw": "Schlüsselwort hinzufügen...",
-                "seo_score": "SEO-Score",
-                "rejection": "Ablehnung",
-                "platform_check": "Plattform-Check",
-                "style": "Stil",
-                "mode": "Modus",
-                "translate": "Übersetzen",
-                "go": "Los",
-                "min_title": "Min. Titelwörter",
-                "max_title": "Max. Titelwörter",
-                "min_keywords": "Min. Schlagwörter",
-                "max_keywords": "Max. Schlagwörter",
-                "min_desc": "Min. Beschreibungswörter",
-                "max_desc": "Max. Beschreibungswörter",
-                "toggle_silhouette": "Silhouette",
-                "toggle_vector": "Vektor / Illustrationsmodus",
-                "toggle_white_bg": "Weißer Hintergrund",
-                "toggle_trans_bg": "Transparenter Hintergrund",
-                "toggle_custom_prompt": "Benutzerdefinierter Prompt",
-                "toggle_prohibited": "Verbotene Wörter",
-                "toggle_single_kw": "Einzelwort-Schlagwörter",
-                "toggle_change_name": "Dateinamen ändern",
-                "toggle_name_title": "Dateiname als Titel",
-                "feedback_matters": "Ihr Feedback ist uns wichtig",
-                "provide_feedback": "Bitte geben Sie Feedback zum Tool.",
-                "issue_type": "Problemtyp",
-                "general_feedback": "Allgemeines Feedback",
-                "bug_report": "Fehlerbericht",
-                "feature_request": "Funktionsanfrage",
-                "your_mess": "Ihre Nachricht",
-                "send_feed": "Feedback senden",
-                eps_meta: 'EPS-Metadaten generieren und einbetten',
-                month: '/ Monat',
-                pricing: 'Preise',
-                ftp_upload: 'FTP-Direkt-Upload',
-                ftp_upload_sub_txt: 'Laden Sie Dateien direkt auf Stock-Websites hoch (Adobe Stock, Shutterstock, Magnific).',
-                upgrade_plan: 'Plan aktualisieren',
-                stock_calendar: 'Stock-Kalender',
-                get_access: 'Zugang erhalten',
-                pricing_plan: 'Unser Preisplan',
-                pricing_sub_txt: 'Wählen Sie den perfekten Plan für Ihren kreativen Workflow.',
-                free_plan: 'Kostenloser Plan',
-                free_price: '$0/Monat',
-                most_popular: 'Am beliebtesten',
-                pro_plan: 'Auf Pro upgraden',
-                pro_price: '$12/Monat',
-                premium_plan: 'Premium-Plan',
-                premium_price: '$29/Monat',
-                '50_image': '120 Bilder pro Monat (maximal 10 pro Tag im Rahmen der zulässigen Nutzung)',
-                basic_ai_model: 'Einfache KI-Modelle (Gemini, Mistral, Groq) Verwenden Sie Ihren eigenen API-Schlüssel.',
-                batch_process: 'Stapelverarbeitung: bis zu 50 Dateien',
-                csv_export: 'CSV-Export',
-                ads_support: 'Werbeunterstützt',
-                auto_embed: 'Automatische Metadaten-Einbettung',
-                excel_export: 'Excel-Export',
-                drag_keyword: 'Keyword-Neuordnung per Drag & Drop',
-                copy_trade_check: 'Urheberrechts-/Markenprüfung',
-                get_started_free: 'Kostenlos starten',
-                '300_images': '2000 Bilder/Monat',
-                advance_ai: 'Erweiterte KI-Modelle (Kein API-Schlüssel erforderlich).',
-                batch_process_pro: 'Stapelverarbeitung: bis zu 100 Dateien',
-                csv_excel_ex: 'CSV-/Excel-Export',
-                seo_and_no_ads: 'SEO-Analysen & Keine Werbung',
-                support_time: 'Support 24 Stunden',
-                '1k_image': '3000 Bilder/Monat',
-                all_pro: 'Alle Pro-Funktionen',
-                batch_process_pre: 'Stapelverarbeitung: bis zu 300 Dateien',
-                ftp_auto_up: 'FTP/SFTP-Auto-Upload',
-                vector_eps: 'Direkte Vektor-/EPS-Konvertierung',
-                vip_support: 'VIP-Support & Vorabzugang',
-                privacy_policy: 'Datenschutz',
-                terms_of_service: 'Nutzungsbedingungen',
-                adjustment: 'Anpassung',
-                multi_tool: 'Multi-Bild-Tools',
-                sketch_art: 'Bild zu Skizzenkunst',
-                all_tools: 'Alle Tools',
-                image_enhance: 'KI-Bildverbesserer',
-                bg_remove: 'KI-Hintergrundentferner',
-                pixel_check: 'Pixel-Check Studio',
-                text_to_image: 'Text-zu-Bild-Generator',
-                company: 'Unternehmen',
-                free_plan: 'Kostenloser Plan',
-                note: 'Der API-Zugriff wird in 7 Tagen entfernt. Aktualisieren Sie auf den Pro/Premium-Tarif und nutzen Sie alle Funktionen von MetaGen Pro.',
-                platform: 'Plattform',
-                add_more: 'Mehr Dateien hinzufügen',
-                well_come: 'Willkommen zurück',
-                login_google: 'Weiter mit Google',
-                new_user: 'Neuer Benutzer?',
-                create_account: 'Konto erstellen',
-                niche_research: 'Nischenrecherche',
-                metadata_generator: 'Metadaten-Generator',
-                seo_score: 'SEO-Score & Analyse',
-                batch_process: 'Superschnelle Stapelverarbeitung',
-                sign_out: 'Abmelden',
-                switch_account: 'Konto wechseln',
-                upload_title: 'Bilder oder Videos hochladen',
-                drag_drop: 'Dateien hierher ziehen oder zum Hochladen klicken',
-                supports: 'Unterstützt JPG, PNG, WEBP, MP4, MOV',
-                max_size: 'Max 50MB pro Datei',
-                privacy_note: 'Ihre Dateien werden sicher verarbeitet und nach 1 Stunde gelöscht.',
-                privacy_note_device: 'Wir analysieren Dateien nur auf dem Gerät, Daten werden nach der Verarbeitung gelöscht.',
-                upload_limit_info: 'Kostenloser Plan: 50 Dateien/Tag',
-                usage: 'Nutzung:',
-                "daily_limit": "Tägliches Prozesslimit",
-                refer_text: 'Teile MetaGen Pro, um +50 extra Tageslimit zu erhalten!',
-                "share_get_credit": "Teilen & Guthaben erhalten",
-                generate_metadata: 'Metadaten generieren',
-                "limit_reached_msg": "Sie haben Ihr tägliches Verarbeitungslimit erreicht! Aktualisieren Sie Ihren Plan für höhere Limits oder teilen Sie das Tool für einen Bonus.",
-                export_csv: 'Als CSV exportieren',
-                export_excel: 'Als Excel exportieren',
-                clear_all: 'Alles löschen',
-                copy_all: 'Alles kopieren',
-                down_eps: 'EPS herunterladen',
-                guides: 'Anleitungen',
-                title: 'Titel',
-                description: 'Beschreibung',
-                keywords: 'Schlagwörter',
-                categories: 'Kategorien',
-                already_user: 'Haben Sie bereits ein Konto?',
-                login: 'Anmelden',
-                tools_generator: 'Tools & Generator',
-                trending: '📅 Im Trend...',
-                customization: 'Anpassung',
-                settings: 'Einstellungen',
-                select_ai: 'KI-Anbieter auswählen',
-                manage_api: 'API-Schlüssel verwalten',
-                convert_api: 'ConvertAPI-Schlüssel',
-                translation_lang: 'Übersetzungssprache',
-                upload_files: 'Dateien hochladen',
-                watch_demo: 'Demo ansehen',
-                watch_tagline: 'Sehen Sie, wie Sie Ihre Stock-Verkäufe in Sekunden steigern',
-                process_selected: 'Ausgewählte verarbeiten',
-                process_prompts: 'Prompts verarbeiten',
-                embed_metadata: 'Metadaten einbetten',
-                export: 'Exportieren',
-                batch_translate: 'Stapelübersetzung (Kostenlos)',
-                translate_all: 'Alles übersetzen (API)',
-                test_metadata: 'Metadaten testen',
-                save_folder: 'In Ordner speichern',
-                share_files: 'Dateien teilen',
-                upload_drive: 'Auf Drive hochladen',
-                pause: 'Pause',
-                image_to_prompt: 'Bild zu Prompt',
-                jpg_png: 'JPG/PNG',
-                svg_eps: 'SVG/EPS/AI',
-                videos: 'Videos',
-                check_copyright: 'Auf Urheberrecht/Marken prüfen:',
-                upload_limit: 'Maximal 500 Dateien in einer einzigen Aktion hochladen',
-                resume: 'Fortsetzen',
-                send_feedback: 'Feedback senden / Fehlerbericht melden',
-                view_translated: 'Übersetzt anzeigen',
-                view_original: 'Original anzeigen',
-                analyze_trends: 'Trends analysieren',
-                downloading: 'Wird heruntergeladen...',
-                translating: 'Wird übersetzt...',
-                embedding: 'Wird eingebettet...',
-                analyzing: 'Wird analysiert...',
-                processing: 'Wird verarbeitet...',
-                process: 'Verarbeiten',
-                files: 'Dateien',
-                prompts: 'Prompts',
-                complete: 'Abgeschlossen',
-                success: 'Erfolg',
-                fail: 'Fehlgeschlagen',
-                saving: 'Wird gespeichert...',
-                preparing: 'Wird vorbereitet...',
-                uploading: 'Wird hochgeladen...',
-                initializing: 'Verbindung wird hergestellt...',
-                processing_files: 'Dateien werden verarbeitet...',
-                "hero_title": "Kostenloser KI-Metadaten-Generator & Stockfoto-Keywords!",
-                hero_tagline: 'Steigern Sie Ihre Sichtbarkeit auf Shutterstock, Adobe Stock und Magnific. Generieren Sie SEO-optimierte Titel, Beschreibungen und Keywords in Sekunden mit fortschrittlicher KI.',
-                why_choose: 'Warum MetaGen Pro wählen?',
-                blog_1: 'Superschnelle Stapelverarbeitung',
-                blog_tag_1: 'Analysieren und verschlagworten Sie Hunderte von Bildern in Sekunden. Sparen Sie Stunden manueller Arbeit mit unserer optimierten Stapelverarbeitung.',
-                blog_2: 'Fortschrittliche KI-Analyse',
-                blog_tag_2: 'Angetrieben von Gemini 1.5 Pro, Mistral & Llama 3 für branchenführende Bilderkennung und präzise Metadaten.',
-                blog_3: 'SEO-optimierte Keywords',
-                blog_tag_3: 'Generieren Sie hochrangige Titel und Tags, die speziell auf die Algorithmen von Shutterstock, Adobe Stock & Magnific zugeschnitten sind.',
-                blog_4: 'Nischenrecherche',
-                blog_tag_4: 'Entdecken Sie Themen mit geringer Konkurrenz und hoher Nachfrage mit unserem integrierten Nischenrecherche-Tool. Finden Sie heraus, wonach Käufer suchen.',
-                blog_5: 'Drag & Drop Keyword-Neuanordnung',
-                blog_tag_5: 'Auf Stock-Seiten (Adobe Stock, Shutterstock) sind die ersten 5-10 Keywords am wichtigsten.',
-                blog_6: 'Metadaten-Einbettung',
-                blog_tag_6: 'Betten Sie Titel und Keywords direkt in Ihre JPG/PNG/SVG-Dateien ein (IPTC/XMP). Einfach herunterladen und bei jeder Stock-Agentur hochladen.',
-                blog_7: 'Mehrsprachig',
-                blog_tag_7: 'Übersetzen Sie Ihre Metadaten sofort in über 10 Sprachen. Erreichen Sie ein globales Publikum mit lokalisierten Titeln und Beschreibungen.',
-                blog_8: 'Urheberrechtsprüfung',
-                blog_tag_8: 'Vermeiden Sie Ablehnung! Unsere KI scannt Ihre Bilder auf potenzielle Markenprobleme und Logos, bevor Sie sie hochladen.',
-                blog_9: 'Metadaten-CSV-Export',
-                blog_tag_9: 'CSV-Exportfunktion für alle Stock-Seiten (Adobe Stock, Shutterstock, Magnific).',
-                trusted_all: 'Vertraut für alle großen Microstock-Plattformen',
-                it_works: 'Wie es funktioniert',
-                upload_photos: 'Fotos hochladen',
-                upload_photos_tag: 'Ziehen Sie Ihre JPG/PNG-Dateien hierher. Wir lesen automatisch Abmessungen und technische Spezifikationen.',
-                select_platfrom: 'Plattform & KI auswählen',
-                select_platfrom_tag: 'Wählen Sie Ihren Zielmarkt (z. B. Adobe Stock) und das bevorzugte KI-Modell (Gemini/Groq).',
-                gen_down: 'Generieren & Herunterladen',
-                gen_down_tag: 'Erhalten Sie sofort SEO-fertige Titel & Keywords. Laden Sie CSV herunter oder betten Sie sie direkt ein.',
-                why_choose_stock_title: 'Warum MetaGen Pro für Stock-Fotografie wählen?',
-                how_to_use_title: 'Wie benutzt man das Tool?',
-                master_stock_title: 'Meistern Sie Ihre Stock-Fotografie mit KI-gestützten Metadaten',
-                trusted_stock_title: 'Vertraut von Stock-Mitwirkenden in den gesamten USA',
-                why_choose_stock_p1: 'In der wettbewerbsintensiven Welt der Stockfotografie ist die Auffindbarkeit der Schlüssel zum Erfolg. Selbst die besten Bilder werden nicht verkauft, wenn Käufer sie nicht finden können. <strong>MetaGen Pro</strong> ist der ultimative <em>KI-Metadaten-Generator</em>, der entwickelt wurde, um dieses Problem zu lösen.',
-                why_choose_stock_p2: 'Im Gegensatz zur manuellen Verschlagwortung, die mühsam und fehleranfällig ist, nutzt unser Tool modernste Computer Vision, um Motiv, Stimmung, Beleuchtung und Komposition Ihres Bildes zu analysieren. Anschließend generiert es über 50 optimierte Keywords, eingängige Titel und detaillierte Beschreibungen, die auf Plattformen wie <strong>Shutterstock, Adobe Stock, Magnific und Vecteezy</strong> zugeschnitten sind.',
-                why_choose_stock_p3: 'Egal, ob Sie Fotograf, Illustrator oder KI-Künstler sind, MetaGen Pro optimiert Ihren Workflow. Funktionen wie <strong>Bild-zu-Prompt</strong> helfen Ihnen dabei, erfolgreiche KI-Bilder zu rekonstruieren, während unser <strong>Ablehnungs-Prädiktor</strong> Ihnen hilft, technische Probleme vor dem Hochladen zu beheben.',
-                why_choose_stock_p4: 'Beginnen Sie noch heute damit, Ihr passives Einkommen mit dem fortschrittlichsten kostenlosen Stockfoto-Tagger zu maximieren.',
-                "plan_details_title": "Welcher Plan ist der richtige für Sie?",
-                "plan_details_free": "Kostenloser Plan - Ideal für Anfänger",
-                "plan_details_free_p1": "Unser kostenloser Plan ist für Hobbyisten und neue Stock-Kontributoren konzipiert. Er ermöglicht es Ihnen, bis zu <strong>10 Bilder pro Tag</strong> zu verarbeiten. Um den Service völlig kostenlos zu halten, Sie erhalten Zugriff auf unsere Kernfunktionen, einschließlich superschneller Stapelverarbeitung (bis zu 50 Dateien gleichzeitig), KI-Metadaten-Generierung und CSV-Export. Beachten Sie, dass erweiterte Funktionen wie die automatische Metadaten-Einbettung, Excel-Export und Urheberrechtsprüfungen in diesem Plan nicht enthalten sind.",
-                "plan_details_pro": "Pro Plan - Für Profis",
-                "plan_details_pro_p1": "Der Pro-Plan ist für regelmäßige Kontributoren gedacht, die ihren Workflow maximieren und Stunden sparen möchten. Mit einem großzügigen Limit von <strong>70 Bildern pro Tag</strong> müssen Sie Ihre eigenen API-Schlüssel nicht mehr mitbringen – wir verarbeiten alle KI-Anfragen sicher auf unserer Seite. Dieser Plan schaltet leistungsstarke Tools frei, wie die <strong>automatische Metadaten-Einbettung</strong> direkt in Ihre JPEG-/PNG-/SVG-Dateien, Drag-and-Drop-Schlüsselwort-Neuordnung, KI-gestützte Urheberrechts-/Markenprüfungen und Excel-Export. Er erhöht auch Ihr Stapelverarbeitungs-Limit auf 100 Dateien auf einmal und bietet ein komplett werbefreies Erlebnis.",
-                "plan_details_premium": "Premium Plan - Für Power-User & Agenturen",
-                "plan_details_premium_p1": "Entwickelt für High-Volume-Ersteller, Vektorkünstler und Agenturen bietet der Premium-Plan ein massives Limit von <strong>100 Bildern pro Tag</strong> und ein Batch-Limit von 300 Dateien. Er beinhaltet alles aus dem Pro-Plan sowie erweiterte Automatisierungsfunktionen. Sie erhalten exklusiven Zugriff auf <strong>direkte Vektor-/EPS-Konvertierung</strong> (keine ConvertAPI-Schlüssel von Drittanbietern erforderlich) und die Funktion <strong>FTP-/SFTP-Auto-Upload</strong>. Dies ermöglicht es Ihnen, Ihre verarbeiteten Dateien und Metadaten direkt aus Ihrem Browser automatisch an mehrere Stock-Agenturen (Shutterstock, Adobe Stock, Magnific usw.) zu verteilen.",
-                "htu_step1_title": "1. Dateien hochladen",
-                "htu_step1_desc": "Ziehen Sie Bilder (JPG/PNG), Vektoren (SVG/EPS) oder Videos per Drag & Drop, um zu beginnen.",
-                "htu_step2_title": "2. Zielplattform",
-                "htu_step2_desc": "Wählen Sie Shutterstock, Adobe Stock oder Magnific für optimierte Ergebnisse.",
-                "htu_step3_title": "3. KI-Modell auswählen",
-                "htu_step3_desc": "Wählen Sie zwischen Gemini, Mistral oder Groq für die Bildanalyse.",
-                "htu_step4_title": "4. Anpassung",
-                "htu_step4_desc": "Passen Sie die Min/Max-Wörter für Titel und Schlagwörter über die Schieberegler an.",
-                "htu_step5_title": "5. KI-Einstellungen",
-                "htu_step5_desc": "Aktivieren Sie den Vektor-Modus, den weißen Hintergrund oder nutzen Sie Ihre eigenen benutzerdefinierten Prompts.",
-                "htu_step6_title": "6. Metadaten generieren",
-                "htu_step6_desc": "Klicken Sie auf 'Ausgewählte verarbeiten', um sofort SEO-optimierte Titel und Tags zu erhalten.",
-                "htu_step7_title": "7. Metadaten einbetten",
-                "htu_step7_desc": "Schreiben Sie Metadaten direkt in Ihre JPG-, PNG- oder SVG-Dateien.",
-                "htu_step8_title": "8. Multi-Übersetzung",
-                "htu_step8_desc": "Übersetzen Sie Metadaten in über 10 Sprachen für den globalen Markt.",
-                "htu_step9_title": "9. Ergebnisse exportieren",
-                "htu_step9_desc": "Laden Sie alle Ihre Metadaten als CSV oder professionelle Excel-Tabellen herunter.",
-                "htu_step10_title": "10. Speichern & Drive",
-                "htu_step10_desc": "Speichern Sie im lokalen Ordner, teilen Sie per Link oder laden Sie direkt auf Google Drive hoch.",
-                how_to_use_step5: '<strong>Schritt 5:</strong> Überprüfen Sie die Ergebnisse, bearbeiten Sie sie bei Bedarf und klicken Sie auf <strong>"Herunterladen"</strong> oder <strong>"CSV exportieren"</strong>.',
-                master_stock_subtitle1: 'So verwenden Sie MetaGen Pro',
-                master_stock_p1: 'Der Einstieg in MetaGen Pro ist denkbar einfach und erfordert kein technisches Fachwissen. Laden Sie zunächst Ihre Bilder hoch, indem Sie sie in den dafür vorgesehenen Upload-Bereich ziehen oder auf Ihre Dateien klicken. MetaGen Pro unterstützt alle gängigen Bildformate einschließlich JPG, PNG, SVG und EPS sowie Videodateien. Sobald Ihre Bilder hochgeladen sind, wählen Sie Ihre Zielplattform (Shutterstock, Adobe Stock, Magnific oder Allgemein) aus, um die Metadaten speziell für diesen Marktplatz zu optimieren.',
-                master_stock_p2: 'Konfigurieren Sie anschließend Ihre Einstellungen über die Seitenleiste. Sie können die Anzahl der Keywords anpassen (wir empfehlen 35-50 für optimales SEO), Titel-Längenbeschränkungen festlegen und spezielle Funktionen wie den Vektormodus für Illustrationen oder die Weißer-Hintergrund-Erkennung für Produktbilder aktivieren. Die KI-Anbieterauswahl ermöglicht es Ihnen, je nach API-Verfügbarkeit und Geschwindigkeitspräferenzen zwischen Google Gemini-, Mistral KI- oder Groq Llama-Modellen zu wählen.',
-                master_stock_p3: 'Klicken Sie nach der Konfiguration auf die Schaltfläche "Alle verarbeiten", um Metadaten für alle hochgeladenen Bilder gleichzeitig zu generieren. Unsere fortschrittliche KI analysiert den visuellen Inhalt, die Komposition, die Farben, die Motive und den Kontext jedes Bildes, um hochrelevante Titel, Beschreibungen und Keyword-Sets zu erstellen. Der gesamte Vorgang dauert in der Regel nur wenige Sekunden pro Bild, selbst wenn Hunderte von Dateien im Batch-Modus verarbeitet werden.',
-                master_stock_subtitle2: 'Vorteile der Verwendung dieses Tools',
-                master_stock_benefit1: '<strong>Zeiteffizienz:</strong> Die manuelle Verschlagwortung kann 10-15 Minuten pro Bild in Anspruch nehmen. MetaGen Pro reduziert dies auf wenige Sekunden, sodass Sie Hunderte von Bildern in der Zeit verschlagworten können, die Sie für die manuelle Bearbeitung von nur wenigen Bildern benötigen würden. Für professionelle Anbieter, die wöchentlich 50-100 Bilder hochladen, bedeutet dies eine Ersparnis von über 10 Stunden pro Woche.',
-                master_stock_benefit2: '<strong>SEO-Optimierung:</strong> Unsere KI beschreibt nicht nur, was sie sieht – sie versteht die Suchintention und die Algorithmen der Marktplätze. Jedes Metadaten-Set enthält eine strategische Mischung aus allgemeinen Keywords (hohes Suchvolumen), spezifischen Long-Tail-Keywords (hohe Konversion) und Trendbegriffen (aktuelle Nachfrage). Das integrierte SEO-Score-Messgerät bewertet Ihre Metadaten in Echtzeit und stellt sicher, dass jeder Upload für maximale Auffindbarkeit optimiert ist.',
-                master_stock_benefit3: '<strong>Multi-Plattform-Unterstützung:</strong> Verschiedene Stock-Agenturen haben unterschiedliche Anforderungen und Vorlieben. MetaGen Pro passt sich dem einzigartigen Algorithmus jeder Plattform an – Shutterstock bevorzugt andere Keyword-Strukturen als Adobe Stock oder Magnific. Unsere plattformspezifische Optimierung stellt sicher, dass Ihre Bilder überall dort, wo Sie sie hochladen, gut ranken.',
-                master_stock_benefit4: '<strong>Konsistenz und Qualität:</strong> Eliminieren Sie menschliche Fehler und halten Sie professionelle Standards in Ihrem gesamten Portfolio ein. MetaGen Pro stellt sicher, dass jedes Bild über korrekt formatierte Metadaten, eine angemessene Keyword-Anzahl und passende Beschreibungen verfügt. Die Ablehnungs-Prädiktor-Funktion analysiert Ihre Metadaten anhand gängiger Ablehnungskriterien und hilft Ihnen, kostspielige Einreichungsfehler zu vermeiden.',
-                master_stock_subtitle3: 'Was ist Bild-SEO und warum es wichtig ist',
-                master_stock_seo_p1: 'Bild-SEO (Suchmaschinenoptimierung) ist die Praxis der Optimierung von Bildmetadaten, um die Sichtbarkeit in Suchergebnissen auf Stockfotografie-Plattformen und Suchmaschinen zu verbessern. Wenn ein Käufer nach "Geschäftstreffen" oder "tropischer Strandsonnenuntergang" sucht, "sieht" der Algorithmus der Plattform Ihr Bild nicht – er liest die von Ihnen bereitgestellten Metadaten. Effektives Bild-SEO ist der Unterschied, ob Ihre Arbeit auf Seite 1 oder auf Seite 50 der Suchergebnisse erscheint.',
-                master_stock_seo_p2: '<strong>Die drei Säulen von Bild-SEO:</strong> Erstens sollte der <em>Titel</em> beschreibend, aber prägnant sein (10-20 Wörter) und Ihre primären Keywords enthalten, während er natürlich und lesbar bleibt. Zweitens bietet die <em>Beschreibung</em> Kontext und Anwendungsfälle (30-50 Wörter) und hilft sowohl Algorithmen als auch Käufern, die kommerziellen Anwendungen Ihres Bildes zu verstehen. Drittens decken <em>Keywords</em> ein breites Spektrum ab (empfohlen werden 35-50 Begriffe) und erfassen verschiedene Suchanfragen, die Käufer zu Ihrem Bild führen könnten.',
-                master_stock_seo_p3: '<strong>Keyword-Strategie ist wichtig:</strong> Die effektivsten Metadaten verwenden eine ausgewogene Mischung: 20-30 % Ein-Wort-Keywords (große Reichweite), 40-50 % Zwei-Wort-Phrasen (mittlere Spezifität) und 20-30 % Long-Tail-Keywords (hohe Konversion). Beispielsweise sollte ein Bild von Händen, die ein Smartphone benutzen, "Hände" (allgemein), "Smartphone-Interaktion" (mittelspezifisch) und "Hände tippen auf mobile App-Oberfläche" (Long-Tail) enthalten. Diese Strategie maximiert die Chancen, dass Ihr Bild sowohl in allgemeinen als auch in spezifischen Suchen erscheint.',
-                master_stock_seo_p4: '<strong>Suchranking-Faktoren:</strong> Stock-Plattformen berücksichtigen mehrere Faktoren beim Ranking der Suchergebnisse. Relevanz (wie gut Ihre Metadaten mit der Suchanfrage übereinstimmen), Vollständigkeit (alle Metadatenfelder korrekt ausgefüllt) und Keyword-Vielfalt (Verwendung variierter, verwandter Begriffe) wirken sich alle auf Ihr Ranking aus. Darüber hinaus beeinflusst die kommerzielle Relevanz – die Beschreibung, wie Käufer Ihr Bild verwenden können – die Konversionsraten erheblich, selbst wenn Ihr Bild gut rankt.',
-                master_stock_seo_p5: 'MetaGen Pro automatisiert all diese Best Practices und stellt sicher, dass jedes Bild, das Sie hochladen, vollständig für maximale Sichtbarkeit, Downloads und letztendlich Einkommen optimiert ist. Egal, ob Sie ein Hobby-Anbieter oder ein Vollzeit-Stockfotograf sind, ordentliches Bild-SEO ist auf dem heutigen wettbewerbsintensiven Marktplatz unverzichtbar.',
-                master_stock_cta: '<strong>Bereit, Ihren Erfolg in der Stockfotografie zu steigern?</strong> Nutzen Sie MetaGen Pro noch heute und verwandeln Sie Stunden mühsamer Verschlagwortung in Sekunden automatisierter Exzellenz.',
-                trusted_stock_subtitle: 'Erfahren Sie, warum Tausende von amerikanischen Fotografen und Erstellern auf MetaGen Pro vertrauen, um ihre Stock-Einnahmen zu steigern',
-                review_1_details: '📍 New York, NY • Professionelle Fotografin',
-                review_1_text: '"MetaGen Pro hat meinen Workflow komplett verändert! Früher habe ich Stunden damit verbracht, meine Fotos für Shutterstock zu verschlagworten. Jetzt dauert es nur noch Minuten und meine Downloads sind um 40 % gestiegen. Die SEO-Score-Funktion ist brillant!"',
-                review_2_details: '📍 Los Angeles, CA • Content Creator',
-                review_2_text: '"Als Vollzeit-Content-Creator ist Zeit Geld. Dieses Tool spart mir mindestens 10 Stunden pro Woche bei der Metadaten-Eingabe. Die Batch-Verarbeitung ist blitzschnell und die KI-generierten Keywords sind genau auf den Punkt. Die beste Investition, die ich dieses Jahr getätigt habe!"',
-                review_3_details: '📍 Miami, FL • Stock-Anbieterin',
-                review_3_text: '"Ich war anfangs skeptisch, aber MetaGen Pro hat alle Erwartungen übertroffen. Die Keyword-Vorschläge sind unglaublich relevant und die Mehrsprachigkeitsfunktion hat mir geholfen, internationale Käufer zu erreichen. Meine Adobe Stock-Einnahmen haben sich in nur 3 Monaten verdoppelt!"',
-                review_4_details: '📍 Chicago, IL • Grafikdesigner',
-                review_4_text: '"Alleine die Urheberrechtsprüfung ist den Preis wert! Sie hat mich schon mehrmals vor möglichen Ablehnungen bewahrt. In Kombination mit der automatisierten Metadatengenerierung ist dieses Tool ein Muss für jeden, der Stockfotografie ernst nimmt."',
-                review_5_details: '📍 Seattle, WA • Naturfotografin',
-                review_5_text: '"Ich lade jeden Monat Hunderte von Naturfotos hoch. MetaGen Pro macht es mühelos, sie alle zu verwalten und zu optimieren. Die CSV-Exportfunktion lässt sich nahtlos in meinen Workflow integrieren. Sehr empfehlenswert für andere Anbieter!"',
-                review_6_details: '📍 Austin, TX • Freiberuflicher Videograf',
-                review_6_text: '"Ein Game-Changer für Video-Metadaten! Die KI identifiziert Szenen genau und generiert perfekte Titel. Die Sichtbarkeit meines Shutterstock-Videoportfolios hat sich dramatisch verbessert. Das Support-Team ist außerdem extrem reaktionsschnell und hilfreich."',
-                stat_users: 'Aktive US-Nutzer',
-                stat_satisfaction: 'Zufriedenheitsrate',
-                stat_images: 'Täglich optimierte Bilder',
-                stat_rating: 'Durchschnittliche Bewertung',
-                "faq_title": "FAQs — MetaGen Pro",
-                "faq_q1": "🚀 Wie fange ich mit MetaGen Pro an?",
-                "faq_a1": "<strong>Schritt 1:</strong> Registrieren oder anmelden.<br><strong>Schritt 2:</strong> Google Gemini API-Key in den Einstellungen hinterlegen (<a href='https://aistudio.google.com/app/apikey' target='_blank'>Google AI Studio</a>).<br><strong>Schritt 3:</strong> Bilder hochladen (bis zu 500 Dateien gleichzeitig).<br><strong>Schritt 4:</strong> Plattform wählen und auf 'Generate Metadata' klicken.<br><strong>Schritt 5:</strong> Bearbeiten, Metadaten einbetten und herunterladen!",
-                "faq_q2": "💰 Ist MetaGen Pro kostenlos?",
-                "faq_a2": "<p><strong>Kostenlose Tarife für alle!</strong> Metagen Pro bietet einen leistungsstarken Gratis-Tarif (120 Bilder/Monat, max. 25 täglich). Für intensive Nutzung bieten wir jedoch die Tarife <strong>Pro</strong> (12 $/Monat – 2000 Bilder/Monat, max. 70 täglich) und <strong>Premium</strong> (29 $/Monat – 3000 Bilder/Monat, max. 100 täglich) an. Die kostenpflichtigen Tarife bieten erweiterte Funktionen wie automatisches Einbetten von Metadaten, Excel-Export und direkten FTP-Upload.</p>",
-                "faq_q3": "🔑 Sind meine API-Keys sicher?",
-                "faq_a3": "<p><strong>Nein, für keinen Tarif ist jetzt ein API-Schlüssel erforderlich!</strong> In allen Tarifen – Free, Pro und Premium – verarbeiten wir Metadaten mithilfe unserer eigenen Server und der dedizierten KI-Modelle von Supabase Edge Functions (fortschrittliche KI-Modelle).</p><p><strong>Sicherheit:</strong> Alle Ihre Daten sind absolut <strong>sicher</strong> und werden unmittelbar nach der Verarbeitung vom Server gelöscht.</p>",
-                "faq_q4": "📁 Welche Formate werden unterstützt?",
-                "faq_a4": "<p>Unterstützt werden JPG, PNG, SVG und EPS (via ConvertAPI).</p><p>Bis zu <strong>500 Dateien gleichzeitig</strong>!</p>",
-                "faq_q5": "🎯 Welche Plattformen werden unterstützt?",
-                "faq_a5": "<p>Optimiert für Shutterstock, Adobe Stock, Magnific und viele mehr. Unsere KI passt sich automatisch an.</p>",
-                "faq_q6": "📊 Was ist der SEO Score?",
-                "faq_a6": "<p>Misst die Sichtbarkeit für Suchalgorithmen. 🟢 = Ein Wort, 🟡 = Zwei Wörter, 🔵 = Long-tail.</p>",
-                "faq_q7": "⚡ Wie schnell ist die Stapelverarbeitung?",
-                "faq_a7": "<p>Blitzschnell! 100 Dateien dauern fast so kurz wie eine einzige Datei, da sie parallel verarbeitet werden.</p>",
-                "faq_q8": "🎨 Was ist 'Image to Prompt'?",
-                "faq_a8": "<p>Erstellt aus einem Bild einen Text-Prompt für Midjourney oder DALL-E.</p>",
-                "faq_q9": "🔒 Sind meine Daten privat?",
-                "faq_a9": "<p><strong>100% Privat!</strong> Alles geschieht im Browser. Wir speichern KEINE Bilder.</p>",
-                "faq_q10": "🔧 Fehlerbehebung",
-                "faq_a10": "<ul><li>API-Fehler? Key prüfen.</li><li>Datei zu groß? Max 20MB.</li></ul>",
-                "faq_q12": "💬 Hilfe & Feedback",
-                "faq_a12": "<p>E-Mail an <strong>metagenp@gmail.com</strong>. Wir antworten innerhalb von 12 Stunden!</p>"
-            },
-
-            ru: {
-                flag: '🇷🇺',
-                name: 'RU',
-                band: 'MetaGen Pro',
-                tagline: 'Метаданные на базе ИИ',
-                home: 'Главная',
-                features: 'Функции',
-                start_tour: 'Начать тур',
-                faq: 'FAQ',
-                menu: 'МЕНЮ',
-                blog: 'Блог',
-                disclaimer: 'Отказ от ответственности',
-                about: 'О нас',
-                contact: 'Контакты',
-                legal: 'Юридическая инфо',
-                select_lang: 'Выберите язык',
-                general_btn: "Общий",
-                save_key: 'Сохранить',
-                close: 'Закрыть',
-                get_key: 'Получить ключ',
-                badge: 'Значок',
-                try_metagen: 'Попробуйте MetaGen бесплатно',
-                no_api: 'Для бесплатного пробного периода ключ API не требуется.',
-                watting_for: 'Чего вы ждёте?',
-                "get_start": "Начните бесплатно",
-                "drag_and_drop": "Перетащите мышью в любое место для загрузки.",
-                "fast": "Быстро",
-                "best": "Лучший",
-                "generate_meta": "Создать метаданные",
-                "delete_select": "Удалить выбранное",
-                "down_select": "Скачать выбранное",
-                "translate_select": "Перевести выбранное",
-                "done": "Готово",
-                "processing": "Обработка",
-                "analyzing_market": "Анализ рыночных трендов...",
-                "ai_is_researching": "ИИ ищет для вас высокоэффективные концепции.",
-                "analyzing": "Анализ...",
-                "copy_tag": "Копировать теги",
-                "copy_idea": "Копировать идею и инфо",
-                "download": "Скачать",
-                "enter_your_convert_api": "Введите ключ Convert API для включения конвертации EPS файлов.",
-                "export_csv": "Экспорт в CSV",
-                "export_excel": "Экспорт в Excel",
-                "niche_research_cen": "Центр исследования ниш",
-                "niche_research_tag": "Откройте для себя высоко востребованные ключевые слова и концепции с низкой конкуренцией для вашего стокового портфолио.",
-                "select_category": "Выберите категорию",
-                "market_focus": "Рыночный фокус",
-                "analyze_trend": "Анализировать тренды",
-                "ready_to_research": "Готов к исследованию",
-                "ready_to_research_tag": "Выберите категорию выше и нажмите «Анализировать тренды», чтобы найти прибыльные ниши.",
-                "quick_suggest": "Быстрые предложения",
-                "label_title": "Заголовок",
-                "label_desc": "Описание",
-                "label_keywords": "Ключевые слова",
-                "btn_copy": "Копировать",
-                "btn_add": "Добавить",
-                "placeholder_add_kw": "Добавить ключевое слово...",
-                "seo_score": "SEO оценка",
-                "rejection": "Отказ",
-                "platform_check": "Проверка платформы",
-                "style": "Стиль",
-                "mode": "Режим",
-                "translate": "Перевести",
-                "go": "Перейти",
-                "min_title": "Мин. слов в заголовке",
-                "max_title": "Макс. слов в заголовке",
-                "min_keywords": "Мин. ключевых слов",
-                "max_keywords": "Макс. ключевых слов",
-                "min_desc": "Мин. слов в описании",
-                "max_desc": "Макс. слов в описании",
-                "toggle_silhouette": "Силуэт",
-                "toggle_vector": "Вектор / Режим иллюстрации",
-                "toggle_white_bg": "Белый фон",
-                "toggle_trans_bg": "Прозрачный фон",
-                "toggle_custom_prompt": "Пользовательский промпт",
-                "toggle_prohibited": "Запрещенные слова",
-                "toggle_single_kw": "Однословные ключевые слова",
-                "toggle_change_name": "Изменить имя файла",
-                "toggle_name_title": "Имя файла как заголовок",
-                "feedback_matters": "Ваш отзыв важен",
-                "provide_feedback": "Пожалуйста, оставьте отзыв об инструменте?",
-                "issue_type": "Тип проблемы",
-                "general_feedback": "Общий отзыв",
-                "bug_report": "Сообщение об ошибке",
-                "feature_request": "Запрос на добавление функции",
-                "your_mess": "Ваше сообщение",
-                "send_feed": "Отправить отзыв",
-                eps_meta: 'Создание и встраивание метаданных EPS',
-                month: '/ месяц',
-                pricing: 'Цены',
-                ftp_upload: 'Прямая загрузка по FTP',
-                ftp_upload_sub_txt: 'Загружайте файлы напрямую на стоковые сайты (Adobe Stock, Shutterstock, Magnific).',
-                upgrade_plan: 'Улучшить тариф',
-                stock_calendar: 'Стоковый календарь',
-                get_access: 'Получить доступ',
-                pricing_plan: 'Наш тарифный план',
-                pricing_sub_txt: 'Выберите идеальный план для вашего творческого рабочего процесса.',
-                free_plan: 'Бесплатный план',
-                free_price: '$0/мес',
-                most_popular: 'Самый популярный',
-                pro_plan: 'Перейти на Pro',
-                pro_price: '$12/мес',
-                premium_plan: 'Премиум план',
-                premium_price: '$29/мес',
-                '50_image': '120 изображений в месяц (максимум 10 в день для соблюдения принципов добросовестного использования)',
-                basic_ai_model: 'Базовые модели ИИ (Gemini, Mistral, Groq) Используйте свой собственный API-ключ.',
-                batch_process: 'Пакетная обработка: до 50 файлов',
-                csv_export: 'Экспорт в CSV',
-                ads_support: 'С поддержкой рекламы',
-                auto_embed: 'Автоматическое внедрение метаданных',
-                excel_export: 'Экспорт в Excel',
-                drag_keyword: 'Изменение порядка ключевых слов (Drag & Drop)',
-                copy_trade_check: 'Проверка авторских прав/товарных знаков',
-                get_started_free: 'Начать бесплатно',
-                '300_images': '2000 изображений в месяц',
-                advance_ai: 'Продвинутые модели ИИ (API-ключ не требуется).',
-                batch_process_pro: 'Пакетная обработка: до 100 файлов',
-                csv_excel_ex: 'Экспорт в CSV/Excel',
-                seo_and_no_ads: 'SEO-аналитика и Без рекламы',
-                support_time: 'Поддержка 24 часа',
-                '1k_image': '3000 изображений в месяц',
-                all_pro: 'Все функции Pro',
-                batch_process_pre: 'Пакетная обработка: до 300 файлов',
-                ftp_auto_up: 'Автоматическая загрузка FTP/SFTP',
-                vector_eps: 'Прямая конвертация в Vector/EPS',
-                vip_support: 'VIP-поддержка и Ранний доступ',
-                privacy_policy: 'Политика конфиденциальности',
-                terms_of_service: 'Условия использования',
-                adjustment: 'Регулировка',
-                multi_tool: 'Мульти-инструменты',
-                sketch_art: 'Фото в скетч',
-                all_tools: 'Все инструменты',
-                image_enhance: 'ИИ Улучшение фото',
-                bg_remove: 'ИИ Удаление фона',
-                pixel_check: 'Студия Pixel-Check',
-                text_to_image: 'Генератор текста в изображение',
-                company: 'Компания',
-                free_plan: 'Бесплатный план',
-                note: 'Доступ к API будет отключен через 7 дней. Перейдите на тарифный план Pro/Premium и используйте все функции MetaGen Pro.',
-                platform: 'Платформа',
-                add_more: 'Добавить еще файлы',
-                well_come: 'С возвращением',
-                login_google: 'Продолжить с Google',
-                new_user: 'Новый пользователь?',
-                create_account: 'Создать аккаунт',
-                niche_research: 'Исследование ниши',
-                metadata_generator: 'Генератор метаданных',
-                seo_score: 'SEO Оценка и Аналитика',
-                batch_process: 'Сверхбыстрая пакетная обработка',
-                sign_out: 'Выйти',
-                switch_account: 'Сменить аккаунт',
-                upload_title: 'Загрузить изображения или видео',
-                drag_drop: 'Перетащите файлы сюда или нажмите для загрузки',
-                supports: 'Поддержка JPG, PNG, WEBP, MP4, MOV',
-                max_size: 'Макс 50МБ на файл',
-                privacy_note: 'Ваши файлы надежно обрабатываются и удаляются через 1 час.',
-                privacy_note_device: 'Мы анализируем файлы только на устройстве, данные удаляются после обработки.',
-                upload_limit_info: 'Бесплатный план: 50 файлов/день',
-                usage: 'Использование:',
-                "daily_limit": "Дневной лимит обработки",
-                refer_text: 'Поделитесь ссылкой на MetaGen Pro, чтобы получить дополнительный дневной лимит в +50!',
-                "share_get_credit": "Поделитесь и получите кредиты",
-                generate_metadata: 'Создать метаданные',
-                "limit_reached_msg": "Вы достигли своего дневного лимита обработки! Обновите свой план для получения более высоких лимитов или поделитесь инструментом для получения бонуса.",
-                export_csv: 'Экспорт в CSV',
-                export_excel: 'Экспорт в Excel',
-                clear_all: 'Очистить все',
-                copy_all: 'Копировать все',
-                down_eps: 'Скачать EPS',
-                guides: 'Руководства',
-                title: 'Заголовок',
-                description: 'Описание',
-                keywords: 'Ключевые слова',
-                categories: 'Категории',
-                already_user: 'Уже есть аккаунт?',
-                login: 'Войти',
-                tools_generator: 'Инструменты и Генератор',
-                trending: '📅 В тренде...',
-                customization: 'Настройка',
-                settings: 'Настройки',
-                select_ai: 'Выбрать ИИ провайдера',
-                manage_api: 'Управление API ключами',
-                convert_api: 'Ключ ConvertAPI',
-                translation_lang: 'Язык перевода',
-                upload_files: 'Загрузить файлы',
-                watch_demo: 'Смотреть демо',
-                watch_tagline: 'Узнайте, как увеличить продажи на стоках за секунды',
-                process_selected: 'Обработать выбранное',
-                process_prompts: 'Обработать промпты',
-                embed_metadata: 'Встроить метаданные',
-                export: 'Экспорт',
-                batch_translate: 'Пакетный перевод (Бесплатно)',
-                translate_all: 'Перевести все (API)',
-                test_metadata: 'Тест метаданных',
-                save_folder: 'Сохранить в папку',
-                share_files: 'Поделиться файлами',
-                upload_drive: 'Загрузить на Диск',
-                pause: 'Пауза',
-                image_to_prompt: 'Изображение в Промпт',
-                jpg_png: 'JPG/PNG',
-                svg_eps: 'SVG/EPS/AI',
-                videos: 'Видео',
-                check_copyright: 'Проверка авторских прав/ТМ:',
-                upload_limit: 'Загружайте максимум 500 файлов за одно действие',
-                resume: 'Продолжить',
-                send_feedback: 'Отправить отзыв / Сообщить об ошибке',
-                view_translated: 'Смотреть перевод',
-                view_original: 'Смотреть оригинал',
-                analyze_trends: 'Анализ трендов',
-                downloading: 'Скачивание...',
-                translating: 'Перевод...',
-                embedding: 'Встраивание...',
-                analyzing: 'Анализ...',
-                processing: 'Обработка...',
-                process: 'Процесс',
-                files: 'Файлы',
-                prompts: 'Промпты',
-                complete: 'Готово',
-                success: 'Успех',
-                fail: 'Ошибка',
-                saving: 'Сохранение...',
-                preparing: 'Подготовка...',
-                uploading: 'Загрузка...',
-                initializing: 'Инициализация соединения...',
-                processing_files: 'Обработка файлов...',
-                "hero_title": "Бесплатный ИИ-генератор метаданных и ключевых слов для стоковых фото!",
-                hero_tagline: 'Увеличьте видимость на Shutterstock, Adobe Stock и Magnific. Создавайте SEO-оптимизированные заголовки, описания и теги за секунды с помощью ИИ.',
-                why_choose: 'Почему MetaGen Pro?',
-                blog_1: 'Сверхбыстрая пакетная обработка',
-                blog_tag_1: 'Анализируйте и тегируйте сотни изображений за секунды. Сэкономьте часы ручной работы с нашим оптимизированным пакетным движком.',
-                blog_2: 'Продвинутый ИИ анализ',
-                blog_tag_2: 'Работает на Gemini 1.5 Pro, Mistral и Llama 3 для лучшего в отрасли распознавания изображений и точных метаданных.',
-                blog_3: 'SEO-оптимизированные ключевые слова',
-                blog_tag_3: 'Создавайте рейтинговые заголовки и теги, специально адаптированные для алгоритмов Shutterstock, Adobe Stock и Magnific.',
-                blog_4: 'Исследование ниши',
-                blog_tag_4: 'Находите темы с низкой конкуренцией и высоким спросом с помощью нашего встроенного инструмента. Узнайте, что ищут покупатели.',
-                blog_5: 'Перетаскивание порядка ключевых слов',
-                blog_tag_5: 'На стоковых сайтах (Adobe Stock, Shutterstock) первые 5-10 ключевых слов являются самыми важными.',
-                blog_6: 'Встраивание метаданных',
-                blog_tag_6: 'Встраивайте заголовки и теги прямо в ваши файлы JPG/PNG/SVG (IPTC/XMP). Просто скачайте и загрузите в любое агентство.',
-                blog_7: 'Мультиязычность',
-                blog_tag_7: 'Переводите метаданные на 10+ языков мгновенно. Охватите глобальную аудиторию с локализованными заголовками и описаниями.',
-                blog_8: 'Проверка авторских прав',
-                blog_tag_8: 'Избегайте отклонений! Наш ИИ сканирует ваши изображения на наличие потенциальных проблем с товарными знаками и логотипами перед загрузкой.',
-                blog_9: 'Экспорт метаданных CSV',
-                blog_tag_9: 'Функция экспорта CSV для всех стоковых сайтов (Adobe Stock, Shutterstock, Magnific).',
-                trusted_all: 'Нам доверяют на всех основных микростоковых платформах',
-                it_works: 'Как это работает',
-                upload_photos: 'Загрузите фото',
-                upload_photos_tag: 'Перетащите ваши файлы JPG/PNG. Мы автоматически считываем размеры и технические характеристики.',
-                select_platfrom: 'Выберите платформу и ИИ',
-                select_platfrom_tag: 'Выберите целевой рынок (например, Adobe Stock) и предпочтительную модель ИИ (Gemini/Groq).',
-                gen_down: 'Создать и Скачать',
-                gen_down_tag: 'Получите готовые SEO заголовки и теги мгновенно. Скачайте CSV или встройте напрямую.',
-                why_choose_stock_title: 'Почему выбирают MetaGen Pro для стоковой фотографии?',
-                how_to_use_title: 'Как использовать инструмент?',
-                master_stock_title: 'Овладейте стоковой фотографией с метаданными на основе ИИ',
-                trusted_stock_title: 'Доверяют стоковые участники по всей территории США',
-                why_choose_stock_p1: 'В конкурентном мире стоковой фотографии ключевым моментом является обнаруживаемость. Даже лучшие изображения не будут продаваться, если покупатели не смогут их найти. <strong>MetaGen Pro</strong> — это идеальный <em>ИИ-генератор метаданных</em>, созданный для решения этой проблемы.',
-                why_choose_stock_p2: 'В отличие от ручного подбора ключевых слов, который утомителен и чреват ошибками, наш инструмент использует современное компьютерное зрение для анализа объекта, настроения, освещения и композиции вашего изображения. Затем он генерирует более 50 оптимизированных ключевых слов, запоминающиеся заголовки и подробные описания, адаптированные для таких платформ, как <strong>Shutterstock, Adobe Stock, Magnific и Vecteezy</strong>.',
-                why_choose_stock_p3: 'Будь вы фотографом, иллюстратором или ИИ-художником, MetaGen Pro оптимизирует ваш рабочий процесс. Такие функции, как <strong>Изображение в Промпт</strong>, помогают вам анализировать успешные ИИ-изображения, а наш <strong>Прогнозировщик отказов</strong> помогает исправлять технические проблемы перед загрузкой.',
-                why_choose_stock_p4: 'Начните максимизировать свой пассивный доход сегодня с помощью самого продвинутого бесплатного инструмента для тегирования стоковых фотографий.',
-
-                master_stock_subtitle1: 'Как использовать MetaGen Pro',
-                master_stock_p1: 'Начать работу с MetaGen Pro невероятно просто и не требует технических навыков. Сначала загрузите свои изображения, перетащив их в специальную область загрузки, или нажмите, чтобы просмотреть файлы. MetaGen Pro поддерживает все основные форматы изображений, включая JPG, PNG, SVG и EPS, а также видеофайлы. После загрузки изображений выберите целевую платформу (Shutterstock, Adobe Stock, Magnific или General), чтобы оптимизировать метаданные специально для этого маркетплейса.',
-                master_stock_p2: 'Затем настройте свои предпочтения в боковой панели. Вы можете настроить количество ключевых слов (мы рекомендуем 35–50 для оптимального SEO), установить ограничения на длину заголовка и включить специальные функции, такие как векторный режим для иллюстраций или обнаружение белого фона для фотографий товаров. Выбор провайдера ИИ позволяет выбирать между моделями Google Gemini, Mistral AI или Groq Llama в зависимости от доступности вашего API и предпочтений по скорости.',
-                master_stock_p3: 'После настройки нажмите кнопку «Process All», чтобы сгенерировать метаданные для всех загруженных изображений одновременно. Наш продвинутый ИИ анализирует визуальный контент, композицию, цвета, объекты и контекст каждого изображения для создания максимально релевантных заголовков, описаний и наборов ключевых слов. Весь процесс обычно занимает всего несколько секунд на одно изображение, даже при пакетной обработке сотен файлов.',
-                master_stock_subtitle2: 'Преимущества использования этого инструмента',
-                master_stock_benefit1: '<strong>Экономия времени:</strong> Ручной подбор ключевых слов может занимать 10–15 минут на одно изображение. MetaGen Pro сокращает это время до нескольких секунд, позволяя вам снабдить ключевыми словами сотни изображений за то время, которое потребовалось бы для ручной обработки всего нескольких штук. Для профессиональных авторов, загружающих 50–100 изображений в неделю, это означает экономию более 10 часов каждую неделю.',
-                master_stock_benefit2: '<strong>SEO-оптимизация:</strong> Наш ИИ не просто описывает то, что видит, — он понимает поисковые намерения и алгоритмы маркетплейсов. Каждый набор метаданных включает стратегическое сочетание широких ключевых слов (высокий объем поиска), специфических низкочастотных ключевых слов (высокая конверсия) и трендовых терминов (текущий спрос). Встроенный измеритель SEO-показателя оценивает ваши метаданные в реальном времени, гарантируя, что каждая загрузка оптимизирована для максимальной видимости.',
-                master_stock_benefit3: '<strong>Мультиплатформенная поддержка:</strong> У разных стоковых агентств разные требования и предпочтения. MetaGen Pro адаптируется к уникальному алгоритму каждой платформы: Shutterstock предпочитает иную структуру ключевых слов, чем Adobe Stock или Magnific. Наша оптимизация под конкретные платформы гарантирует, что ваши изображения будут занимать высокие позиции в поиске везде, куда бы вы их ни загрузили.',
-                master_stock_benefit4: '<strong>Стабильность и качество:</strong> Исключите человеческий фактор и поддерживайте профессиональные стандарты во всем своем портфолио. MetaGen Pro гарантирует, что каждое изображение имеет правильно отформатированные метаданные, достаточное количество ключевых слов и соответствующие описания. Функция прогнозирования отказов анализирует ваши метаданные на соответствие общим критериям отказа, помогая избежать дорогостоящих неудач при отправке.',
-                master_stock_subtitle3: 'Что такое SEO для изображений и почему это важно',
-                master_stock_seo_p1: 'SEO для изображений (поисковая оптимизация) — это практика оптимизации метаданных изображений для улучшения их видимости в результатах поиска на фотостоках и в поисковых системах. Когда покупатель ищет «деловая встреча» или «закат на тропическом пляже», алгоритм платформы не «видит» ваше изображение — он читает предоставленные вами метаданные. Эффективное SEO для изображений — это разница между тем, появится ли ваша работа на 1-й или на 50-й странице результатов поиска.',
-                master_stock_seo_p2: '<strong>Три столпа SEO для изображений:</strong> Во-первых, <em>Заголовок</em> должен быть описательным, но кратким (10–20 слов), содержать ваши основные ключевые слова и оставаться естественным и читабельным. Во-вторых, <em>Описание</em> дает контекст и варианты использования (30–50 слов), помогая как алгоритмам, так и покупателям понять коммерческое применение вашего изображения. В-третьих, <em>Ключевые слова</em> охватывают широкую сеть (рекомендуется 35–50 терминов), захватывая различные поисковые запросы, которые могут привести покупателей к вашему изображению.',
-                master_stock_seo_p3: '<strong>Стратегия ключевых слов имеет значение:</strong> Наиболее эффективные метаданные используют сбалансированное сочетание: 20–30% ключевых слов из одного слова (широкий охват), 40–50% фраз из двух слов (средняя специфика) и 20–30% низкочастотных ключевых слов (высокая конверсия). Например, изображение рук, использующих смартфон, должно включать слова «руки» (широкий охват), «взаимодействие со смартфоном» (средняя специфика) и «руки, нажимающие на интерфейс мобильного приложения» (низкочастотный запрос). Эта стратегия максимизирует шансы на то, что ваше изображение появится как в широком, так и в специфическом поиске.',
-                master_stock_seo_p4: '<strong>Факторы ранжирования в поиске:</strong> Стоковые платформы учитывают множество факторов при ранжировании результатов поиска. Релевантность (насколько ваши метаданные соответствуют поисковому запросу), полнота (правильное заполнение всех полей метаданных) и разнообразие ключевых слов (использование различных связанных терминов) — все это влияет на ваш рейтинг. Кроме того, коммерческая релевантность — описание того, как покупатели могут использовать ваше изображение, — существенно влияет на уровень конверсии, даже если ваше изображение занимает высокую позицию.',
-                master_stock_seo_p5: 'MetaGen Pro автоматизирует все эти лучшие практики, гарантируя, что каждое загружаемое вами изображение полностью оптимизировано для максимальной видимости, скачиваний и, в конечном счете, дохода. Будь вы любителем или профессиональным стоковым фотографом, правильное SEO для изображений является обязательным условием на сегодняшнем конкурентном рынке.',
-                master_stock_cta: '<strong>Готовы повысить свой успех в стоковой фотографии?</strong> Начните использовать MetaGen Pro сегодня и превратите часы утомительного подбора ключевых слов в секунды автоматизированного превосходства.',
-                trusted_stock_subtitle: 'Узнайте, почему тысячи американских фотографов и создателей контента полагаются на MetaGen Pro для увеличения своих доходов от стоков',
-                review_1_details: '📍 Нью-Йорк, штат Нью-Йорк • Профессиональный фотограф',
-                review_1_text: '"MetaGen Pro полностью изменил мой рабочий процесс! Раньше я часами подбирала ключевые слова к своим фотографиям для Shutterstock. Теперь это занимает считанные минуты, а количество скачиваний выросло на 40%. Функция SEO-показателя просто блестящая!"',
-                review_2_details: '📍 Лос-Анджелес, Калифорния • Создатель контента',
-                review_2_text: '"Для создателя контента на полной ставке время — деньги. Этот инструмент экономит мне как минимум 10 часов в неделю на вводе метаданных. Пакетная обработка молниеносна, а ключевые слова, сгенерированные ИИ, всегда в точку. Лучшая инвестиция, которую я сделал в этом году!"',
-                review_3_details: '📍 Майами, Флорида • Автор стокового контента',
-                review_3_text: '"Сначала я была настроена скептически, но MetaGen Pro превзошел все ожидания. Предложения ключевых слов невероятно актуальны, а многоязычная функция помогла мне выйти на международных покупателей. Мои доходы на Adobe Stock удвоились всего за 3 месяца!"',
-                review_4_details: '📍 Чикаго, Иллинойс • Графический дизайнер',
-                review_4_text: '"Одна только функция проверки авторских прав стоит потраченных денег! Она уже несколько раз спасала меня от возможных отказов. В сочетании с автоматической генерацией метаданных этот инструмент просто необходим каждому, кто серьезно занимается стоковой фотографией."',
-                review_5_details: '📍 Сиэтл, Вашингтон • Фотограф дикой природы',
-                review_5_text: '"Я загружаю сотни фотографий природы каждый месяц. MetaGen Pro позволяет без труда управлять ими и оптимизировать их все. Функция экспорта в CSV идеально вписывается в мой рабочий процесс. Очень рекомендую коллегам!"',
-                review_6_details: '📍 Остин, Техас • Видеограф-фрилансер',
-                review_6_text: '"Настоящий прорыв для метаданных видео! ИИ точно идентифицирует сцены и генерирует идеальные заголовки. Видимость моего видеопортфолио на Shutterstock значительно улучшилась. Команда поддержки также очень отзывчива и полезна."',
-                stat_users: 'Активные пользователи в США',
-                stat_satisfaction: 'Уровень удовлетворенности',
-                stat_images: 'Изображений оптимизируется ежедневно',
-                stat_rating: 'Средний рейтинг',
-                "faq_title": "Часто задаваемые вопросы — MetaGen Pro",
-                "faq_q1": "🚀 С чего начать работу с MetaGen Pro?",
-                "faq_a1": "<strong>Шаг 1:</strong> Войдите через Google или email.<br><strong>Шаг 2:</strong> Вставьте API-ключ Google Gemini в настройках (<a href='https://aistudio.google.com/app/apikey' target='_blank'>Google AI Studio</a>).<br><strong>Шаг 3:</strong> Загрузите фото (JPG, PNG, SVG, EPS) — до 500 файлов сразу!<br><strong>Шаг 4:</strong> Выберите платформу и нажмите 'Generate Metadata'.<br><strong>Шаг 5:</strong> Проверьте, внедрите метаданные и скачайте!",
-                "faq_q2": "💰 Это бесплатно?",
-                "faq_a2": "<p><strong>Бесплатные тарифы для всех!</strong> Metagen Pro предлагает мощный бесплатный тариф (120 изображений в месяц, максимум 25 в день). Однако для интенсивного использования у нас есть тарифы <strong>Pro</strong> (12 долларов в месяц - 2000 изображений в месяц, максимум 70 в день) и <strong>Premium</strong> (29 долларов в месяц - 3000 изображений в месяц, максимум 100 в день). Платные тарифы предлагают расширенные функции, такие как автоматическое встраивание метаданных, экспорт в Excel и прямая загрузка по FTP.</p>",
-                "faq_q3": "🔑 Нужен ли API-ключ?",
-                "faq_a3": "<p><strong>Нет, для всех тарифных планов теперь не требуется ключ API!</strong> Во всех тарифных планах, Free, Pro и Premium, мы обрабатываем метаданные, используя собственные серверы и выделенные модели искусственного интеллекта Supabase Edge Functions (расширенные модели ИИ).</p><p><strong>Безопасность:</strong> Все ваши данные полностью <strong>безопасны</strong> и удаляются с сервера сразу после обработки.</p>",
-                "faq_q4": "📁 Какие форматы поддерживаются?",
-                "faq_a4": "<p>JPG, PNG, SVG и EPS. Загрузка до <strong>500 файлов одновременно</strong>!</p>",
-                "faq_q5": "🎯 Какие фотостоки поддерживаются?",
-                "faq_a5": "<p>Shutterstock, Adobe Stock, Magnific, Vecteezy и др. ИИ адаптирует теги под требования каждой площадки.</p>",
-                "faq_q6": "📊 Что такое SEO Score?",
-                "faq_a6": "<p>Показатель оптимизации для поиска. 🟢 = одно слово, 🟡 = два слова, 🔵 = фразы.</p>",
-                "faq_q7": "⚡ Как работает пакетная обработка?",
-                "faq_a7": "<p>ИИ обрабатывает файлы параллельно. 100 файлов обрабатываются почти так же быстро, как один!</p>",
-                "faq_q8": "🎨 Что такое 'Image to Prompt'?",
-                "faq_a8": "<p>Превращает картинку в текстовое описание для Midjourney или DALL-E.</p>",
-                "faq_q9": "🔒 Мои данные защищены?",
-                "faq_a9": "<p><strong>Полная приватность!</strong> Мы не храним ваши изображения. Все удаляется сразу после обработки.</p>",
-                "faq_q12": "💬 Поддержка",
-                "faq_a12": "<p>Пишите на <strong>metagenp@gmail.com</strong>. Мы отвечаем в течение 12 часов!</p>"
-            },
-
-            fr: {
-                flag: '🇫🇷',
-                name: 'FR',
-                band: 'MetaGen Pro',
-                tagline: 'Métadonnées, propulsées par l\'IA',
-                home: 'Accueil',
-                features: 'Fonctionnalités',
-                start_tour: 'Commencer la visite',
-                faq: 'FAQ',
-                menu: 'MENU',
-                blog: 'Article de Blog',
-                disclaimer: 'Clause de non-responsabilité',
-                about: 'À propos de nous',
-                contact: 'Contactez-nous',
-                legal: 'Mentions légales',
-                select_lang: 'Choisir la langue',
-                general_btn: "Général",
-                save_key: 'Enregistrer les clés',
-                close: 'Fermer',
-                get_key: 'Obtenir une clé',
-                badge: 'Badge',
-                try_metagen: 'Essayer MetaGen Pro',
-                no_api: 'Aucune clé API requise pour votre essai',
-                ref: 'Débloquez une limite quotidienne supplémentaire !',
-                ref_text: 'Partagez MetaGen Pro. Lorsqu\'une personne s\'inscrit en cliquant sur votre lien de parrainage, votre limite de traitement quotidienne augmentera de +50 !',
-                ref_share_btn: 'Partager maintenant',
-                watting_for: 'Qu\'attendez-vous ?',
-                "get_start": "Commencer gratuitement",
-                "drag_and_drop": "Glissez-déposez n'importe où pour télécharger",
-                "fast": "Rapide",
-                "best": "Meilleur",
-                "generate_meta": "Générer les métadonnées",
-                "delete_select": "Supprimer la sélection",
-                "down_select": "Télécharger la sélection",
-                "translate_select": "Traduire la sélection",
-                "done": "Terminé",
-                "processing": "Traitement en cours",
-                "analyzing_market": "Analyse des tendances du marché...",
-                "ai_is_researching": "L'IA recherche des concepts performants pour vous.",
-                "analyzing": "Analyse...",
-                "copy_tag": "Copier les tags",
-                "copy_idea": "Copier l'idée et les infos",
-                "download": "Télécharger",
-                "enter_your_convert_api": "Entrez votre clé Convert API pour activer la conversion des fichiers EPS.",
-                "export_csv": "Exporter en CSV",
-                "export_excel": "Exporter en Excel",
-                "niche_research_cen": "Centre de recherche de niche",
-                "niche_research_tag": "Découvrez des mots-clés et des concepts à forte demande et faible concurrence pour votre portfolio de stock.",
-                "select_category": "Sélectionner une catégorie",
-                "market_focus": "Focus sur le marché",
-                "analyze_trend": "Analyser les tendances",
-                "ready_to_research": "Prêt pour la recherche",
-                "ready_to_research_tag": "Sélectionnez une catégorie ci-dessus et cliquez sur \"Analyser les tendances\" pour découvrir des niches rentables.",
-                "quick_suggest": "Suggestions rapides",
-                "label_title": "Titre",
-                "label_desc": "Description",
-                "label_keywords": "Mots-clés",
-                "btn_copy": "Copier",
-                "btn_add": "Ajouter",
-                "placeholder_add_kw": "Ajouter un mot-clé...",
-                "seo_score": "Score SEO",
-                "rejection": "Rejet",
-                "platform_check": "Vérification de plateforme",
-                "style": "Style",
-                "mode": "Mode",
-                "translate": "Traduire",
-                "go": "Aller",
-                "min_title": "Mots min (Titre)",
-                "max_title": "Mots max (Titre)",
-                "min_keywords": "Mots-clés min",
-                "max_keywords": "Mots-clés max",
-                "min_desc": "Mots min (Description)",
-                "max_desc": "Mots max (Description)",
-                "toggle_silhouette": "Silhouette",
-                "toggle_vector": "Mode Vecteur / Illustration",
-                "toggle_white_bg": "Fond blanc",
-                "toggle_trans_bg": "Fond transparent",
-                "toggle_custom_prompt": "Prompt personnalisé",
-                "toggle_prohibited": "Mots interdits",
-                "toggle_single_kw": "Mots-clés à mot unique",
-                "toggle_change_name": "Changer le nom du fichier",
-                "toggle_name_title": "Nom du fichier comme titre",
-                "feedback_matters": "Votre avis compte",
-                "provide_feedback": "Veuillez donner votre avis sur l'outil",
-                "issue_type": "Type de problème",
-                "general_feedback": "Avis général",
-                "bug_report": "Rapport de bug",
-                "feature_request": "Demande de fonctionnalité",
-                "your_mess": "Votre message",
-                "send_feed": "Envoyer l'avis",
-                "trial_credits": "Crédits d'essai",
-                "trial_footer": "Les 10 premières images sont offertes ! Ajoutez votre clé API pour un usage illimité.",
-                eps_meta: 'Génération et intégration de métadonnées EPS',
-                month: '/ mois',
-                pricing: 'Tarification',
-                ftp_upload: 'Téléchargement direct FTP',
-                ftp_upload_sub_txt: 'Téléchargez des fichiers directement sur les sites de stock (Adobe Stock, Shutterstock, Magnific).',
-                upgrade_plan: 'Améliorer le plan',
-                stock_calendar: 'Calendrier de Stock',
-                get_access: 'Obtenir l\'accès',
-                pricing_plan: 'Nos tarifs',
-                pricing_sub_txt: 'Choisissez le plan parfait pour votre flux de travail créatif.',
-                free_plan: 'Plan Gratuit',
-                free_price: '0 $/mois',
-                most_popular: 'Le plus populaire',
-                pro_plan: 'Passer au Pro',
-                pro_price: '12 $/mois',
-                premium_plan: 'Plan Premium',
-                premium_price: '29 $/mois',
-                '50_image': '120 images par mois (Max 10/jour) + (Partage 50)',
-                basic_ai_model: 'Modèles IA de base (Gemini, Mistral, Groq). Utilisez votre propre clé API.',
-                batch_process: 'Traitement par lot : jusqu\'à 50 fichiers',
-                csv_export: 'Export CSV',
-                ads_support: 'Supporté par la publicité',
-                auto_embed: 'Intégration automatique des métadonnées',
-                excel_export: 'Export Excel',
-                drag_keyword: 'Réorganisation des mots-clés par glisser-déposer',
-                copy_trade_check: 'Vérification Copyright/Marque déposée',
-                get_started_free: 'Commencer gratuitement',
-                '300_images': '2000 images par mois',
-                advance_ai: 'Modèles IA avancés (Clé API non requise.)',
-                batch_process_pro: 'Traitement par lot : jusqu\'à 100 fichiers',
-                csv_excel_ex: 'Export CSV/Excel',
-                seo_and_no_ads: 'Analyses SEO & Sans publicité',
-                support_time: 'Support 24h/24',
-                '1k_image': '3000 images par mois',
-                all_pro: 'Toutes les fonctionnalités Pro',
-                batch_process_pre: 'Traitement par lot : jusqu\'à 300 fichiers',
-                ftp_auto_up: 'Téléchargement auto FTP/SFTP',
-                vector_eps: 'Conversion directe Vecteur/EPS',
-                vip_support: 'Support VIP & Accès anticipé',
-                privacy_policy: 'Politique de confidentialité',
-                terms_of_service: 'Conditions d\'utilisation',
-                adjustment: 'Ajustement',
-                multi_tool: 'Outils Multi-Images',
-                sketch_art: 'Image en Sketch Art',
-                all_tools: 'Tous les outils',
-                image_enhance: 'Amélioration d\'image IA',
-                bg_remove: 'Suppression de fond IA',
-                pixel_check: 'Pixel-Check Studio',
-                text_to_image: 'Générateur de texte en image',
-                company: 'Entreprise',
-
-                platform: 'Plateforme',
-                add_more: 'Ajouter plus de fichiers',
-                well_come: 'Bon retour',
-                login_google: 'Continuer avec Google',
-                new_user: 'Nouvel utilisateur ?',
-                create_account: 'Créer un compte',
-                niche_research: 'Recherche de niche',
-                metadata_generator: 'Générateur de métadonnées',
-                sign_out: 'Se déconnecter',
-                switch_account: 'Changer de compte',
-                upload_title: 'Télécharger images ou vidéos',
-                drag_drop: 'Glissez-déposez ici ou cliquez pour télécharger',
-                supports: 'Supporte JPG, PNG, WEBP, MP4, MOV',
-                max_size: 'Max 50 Mo par fichier',
-                privacy_note: 'Vos fichiers sont traités en toute sécurité et supprimés après 1 heure.',
-                privacy_note_device: 'Nous analysons les fichiers uniquement sur l\'appareil, les données sont purgées après traitement.',
-                upload_limit_info: 'Plan : {{plan}} | Limite : {{limit}} fichiers/jour',
-                usage: 'Utilisation :',
-                "daily_limit": "Limite quotidienne de traitement",
-                refer_text: 'Partagez MetaGen Pro pour obtenir +50 de limite quotidienne supplémentaire !',
-                "share_get_credit": "Partager et obtenir des crédits de traitement",
-                generate_metadata: 'Générer les métadonnées',
-                "limit_reached_msg": "Vous avez atteint votre limite quotidienne ! Améliorez votre plan pour des limites plus élevées ou partagez l'outil pour un bonus.",
-                export_csv: 'Exporter en CSV',
-                export_excel: 'Exporter en Excel',
-                clear_all: 'Tout effacer',
-                copy_all: 'Tout copier',
-                down_eps: 'Télécharger EPS',
-                guides: 'Guides',
-                title: 'Titre',
-                description: 'Description',
-                keywords: 'Mots-clés',
-                categories: 'Catégories',
-                already_user: 'Déjà un compte ?',
-                login: 'Connexion',
-                tools_generator: 'Outils & Générateur',
-                trending: '📅 Tendances...',
-                customization: 'Personnalisation',
-                settings: 'Paramètres',
-                select_ai: 'Choisir le fournisseur IA',
-                manage_api: 'Gérer les clés API',
-                convert_api: 'Clé ConvertAPI',
-                translation_lang: 'Langue de traduction',
-                upload_files: 'Télécharger des fichiers',
-                watch_demo: 'Voir la démo',
-                watch_tagline: 'Voyez comment booster vos ventes de stock en quelques secondes',
-                process_selected: 'Traiter la sélection',
-                process_prompts: 'Traiter les prompts',
-                embed_metadata: 'Incruster les métadonnées',
-                export: 'Exporter',
-                batch_translate: 'Traduction groupée (Gratuit)',
-                translate_all: 'Tout traduire (Pro)',
-                test_metadata: 'Tester les métadonnées',
-                save_folder: 'Enregistrer dans le dossier',
-                upload_complete: 'Téléchargement terminé',
-                share_files: 'Partager des fichiers',
-                upload_drive: 'Télécharger sur Drive',
-                pause: 'Pause',
-                image_to_prompt: 'Image en Prompt',
-                jpg_png: 'JPG/PNG',
-                svg_eps: 'SVG/EPS/AI',
-                videos: 'Vidéos',
-                check_copyright: 'Vérifier Copyright/Marque déposée :',
-                upload_limit: 'Téléchargez un maximum de 500 fichiers en une seule action',
-                resume: 'Reprendre',
-                send_feedback: 'Envoyer avis / Signaler bug',
-                view_translated: 'Voir la version traduite',
-                view_original: 'Voir l\'original',
-                analyze_trends: 'Analyser les tendances',
-                downloading: 'Téléchargement...',
-                translating: 'Traduction...',
-                embedding: 'Incrustation...',
-                processing: 'Traitement...',
-                process: 'Traiter',
-                files: 'Fichiers',
-                prompts: 'Prompts',
-                complete: 'Terminé',
-                success: 'Succès',
-                fail: 'Échec',
-                saving: 'Enregistrement...',
-                preparing: 'Préparation...',
-                uploading: 'Téléchargement...',
-                initializing: 'Initialisation de la connexion...',
-                "faq_q1": "Comment utiliser MetaGen Pro ?",
-                "faq_a1": "Téléchargez vos photos/vidéos de stock -> Sélectionnez le modèle IA -> Cliquez sur 'Générer les métadonnées' -> Vérifiez et téléchargez !",
-                "faq_q2": "MetaGen Pro est-il gratuit ? Quels sont les prix ?",
-                "faq_a2": "<p><strong>Gratuit pour tout le monde !</strong> MetaGen Pro propose un plan gratuit robuste (120 images/mois (Max 25/jour)). Pour les gros utilisateurs, nous avons les plans <strong>Pro</strong> (12 $/mois - 2120 images/mois (Max 25/jour)) et <strong>Premium</strong> (29 $/mois - 3000 images/mois (Max 100/jour)) avec des fonctionnalités avancées comme l'export Excel et le téléchargement FTP direct.</p>",
-                "faq_q3": "Mes données sont-elles en sécurité ?",
-                "faq_a3": "Oui, nous traitons toutes les données sur l'appareil ou via des terminaux IA sécurisés et les supprimons immédiatement après usage.",
-                "faq_q4": "Quels formats sont supportés ?",
-                "faq_a4": "Actuellement, nous supportons JPG, PNG, WEBP, MP4, MOV. Le support pour SVG et EPS est disponible via ConvertAPI.",
-                "faq_q5": "Puis-je améliorer mon plan ?",
-                "faq_a5": "Oui ! Vous pouvez passer à un plan supérieur à tout moment depuis la section Tarification. Contactez-nous à metagenp@gmail.com pour les détails de facturation en accès anticipé.",
-                "faq_q6": "Comment obtenir plus de limites quotidiennes ?",
-                "faq_a6": "Vous pouvez obtenir +50 limites quotidiennes supplémentaires en parrainant vos amis ! Trouvez votre lien de parrainage dans le profil.",
-                "hero_title": "Générateur de métadonnées IA gratuit et mots-clés pour photos de stock !",
-                hero_tagline: 'Boostez votre visibilité sur Shutterstock, Adobe Stock et Magnific. Générez des titres, descriptions et mots-clés optimisés pour le SEO en quelques secondes grâce à l\'IA avancée.',
-                why_choose: 'Pourquoi choisir MetaGen Pro ?',
-                blog_1: 'Traitement par lot ultra-rapide',
-                blog_tag_1: 'Analysez et indexez des centaines d\'images en quelques secondes. Économisez des heures de travail manuel grâce à notre moteur de traitement par lot optimisé.',
-                blog_2: 'Analyse IA avancée',
-                blog_tag_2: 'Propulsé par Gemini 1.5 Pro, Mistral et Llama 3 pour une reconnaissance d\'image leader du secteur et des métadonnées précises.',
-                blog_3: 'Mots-clés optimisés SEO',
-                blog_tag_3: 'Générez des titres et des tags à haut classement, spécifiquement adaptés aux algorithmes de Shutterstock, Adobe Stock et Magnific.',
-                blog_4: 'Recherche de niche',
-                blog_tag_4: 'Découvrez des sujets à faible concurrence et à forte demande avec notre outil intégré de recherche de niche. Trouvez ce que les acheteurs recherchent.',
-                blog_5: 'Réorganisation des mots-clés par glisser-déposer',
-                blog_tag_5: 'Sur les sites de stock (Adobe Stock, Shutterstock), les 5 à 10 premiers mots-clés sont les plus importants. Gérez-les facilement.',
-                blog_6: 'Incrustation de métadonnées',
-                blog_tag_6: 'Incrustez des titres et des mots-clés directement dans vos fichiers JPG/PNG/SVG (IPTC/XMP). Téléchargez simplement et envoyez-les à n\'importe quelle agence.',
-                blog_7: 'Multi-langue',
-                blog_tag_7: 'Traduisez vos métadonnées en plus de 10 langues instantanément. Atteignez un public mondial avec des titres et descriptions localisés.',
-                blog_8: 'Vérification du Copyright',
-                blog_tag_8: 'Évitez les rejets ! Notre IA scanne les problèmes potentiels de marque déposée et les logos dans vos images avant de les télécharger.',
-                blog_9: 'Exportation CSV des métadonnées',
-                blog_tag_9: 'Facilité d\'exportation de fichiers CSV pour tous les sites de stock (Adobe Stock, Shutterstock, Magnific).',
-                trusted_all: 'Approuvé pour toutes les principales plateformes de Microstock',
-                it_works: 'Comment ça marche',
-                upload_photos: 'Télécharger les photos',
-                upload_photos_tag: 'Glissez-déposez vos fichiers JPG/PNG. Nous lisons automatiquement les dimensions et les spécifications techniques.',
-                select_platfrom: 'Sélectionner la plateforme et l\'IA',
-                select_platfrom_tag: 'Choisissez votre marché cible (ex. Adobe Stock) et votre modèle IA préféré (Gemini/Groq).',
-                gen_down: 'Générer et télécharger',
-                gen_down_tag: 'Obtenez instantanément des titres et mots-clés prêts pour le SEO. Téléchargez le CSV ou incrustez-les directement.',
-                processing_files: 'Traitement des fichiers...',
-                why_choose_stock_title: 'Pourquoi choisir MetaGen Pro pour la photographie de stock ?',
-                how_to_use_title: 'Comment utiliser l\'outil ?',
-                master_stock_title: 'Maîtrisez votre photographie de stock avec des métadonnées propulsées par l\'IA',
-                trusted_stock_title: 'Approuvé par les contributeurs de stock à travers le monde',
-                why_choose_stock_p1: 'Dans le monde compétitif de la photographie de stock, la découvrabilité est la clé. Même les meilleures images ne se vendront pas si les acheteurs ne peuvent pas les trouver. <strong>MetaGen Pro</strong> est le <em>Générateur de métadonnées IA</em> ultime conçu pour résoudre ce problème.',
-                why_choose_stock_p2: 'Contrairement à l\'indexation manuelle qui est fastidieuse et sujette aux erreurs, notre outil utilise une vision par ordinateur de pointe pour analyser le sujet, l\'ambiance, l\'éclairage et la composition de votre image. Il génère ensuite plus de 50 mots-clés optimisés, des titres accrocheurs et des descriptions détaillées adaptées à des plateformes comme <strong>Shutterstock, Adobe Stock, Magnific et Vecteezy</strong>.',
-                why_choose_stock_p3: 'Que vous soyez photographe, illustrateur ou artiste IA, MetaGen Pro simplifie votre flux de travail. Des fonctionnalités comme <strong>Image-to-Prompt</strong> vous aident à rétro-concevoir des images IA réussies, tandis que notre <strong>Prédicteur de rejet</strong> vous aide à corriger les problèmes techniques avant le téléchargement.',
-                why_choose_stock_p4: 'Commencez à maximiser votre revenu passif dès aujourd\'hui avec l\'étiqueteur de photos de stock gratuit le plus avancé disponible.',
-                "plan_details_title": "Quel plan vous convient le mieux ?",
-                "plan_details_free": "Plan Gratuit - Idéal pour les débutants",
-                "plan_details_free_p1": "Notre plan gratuit est conçu pour les amateurs et les nouveaux contributeurs de stock. Il vous permet de traiter jusqu'à <strong>120 images par mois (Max 25/jour)</strong>. Pour garder le service complètement gratuit, Vous avez accès à nos fonctionnalités de base, y compris le traitement par lot ultra-rapide (jusqu'à 50 fichiers à la fois), la génération de métadonnées par IA et l'exportation CSV. Notez que les fonctionnalités avancées comme l'incrustation automatique, l'exportation Excel et les vérifications de copyright ne sont pas incluses dans ce plan.",
-                "plan_details_pro": "Plan Pro - Pour les professionnels",
-                "plan_details_pro_p1": "Le plan Pro est conçu pour les contributeurs réguliers qui souhaitent maximiser leur flux de travail et gagner des heures. Avec une limite généreuse de <strong>2000 images par mois (Max 70/jour)</strong>, vous n'avez plus besoin d'apporter vos propres clés API — nous gérons toutes les requêtes IA de manière sécurisée. Ce plan débloque des outils puissants comme l'<strong>Incrustation automatique des métadonnées</strong> directement dans vos fichiers JPEG/PNG/SVG, la réorganisation des mots-clés par glisser-déposer, la vérification IA du copyright/marque déposée et l'exportation Excel. Il augmente également votre limite de traitement par lot à 100 fichiers à la fois et offre une expérience sans publicité.",
-                "plan_details_premium": "Plan Premium - Pour les utilisateurs intensifs et les agences",
-                "plan_details_premium_p1": "Conçu pour les créateurs à gros volume, les artistes vectoriels et les agences, le plan Premium offre une limite massive de <strong>3000 images par mois (Max 100/jour)</strong> et une limite de lot de 300 fichiers. Il comprend tout ce qui se trouve dans le plan Pro, plus des fonctionnalités d'automatisation avancées. Vous obtenez un accès exclusif à la <strong>conversion directe Vecteur/EPS</strong> (pas besoin de clés ConvertAPI tierces) et à la fonction de <strong>Téléchargement auto FTP/SFTP</strong>. Cela vous permet de distribuer automatiquement vos fichiers traités et vos métadonnées directement vers plusieurs agences de stock (Shutterstock, Adobe Stock, Magnific, etc.) directement depuis votre navigateur.",
-                "htu_step1_title": "1. Télécharger les fichiers",
-                "htu_step1_desc": "Glissez-déposez des images (JPG/PNG), des vecteurs (SVG/EPS) ou des vidéos pour commencer.",
-                "htu_step2_title": "2. Plateforme cible",
-                "htu_step2_desc": "Sélectionnez Shutterstock, Adobe Stock ou Magnific pour des résultats optimisés.",
-                "htu_step3_title": "3. Sélection du modèle IA",
-                "htu_step3_desc": "Choisissez entre Gemini, Mistral ou Groq pour l'analyse d'image.",
-                "htu_step4_title": "4. Personnalisation",
-                "htu_step4_desc": "Ajustez le nombre min/max de mots pour les titres et les mots-clés à l'aide des curseurs.",
-                "htu_step5_title": "5. Paramètres IA",
-                "htu_step5_desc": "Activez le mode vecteur, le fond blanc ou utilisez vos propres prompts personnalisés.",
-                "htu_step6_title": "6. Générer les métadonnées",
-                "htu_step6_desc": "Cliquez sur 'Traiter la sélection' pour obtenir instantanément des titres et des tags prêts pour le SEO.",
-                "htu_step7_title": "7. Incruster les métadonnées",
-                "htu_step7_desc": "Écrivez directement les métadonnées dans vos fichiers JPG, PNG ou SVG.",
-                "htu_step8_title": "8. Multi-traduction",
-                "htu_step8_desc": "Traduisez les métadonnées en plus de 10 langues pour un marché mondial.",
-                "htu_step9_title": "9. Exporter les résultats",
-                "htu_step9_desc": "Téléchargez toutes vos métadonnées sous forme de CSV ou de feuilles Excel professionnelles.",
-                "htu_step10_title": "10. Enregistrer et Drive",
-                "htu_step10_desc": "Enregistrez dans un dossier local, partagez via un lien ou téléchargez directement sur Drive.",
-                master_stock_subtitle1: 'Comment utiliser MetaGen Pro',
-                master_stock_p1: 'Commencer avec MetaGen Pro est incroyablement simple et ne nécessite aucune expertise technique. Tout d\'abord, téléchargez vos images en les faisant glisser dans la zone de téléchargement désignée, ou cliquez pour parcourir vos fichiers. MetaGen Pro supporte tous les formats d\'image majeurs, y compris JPG, PNG, SVG et EPS, ainsi que les fichiers vidéo. Une fois vos images téléchargées, sélectionnez votre plateforme cible (Shutterstock, Adobe Stock, Magnific ou Général) pour optimiser les métadonnées spécifiquement pour ce marché.',
-                master_stock_p2: 'Ensuite, configurez vos préférences en utilisant les paramètres de la barre latérale. Vous pouvez ajuster le nombre de mots-clés (nous recommandons 35-50 pour un SEO optimal), définir des contraintes de longueur de titre et activer des fonctionnalités spéciales comme le Mode Vecteur pour les illustrations ou la détection de Fond Blanc pour les images de produits. La sélection du fournisseur IA vous permet de choisir entre les modèles Google Gemini, Mistral AI ou Groq Llama en fonction de la disponibilité de votre API et de vos préférences de vitesse.',
-                master_stock_p3: 'Après la configuration, cliquez sur le bouton "Traiter tout" pour générer les métadonnées de toutes les images téléchargées simultanément. Notre IA avancée analyse le contenu visuel de chaque image, sa composition, ses couleurs, ses sujets et son contexte pour créer des titres, des descriptions et des ensembles de mots-clés hautement pertinents. L\'ensemble du processus ne prend généralement que quelques secondes par image, même lors du traitement de centaines de fichiers en mode batch.',
-                master_stock_subtitle2: 'Avantages de l\'utilisation de cet outil',
-                master_stock_benefit1: '<strong>Efficacité temporelle :</strong> L\'indexation manuelle peut prendre 10 à 15 minutes par image. MetaGen Pro réduit cela à quelques secondes, vous permettant d\'indexer des centaines d\'images dans le temps qu\'il faudrait pour n\'en traiter que quelques-unes manuellement. Pour les contributeurs professionnels téléchargeant 50 à 100 images par semaine, cela se traduit par une économie de plus de 10 heures chaque semaine.',
-                master_stock_benefit2: '<strong>Optimisation SEO :</strong> Notre IA ne se contente pas de décrire ce qu\'elle voit — elle comprend l\'intention de recherche et les algorithmes du marché. Chaque ensemble de métadonnées comprend un mélange stratégique de mots-clés larges (gros volume de recherche), de mots-clés spécifiques de longue traîne (conversion élevée) et de termes tendance (demande actuelle). Le score SEO intégré évalue vos métadonnées en temps réel.',
-                master_stock_benefit3: '<strong>Support Multi-Plateforme :</strong> Différentes agences de stock ont des exigences différentes. MetaGen Pro s\'adapte à l\'algorithme unique de chaque plateforme — Shutterstock préfère des structures de mots-clés différentes de celles d\'Adobe Stock ou de Magnific. Notre optimisation spécifique à la plateforme garantit que vos images sont bien classées partout où vous les téléchargez.',
-                master_stock_benefit4: '<strong>Cohérence et Qualité :</strong> Éliminez l\'erreur humaine et maintenez des normes professionnelles sur l\'ensemble de votre portfolio. MetaGen Pro garantit que chaque image a des métadonnées correctement formatées, une quantité de mots-clés adéquate et des descriptions appropriées. La fonction de prédicteur de rejet analyse vos métadonnées par rapport aux critères de rejet courants.',
-                master_stock_subtitle3: 'Qu\'est-ce que le SEO d\'image et pourquoi c\'est important',
-                master_stock_seo_p1: 'Le SEO d\'image (Search Engine Optimization) est la pratique consistant à optimiser les métadonnées d\'une image pour améliorer sa visibilité dans les résultats de recherche. Lorsqu\'un acheteur recherche "réunion d\'affaires" ou "coucher de soleil sur une plage tropicale", l\'algorithme de la plateforme ne "voit" pas votre image — il lit les métadonnées que vous avez fournies. Un SEO d\'image efficace est la différence entre apparaître en page 1 ou en page 50.',
-                master_stock_seo_p2: '<strong>Les trois piliers du SEO d\'image :</strong> Premièrement, le <em>Titre</em> doit être descriptif mais concis (10-20 mots). Deuxièmement, la <em>Description</em> fournit le contexte et les cas d\'utilisation (30-50 mots). Troisièmement, les <em>Mots-clés</em> jettent un large filet (35-50 termes recommandés), capturant diverses requêtes de recherche.',
-                master_stock_seo_p3: '<strong>La stratégie de mots-clés compte :</strong> Les métadonnées les plus efficaces utilisent un mélange équilibré : 20-30% de mots-clés à mot unique (portée large), 40-50% de phrases de deux mots (spécificité moyenne) et 20-30% de mots-clés de longue traîne (conversion élevée). Cette stratégie maximise vos chances d\'apparaître dans les recherches larges et spécifiques.',
-                master_stock_seo_p4: '<strong>Facteurs de classement de recherche :</strong> Les plateformes de stock considèrent plusieurs facteurs : la pertinence, la complétude des champs et la diversité des mots-clés. De plus, la pertinence commerciale — décrire comment les acheteurs peuvent utiliser votre image — impacte considérablement les taux de conversion.',
-                master_stock_seo_p5: 'MetaGen Pro automatise toutes ces meilleures pratiques, garantissant que chaque image que vous téléchargez est entièrement optimisée pour une visibilité, des téléchargements et, en fin de compte, des revenus maximums.',
-                master_stock_cta: '<strong>Prêt à booster votre succès en photographie de stock ?</strong> Commencez à utiliser MetaGen Pro dès aujourd\'hui.',
-                trusted_stock_subtitle: 'Découvrez pourquoi des milliers de photographes et créateurs font confiance à MetaGen Pro pour booster leurs revenus de stock',
-                review_1_details: '📍 New York, NY • Photographe Professionnel',
-                review_1_text: '"MetaGen Pro a complètement transformé mon flux de travail ! Je passais des heures à indexer mes photos pour Shutterstock. Maintenant, cela ne prend que quelques minutes et mes téléchargements ont augmenté de 40%. La fonction de score SEO est géniale !"',
-                review_2_details: '📍 Los Angeles, CA • Créateur de Contenu',
-                review_2_text: '"En tant que créateur de contenu à plein temps, le temps c\'est de l\'argent. Cet outil me fait gagner au moins 10 heures par semaine sur la saisie des métadonnées. Le traitement par lot est ultra-rapide et les mots-clés générés par l\'IA sont parfaits !"',
-                review_3_details: '📍 Miami, FL • Contributeur Stock',
-                review_3_text: '"J\'étais sceptique au début, mais MetaGen Pro a dépassé toutes mes attentes. Les suggestions de mots-clés sont incroyablement pertinentes et la fonction multi-langue m\'a aidé à atteindre des acheteurs internationaux. Mes revenus sur Adobe Stock ont doublé en 3 mois !"',
-                review_4_details: '📍 Chicago, IL • Designer Graphique',
-                review_4_text: '"La fonction de vérification du copyright vaut à elle seule le prix ! Elle m\'a sauvé de rejets potentiels à plusieurs reprises. Combiné à la génération automatique de métadonnées, cet outil est indispensable pour quiconque est sérieux au sujet du stock."',
-                review_5_details: '📍 Seattle, WA • Photographe de Nature',
-                review_5_text: '"Je télécharge des centaines de photos de nature chaque mois. MetaGen Pro facilite la gestion et l\'optimisation de toutes ces photos. L\'export CSV s\'intègre parfaitement à mon flux de travail. Je le recommande vivement !"',
-                review_6_details: '📍 Austin, TX • Vidéaste Freelance',
-                review_6_text: '"Un changement radical pour les métadonnées vidéo ! L\'IA identifie avec précision les scènes et génère des titres parfaits. La visibilité de mon portfolio vidéo sur Shutterstock s\'est considérablement améliorée. L\'équipe de support est également très réactive."',
-                stat_users: 'Utilisateurs actifs aux USA',
-                stat_satisfaction: 'Taux de satisfaction',
-                stat_images: 'Images optimisées quotidiennement',
-                stat_rating: 'Note moyenne',
-                "faq_title": "FAQ — MetaGen Pro",
-                "faq_q1": "🚀 Comment démarrer avec MetaGen Pro ?",
-                "faq_a1": "<strong>Étape 1 :</strong> Inscrivez-vous ou connectez-vous avec Google.<br><strong>Étape 2 :</strong> Configurez votre clé API Google Gemini dans les Paramètres.<br><strong>Étape 3 :</strong> Téléchargez vos images (JPG, PNG, SVG, EPS).<br><strong>Étape 4 :</strong> Sélectionnez la plateforme et cliquez sur 'Générer les métadonnées'.<br><strong>Étape 5 :</strong> Vérifiez et téléchargez !",
-                "faq_q2": "💰 MetaGen Pro est-il gratuit ? Quels sont les tarifs ?",
-                "faq_a2": "<p><strong>Un plan gratuit pour tous !</strong> MetaGen Pro propose un plan gratuit performant (120 images/mois, maximum 25 par jour). Cependant, pour une utilisation intensive, nous proposons les plans <strong>Pro</strong> (12 $/mois - 2 000 images/mois, max 70 par jour) et <strong>Premium</strong> (29 $/mois - 3 000 images/mois, max 100 par jour). Les plans payants incluent des fonctionnalités avancées telles que l'auto-intégration des métadonnées, l'exportation Excel et le téléchargement direct par FTP.</p>",
-                "faq_q3": "🔑 Ai-je besoin d'une clé API pour utiliser MetaGen Pro ?",
-                "faq_a3": "<p><strong>Non, aucune clé API n'est requise pour aucun de nos plans !</strong> Pour tous les plans (Free, Pro et Premium), nous traitons les métadonnées à l'aide de nos propres serveurs et des Supabase Edge Functions avec des modèles d'IA dédiés (modèles d'IA avancés).</p><p><strong>Sécurité :</strong> Toutes vos données sont totalement <strong>sécurisées</strong> et sont immédiatement supprimées du serveur une fois le traitement terminé.</p>",
-                "faq_q4": "📁 Quels formats de fichiers sont supportés ?",
-                "faq_a4": "JPG/JPEG, PNG, WEBP, MP4, MOV et SVG. L'EPS est supporté via ConvertAPI. Téléchargez jusqu'à 500 fichiers à la fois !",
-                "faq_q9": "🔒 Mes données sont-elles privées ?",
-                "faq_a9": "<p><strong>100% Privé !</strong> Le traitement se fait dans votre navigateur. Nous ne stockons JAMAIS vos images. Les données sont purgées après traitement.</p>",
-                "faq_q12": "💬 Comment obtenir de l'aide ?",
-                "faq_a12": "<p>Envoyez-nous un email à <strong>metagenp@gmail.com</strong> ou utilisez le bouton Feedback. Nous répondons sous 12 heures !</p>"
-
-            },
-
-            ja: {
-                flag: '🇯🇵',
-                name: 'JP',
-                band: 'MetaGen Pro',
-                tagline: 'AIによるメタデータ生成',
-                home: 'ホーム',
-                features: '機能',
-                start_tour: 'ツアーを開始',
-                faq: 'よくある質問',
-                menu: 'メニュー',
-                blog: 'ブログ記事',
-                disclaimer: '免責事項',
-                about: '私たちについて',
-                contact: 'お問い合わせ',
-                legal: '法的情報',
-                select_lang: '言語を選択',
-                general_btn: "一般",
-                save_key: 'キーを保存',
-                close: '閉じる',
-                get_key: 'キーを取得',
-                badge: 'バッジ',
-                try_metagen: 'MetaGen Proを試す',
-                no_api: 'トライアルにAPIキーは不要です',
-                ref: '毎日の制限を解除！',
-                ref_text: 'MetaGen Proを共有しましょう。紹介リンクから誰かが参加すると、1日の処理制限が+50増加します！',
-                ref_share_btn: '今すぐ共有',
-                watting_for: '何を待っていますか？',
-                "get_start": "無料で始める",
-                "drag_and_drop": "どこにでもドラッグ＆ドロップしてアップロード",
-                "fast": "高速",
-                "best": "最高",
-                "generate_meta": "メタデータを生成",
-                "delete_select": "選択項目を削除",
-                "down_select": "選択項目をダウンロード",
-                "translate_select": "選択項目を翻訳",
-                "done": "完了",
-                "processing": "処理中",
-                "analyzing_market": "市場トレンドを分析中...",
-                "ai_is_researching": "AIがパフォーマンスの高いコンセプトをリサーチしています。",
-                "analyzing": "分析中...",
-                "copy_tag": "タグをコピー",
-                "copy_idea": "アイデアと情報をコピー",
-                "download": "ダウンロード",
-                "enter_your_convert_api": "EPSファイルの変換を有効にするには、Convert APIキーを入力してください。",
-                "export_csv": "CSV書き出し",
-                "export_excel": "Excel書き出し",
-                "niche_research_cen": "ニッチリサーチセンター",
-                "niche_research_tag": "ストックポートフォリオ向けに、需要が高く競争の少ないキーワードやコンセプトを見つけましょう。",
-                "select_category": "カテゴリを選択",
-                "market_focus": "市場フォーカス",
-                "analyze_trend": "トレンドを分析",
-                "ready_to_research": "リサーチの準備完了",
-                "ready_to_research_tag": "上記のカテゴリを選択し、「トレンドを分析」をクリックして収益性の高いニッチを見つけてください。",
-                "quick_suggest": "クイック提案",
-                "label_title": "タイトル",
-                "label_desc": "説明",
-                "label_keywords": "キーワード",
-                "btn_copy": "コピー",
-                "btn_add": "追加",
-                "placeholder_add_kw": "キーワードを追加...",
-                "seo_score": "SEOスコア",
-                "rejection": "却下理由",
-                "platform_check": "プラットフォームチェック",
-                "style": "スタイル",
-                "mode": "モード",
-                "translate": "翻訳",
-                "go": "実行",
-                "min_title": "最小タイトル単語数",
-                "max_title": "最大タイトル単語数",
-                "min_keywords": "最小キーワード数",
-                "max_keywords": "最大キーワード数",
-                "min_desc": "最小説明単語数",
-                "max_desc": "最大説明単語数",
-                "toggle_silhouette": "シルエット",
-                "toggle_vector": "ベクター / イラストモード",
-                "toggle_white_bg": "白背景",
-                "toggle_trans_bg": "透明背景",
-                "toggle_custom_prompt": "カスタムプロンプト",
-                "toggle_prohibited": "禁止用語",
-                "toggle_single_kw": "単一単語キーワード",
-                "toggle_change_name": "ファイル名を変更",
-                "toggle_name_title": "ファイル名をタイトルにする",
-                "feedback_matters": "フィードバックをお願いします",
-                "provide_feedback": "ツールについてのフィードバックをお寄せください。",
-                "issue_type": "問題の種類",
-                "general_feedback": "一般的なフィードバック",
-                "bug_report": "バグ報告",
-                "feature_request": "機能リクエスト",
-                "your_mess": "メッセージ",
-                "send_feed": "フィードバックを送信",
-                "trial_credits": "トライアルクレジット",
-                "trial_footer": "最初の10枚は無料です！無制限に利用するにはAPIキーを追加してください。",
-                eps_meta: 'EPSメタデータ生成と埋め込み',
-                month: '/ 月',
-                pricing: '料金',
-                ftp_upload: 'FTP直接アップロード',
-                ftp_upload_sub_txt: 'ストックサイト（Adobe Stock, Shutterstock, Magnific）へファイルを直接アップロードします。',
-                upgrade_plan: 'プランをアップグレード',
-                stock_calendar: 'ストックカレンダー',
-                get_access: 'アクセス権を取得',
-                pricing_plan: '料金プラン',
-                pricing_sub_txt: 'あなたのクリエイティブなワークフローに最適なプランをお選びください。',
-                free_plan: '無料プラン',
-                free_price: '$0/月',
-                most_popular: '一番人気',
-                pro_plan: 'Proへアップグレード',
-                pro_price: '$12/月',
-                premium_plan: 'プレミアムプラン',
-                premium_price: '$29/月',
-                '50_image': '月120枚まで（フェアユースの範囲内であれば1日最大25枚まで）',
-                basic_ai_model: '基本AIモデル（Gemini, Mistral, Groq）ご自身のAPIキーを使用。',
-                batch_process: '一括処理：最大50ファイル',
-                csv_export: 'CSV書き出し',
-                ads_support: '広告あり',
-                auto_embed: 'メタデータの自動埋め込み',
-                excel_export: 'Excel書き出し',
-                drag_keyword: 'ドラッグ＆ドロップによるキーワードの並べ替え',
-                copy_trade_check: '著作権/商標チェック',
-                get_started_free: '無料で始める',
-                '300_images': '月間2000枚の画像',
-                advance_ai: '高度なAIモデル（APIキー不要）',
-                batch_process_pro: '一括処理：最大100ファイル',
-                csv_excel_ex: 'CSV/Excel書き出し',
-                seo_and_no_ads: 'SEO分析＆広告なし',
-                support_time: '24時間サポート',
-                '1k_image': '月間3000枚の画像',
-                all_pro: 'すべてのPro機能',
-                batch_process_pre: '一括処理：最大300ファイル',
-                ftp_auto_up: 'FTP/SFTP自動アップロード',
-                vector_eps: 'ベクター/EPSへの直接変換',
-                vip_support: 'VIPサポート＆早期アクセス',
-                privacy_policy: 'プライバシーポリシー',
-                terms_of_service: '利用規約',
-                adjustment: '調整',
-                multi_tool: 'マルチ画像ツール',
-                sketch_art: '画像からスケッチアートへ',
-                all_tools: 'すべてのツール',
-                image_enhance: 'AI画像高画質化',
-                bg_remove: 'AI背景削除',
-                pixel_check: 'ピクセルチェックスタジオ',
-                text_to_image: 'テキストから画像生成',
-                company: '会社',
-                note: 'APIへのアクセスは7日後に削除されます。Pro/Premiumプランにアップグレードして、MetaGen Proのすべての機能をご活用ください。',
-                platform: 'プラットフォーム',
-                add_more: 'ファイルを追加',
-                well_come: 'お帰りなさい',
-                login_google: 'Googleで続行',
-                new_user: '初めての方ですか？',
-                create_account: 'アカウントを作成',
-                niche_research: 'ニッチリサーチ',
-                metadata_generator: 'メタデータジェネレーター',
-                seo_score: 'SEOスコア＆分析',
-                sign_out: 'サインアウト',
-                switch_account: 'アカウントを切り替える',
-                upload_title: '画像または動画をアップロード',
-                drag_drop: 'ファイルをここにドラッグ＆ドロップ、またはクリックしてアップロード',
-                supports: '対応形式: JPG, PNG, WEBP, MP4, MOV',
-                max_size: '1ファイル最大50MB',
-                privacy_note: 'ファイルは安全に処理され、1時間後に削除されます。',
-                privacy_note_device: 'ファイルはデバイス上でのみ分析され、処理後にデータは消去されます。',
-                upload_limit_info: 'プラン: {{plan}} | 制限: 1日{{limit}}ファイル',
-                usage: '使用量:',
-                "daily_limit": "1日の処理制限",
-                refer_text: 'MetaGen Proを共有して、1日の制限を+50増やしましょう！',
-                "share_get_credit": "共有して処理クレジットを獲得",
-                generate_metadata: 'メタデータを生成',
-                "limit_reached_msg": "1日の処理制限に達しました！上限を増やすにはプランをアップグレードするか、ツールを共有してボーナスを獲得してください。",
-                export_csv: 'CSVに書き出し',
-                export_excel: 'Excelに書き出し',
-                clear_all: 'すべてクリア',
-                copy_all: 'すべてコピー',
-                down_eps: 'EPSをダウンロード',
-                guides: 'ガイド',
-                title: 'タイトル',
-                description: '説明',
-                keywords: 'キーワード',
-                categories: 'カテゴリ',
-                already_user: 'すでにアカウントをお持ちですか？',
-                login: 'ログイン',
-                tools_generator: 'ツール＆ジェネレーター',
-                trending: '📅 トレンド中...',
-                customization: 'カスタマイズ',
-                settings: '設定',
-                select_ai: 'AIプロバイダーを選択',
-                manage_api: 'APIキーを管理',
-                convert_api: 'ConvertAPIキー',
-                translation_lang: '翻訳言語',
-                upload_files: 'ファイルをアップロード',
-                watch_demo: 'デモを見る',
-                watch_tagline: 'ストックの売上を数秒で向上させる方法を見る',
-                process_selected: '選択項目を処理',
-                process_prompts: 'プロンプトを処理',
-                embed_metadata: 'メタデータを埋め込む',
-                export: '書き出し',
-                batch_translate: '一括翻訳（無料）',
-                translate_all: 'すべて翻訳（Pro）',
-                test_metadata: 'メタデータをテスト',
-                save_folder: 'フォルダに保存',
-                upload_complete: 'アップロード完了',
-                share_files: 'ファイルを共有',
-                upload_drive: 'ドライブにアップロード',
-                pause: '一時停止',
-                image_to_prompt: '画像からプロンプト生成',
-                jpg_png: 'JPG/PNG',
-                svg_eps: 'SVG/EPS/AI',
-                videos: '動画',
-                check_copyright: '著作権/商標をチェック:',
-                upload_limit: '1回の操作で最大500ファイルまでアップロード可能',
-                resume: '再開',
-                send_feedback: 'フィードバック / バグ報告を送信',
-                view_translated: '翻訳を表示',
-                view_original: 'オリジナルを表示',
-                analyze_trends: 'トレンドを分析',
-                downloading: 'ダウンロード中...',
-                translating: '翻訳中...',
-                embedding: '埋め込み中...',
-                analyzing: '分析中...',
-                processing: '処理中...',
-                process: '処理',
-                files: 'ファイル',
-                prompts: 'プロンプト',
-                complete: '完了',
-                success: '成功',
-                fail: '失敗',
-                saving: '保存中...',
-                preparing: '準備中...',
-                uploading: 'アップロード中...',
-                initializing: '接続を初期化中...',
-                "faq_q1": "MetaGen Proの使い方は？",
-                "faq_a1": "ストック写真/動画をアップロード -> AIモデルを選択 -> 「メタデータを生成」をクリック -> 確認してダウンロード！",
-                "faq_q2": "MetaGen Proは無料ですか？料金は？",
-                "faq_a2": "<p><strong>誰でも無料！</strong> MetaGen Proは強力な無料プラン（1日50枚）を提供しています。ヘビーユーザー向けには、Excel書き出しや直接FTPアップロードなどの高度な機能を備えた <strong>Pro</strong> ($12/月 - 1日250枚) および <strong>Premium</strong> ($29/月 - 1日1000枚) プランを用意しています。</p>",
-                "faq_q3": "データは安全ですか？",
-                "faq_a3": "はい、すべてのデータはデバイス上または安全なAIエンドポイント経由で処理され、使用後すぐに消去されます。",
-                "faq_q4": "どのフォーマットに対応していますか？",
-                "faq_a4": "現在、JPG, PNG, WEBP, MP4, MOVに対応しています。SVGとEPSのサポートはConvertAPI経由で利用可能です。",
-                "faq_q5": "プランのアップグレードは可能ですか？",
-                "faq_a5": "はい！料金セクションからいつでもアップグレード可能です。早期アクセスの請求に関する詳細は、metagenp@gmail.comまでお問い合わせください。",
-                "faq_q6": "1日の制限を増やすにはどうすればいいですか？",
-                "faq_a6": "友達を紹介することで、1日の制限を+50増やすことができます！プロフィール画面で紹介リンクを確認してください。",
-                "hero_title": "無料AIメタデータジェネレーター＆ストック写真キーワード！",
-                hero_tagline: 'Shutterstock、Adobe Stock、Magnificでの露出を増やしましょう。高度なAIを使用して、SEOに最適化されたタイトル、説明、キーワードを数秒で生成します。',
-                why_choose: 'なぜMetaGen Proが選ばれるのか？',
-                blog_1: '超高速一括処理',
-                blog_tag_1: '何百もの画像を数秒で分析し、キーワードを付与します。最適化された一括処理エンジンで、何時間もの手作業を節約しましょう。',
-                blog_2: '高度なAI分析',
-                blog_tag_2: 'Gemini 1.5 Pro, Mistral, Llama 3を搭載し、業界をリードする画像認識と正確なメタデータを提供します。',
-                blog_3: 'SEO最適化キーワード',
-                blog_tag_3: 'Shutterstock、Adobe Stock、Magnificのアルゴリズムに特化した、検索順位の高いタイトルとタグを生成します。',
-                blog_4: 'ニッチリサーチ',
-                blog_tag_4: '内蔵のニッチリサーチツールで、競争が少なく需要の高いトピックを発見しましょう。購入者が何を検索しているかを見つけます。',
-                blog_5: 'ドラッグ＆ドロップによるキーワードの並べ替え',
-                blog_tag_5: 'ストックサイト（Adobe Stock, Shutterstock）では、最初の5〜10個のキーワードが最も重要です。',
-                blog_6: 'メタデータの埋め込み',
-                blog_tag_6: 'タイトルとキーワードをJPG/PNG/SVGファイル（IPTC/XMP）に直接埋め込みます。ダウンロードして、そのままストックエージェンシーにアップロードするだけです。',
-                blog_7: '多言語対応',
-                blog_tag_7: 'メタデータを即座に10以上の言語に翻訳。ローカライズされたタイトルと説明で、世界中のオーディエンスにリーチしましょう。',
-                blog_8: '著作権チェック',
-                blog_tag_8: '却下を回避しましょう！アップロード前に、AIが画像内の商標問題やロゴの可能性をスキャンします。',
-                blog_9: 'メタデータCSV書き出し',
-                blog_tag_9: 'すべてのストックサイト（Adobe Stock, Shutterstock, Magnific）に対応したCSVファイル書き出し機能。',
-                trusted_all: 'すべての主要なマイクロストックプラットフォームで信頼されています',
-                it_works: '仕組み',
-                upload_photos: '写真をアップロード',
-                upload_photos_tag: 'JPG/PNGファイルをドラッグ＆ドロップします。解像度や技術仕様を自動的に読み取ります。',
-                select_platfrom: 'プラットフォームとAIを選択',
-                select_platfrom_tag: 'ターゲット市場（例：Adobe Stock）と好みのAIモデル（Gemini/Groq）を選択します。',
-                gen_down: '生成＆ダウンロード',
-                gen_down_tag: 'SEO対応のタイトルとキーワードを即座に取得。CSVをダウンロード、または直接埋め込みます。',
-                processing_files: 'ファイルを処理中...',
-                why_choose_stock_title: 'なぜストックフォト撮影にMetaGen Proを選ぶべきなのか？',
-                how_to_use_title: '使い方は？',
-                master_stock_title: 'AIでストックフォトをマスター',
-                trusted_stock_title: '全米の寄稿者に信頼されています',
-                why_choose_stock_p1: '競争の激しいストックフォトの世界では、発見されやすさが鍵となります。最高の画像であっても、購入者が見つけられなければ売れません。<strong>MetaGen Pro</strong>は、この問題を解決するために設計された究極の<em>AIメタデータジェネレーター</em>です。',
-                why_choose_stock_p2: '面倒でエラーが発生しやすい手動キーワード設定とは異なり、当社のツールは最先端のコンピュータビジョンを使用して画像の被写体、雰囲気、照明、構図を分析します。そして、Shutterstock、Adobe Stock、Magnific、Vecteezyなどのプラットフォーム向けに最適化された50以上のキーワード、キャッチーなタイトル、詳細な説明を生成します。',
-                why_choose_stock_p3: '写真家、イラストレーター、AIアーティストなど、どのような職種の方でも、MetaGen Proはワークフローを効率化します。<strong>Image-to-Prompt</strong>などの機能は、成功したAI画像をリバースエンジニアリングするのに役立ち、<strong>Rejection Predictor</strong>はアップロード前に技術的な問題を修正するのに役立ちます。',
-                why_choose_stock_p4: '最先端の無料ストックフォトタグ付けツールを使って、今日から不労所得を最大化しましょう。',
-                "plan_details_title": "あなたに最適なプランはどれですか？",
-                "plan_details_free": "無料プラン - 初心者に最適",
-                "plan_details_free_p1": "無料プランは、趣味で写真を使用する方や、ストックフォトを新規に提供する方を対象としています。1日あたり最大<strong>50枚</strong>の画像を処理できます。サービスを完全に無料でご利用いただくために、Google Gemini、Mistral、GroqなどのAPIキーをご提供いただく必要があります。これらのキーは無料で簡単に生成できます。超高速バッチ処理（一度に最大50ファイル）、AIによるメタデータ生成、CSVエクスポートなどの主要機能をご利用いただけます。ただし、メタデータ自動埋め込み、Excelエクスポート、著作権チェックなどの高度な機能は、このプランには含まれていませんのでご注意ください。",
-                "plan_details_pro": "プロプラン - プロフェッショナル向け",
-                "plan_details_pro_p1": "プロプランは、ワークフローを最大限に活用し、時間を大幅に節約したい定期的な投稿者向けに設計されています。1日あたり300枚の画像という十分な制限があるため、APIキーを別途用意する必要はありません。AIによるリクエストはすべて弊社側で安全に処理されます。このプランでは、JPEG/PNG/SVGファイルへのメタデータ自動埋め込み、ドラッグ＆ドロップによるキーワードの並べ替え、AIによる著作権/商標チェック、Excelエクスポートなどの強力なツールが利用可能になります。また、バッチ処理の上限が一度に100ファイルに引き上げられ、広告も一切表示されません。",
-                "plan_details_premium": "プレミアムプラン - パワーユーザーおよび代理店向け",
-                "plan_details_premium_p1": "大量の画像を扱うクリエイター、ベクターアーティスト、代理店向けに設計されたプレミアムプランは、1日あたり最大1000枚の画像と、バッチ処理で最大300ファイルという大容量の制限を提供します。プロプランのすべての機能に加え、高度な自動化機能も含まれています。サードパーティのConvertAPIキーが不要なダイレクトベクター/EPS変換機能と、FTP/SFTP自動アップロード機能に独占的にアクセスできます。これにより、処理済みのファイルとメタデータを、ブラウザから直接、複数のストックフォトサイト（Shutterstock、Adobe Stock、Magnificなど）に自動的に配信できます。",
-                "htu_step1_title": "1. ファイルのアップロード",
-                "htu_step1_desc": "画像（JPG/PNG）、ベクター画像（SVG/EPS）、または動画をドラッグ＆ドロップして開始してください。",
-                "htu_step2_title": "2. 対象プラットフォーム",
-                "htu_step2_desc": "最適な結果を得るには、Shutterstock、Adobe Stock、またはMagnificを選択してください。",
-                "htu_step3_title": "3. AIモデルの選択",
-                "htu_step3_desc": "画像解析には、Gemini、Mistral、またはGroqのいずれかを選択してください。",
-                "htu_step4_title": "4. カスタマイズ",
-                "htu_step4_desc": "スライダーを使って、タイトルとキーワードの最小/最大文字数を調整します。",
-                "htu_step5_title": "5. AI設定",
-                "htu_step5_desc": "ベクターモードを有効にするか、白い背景を使用するか、独自のカスタムプロンプトを使用してください。",
-                "htu_step6_title": "6. メタデータを生成する",
-                "htu_step6_desc": "「選択した項目を処理」をクリックすると、SEO対策済みのタイトルとタグがすぐに生成されます。",
-                "htu_step7_title": "7. メタデータの埋め込み",
-                "htu_step7_desc": "JPG、PNG、またはSVGファイルにメタデータを直接書き込みます。",
-                "htu_step8_title": "8. 複数翻訳",
-                "htu_step8_desc": "グローバル市場向けに、メタデータを10以上の言語に翻訳します。",
-                "htu_step9_title": "9. 結果のエクスポート",
-                "htu_step9_desc": "すべてのメタデータをCSVファイルまたはプロ仕様のExcelシートとしてダウンロードしてください。",
-                "htu_step10_title": "10. セーブ＆ドライブ",
-                "htu_step10_desc": "ローカルフォルダに保存するか、リンクで共有するか、またはGoogleドライブに直接アップロードします。",
-                master_stock_subtitle1: 'MetaGen Pro の使い方',
-                master_stock_p1: 'MetaGen Pro の使い方は非常に簡単で、専門的な知識は必要ありません。まず、画像をアップロードエリアにドラッグ＆ドロップするか、クリックしてファイルを選択します。MetaGen Pro は、JPG、PNG、SVG、EPS などの主要な画像形式に加え、動画ファイルもサポートしています。アップロード後、ターゲットとなるプラットフォーム（Shutterstock、Adobe Stock、Magnific、または一般）を選択すると、その市場に特化したメタデータが最適化されます。',
-                master_stock_p2: '次に、サイドバーの設定を使用して好みを構成します。キーワードの数（最適なSEOのために35〜50個を推奨）の調整、タイトル長の制限、イラスト用のベクターモードや商品写真用の白背景検出などの特別機能を有効にできます。AIプロバイダーの選択では、APIの可用性や速度の好みに基づいて、Google Gemini、Mistral AI、または Groq Llama モデルから選択できます。',
-                master_stock_p3: '設定後、「すべて処理（Process All）」ボタンをクリックすると、アップロードされたすべての画像のメタデータが同時に生成されます。当社の高度なAIが各画像の視覚的内容、構成、色、被写体、および文脈を分析し、関連性の高いタイトル、説明、キーワードセットを作成します。プロセス全体は通常、画像あたりわずか数秒で完了し、バッチモードで数百のファイルを処理する場合も同様です。',
-
-                master_stock_subtitle2: 'このツールを使用するメリット',
-                master_stock_benefit1: '<strong>時間の効率化:</strong> 手動でのキーワード入力は1枚あたり10〜15分かかる場合がありますが、MetaGen Pro はこれをわずか数秒に短縮します。これにより、手動で数枚処理する時間で数百枚の画像にキーワードを付けることができ、プロの寄稿者にとって週に10時間以上の節約になります。',
-                master_stock_benefit2: '<strong>SEOの最適化:</strong> 当社のAIは単に見たものを説明するだけでなく、検索意図や市場のアルゴリズムを理解します。各メタデータには、広範なキーワード（高検索ボリューム）、特定のロングテールキーワード（高コンバージョン）、トレンド用語（現在の需要）が戦略的に混合されています。内蔵のSEOスコアメーターがリアルタイムでメタデータを評価し、すべてのアップロードが最大の発見可能性を得られるよう最適化します。',
-                master_stock_benefit3: '<strong>マルチプラットフォーム対応:</strong> 各ストックエージェンシーには異なる要件があります。MetaGen Pro は各プラットフォーム独自のアルゴリズムに適応します（Shutterstock は Adobe Stock や Magnific とは異なるキーワード構造を好みます）。当社のプラットフォーム別最適化により、どこにアップロードしても画像が上位にランクされるようになります。',
-                master_stock_benefit4: '<strong>一貫性と品質:</strong> ヒューマンエラーを排除し、ポートフォリオ全体でプロフェッショナルな基準を維持します。MetaGen Pro は、すべての画像に適切にフォーマットされたメタデータ、十分なキーワード数、適切な説明が含まれることを保証します。リジェクト予測機能は、一般的な拒否基準に照らしてメタデータを分析し、コストのかかる申請失敗を回避するのに役立ちます。',
-
-                master_stock_subtitle3: '画像SEOとは何か、なぜ重要なのか',
-                master_stock_seo_p1: '画像SEO（検索エンジン最適化）とは、ストックフォトプラットフォームや検索エンジンでの視認性を高めるために画像のメタデータを最適化する作業です。購入者が「ビジネスミーティング」や「南国のビーチの夕日」を検索したとき、プラットフォームのアルゴリズムは画像そのものを「見る」のではなく、提供されたメタデータを読み取ります。効果的な画像SEOは、あなたの作品が検索結果の1ページ目に表示されるか、50ページ目に埋もれるかの分かれ目となります。',
-                master_stock_seo_p2: '<strong>画像SEOの3つの柱:</strong> 第一に「タイトル」は、主要なキーワードを含みつつ、自然で読みやすい簡潔なもの（10〜20語）である必要があります。第二に「説明」は文脈とユースケース（30〜50語）を提供し、アルゴリズムと購入者の両方が画像の商業的用途を理解するのを助けます。第三に「キーワード」は網を広げ（35〜50語を推奨）、購入者を画像に導くさまざまな検索クエリをキャッチします。',
-                master_stock_seo_p3: '<strong>キーワード戦略の重要性:</strong> 最も効果的なメタデータは、バランスの取れた組み合わせを使用します：単一ワードのキーワード20〜30％（広いリーチ）、2語のフレーズ40〜50％（中程度の具体性）、およびロングテールキーワード20〜30％（高いコンバージョン）。この戦略により、広範な検索と特定の検索の両方で画像が表示される可能性が最大化されます。',
-                master_stock_seo_p4: '<strong>検索順位の決定要因:</strong> ストックプラットフォームは、関連性、完全性、キーワードの多様性など、複数の要因を考慮して順位を決定します。さらに、購入者がその画像をどのように使用できるかを説明する商業的な関連性は、画像が上位にランクされた後の成約率に大きく影響します。',
-                master_stock_seo_p5: 'MetaGen Pro はこれらすべてのベストプラクティスを自動化し、アップロードするすべての画像が視認性、ダウンロード数、そして最終的な収益を最大化するように完全に最適化されることを保証します。',
-
-                master_stock_cta: '<strong>ストックフォトでの成功を加速させる準備はできましたか？</strong> 今すぐ MetaGen Pro を使い始めて、退屈な手動作業を数秒の自動化された卓越性に変えましょう。',
-
-                trusted_stock_subtitle: '全米の何千人ものフォトグラファーやクリエイターが、収益向上のために MetaGen Pro を信頼している理由をご覧ください',
-                review_1_details: '📍 ニューヨーク州、ニューヨーク • プロフォトグラファー',
-                review_1_text: '「MetaGen Pro は私のワークフローを完全に変えました！以前は Shutterstock 用のキーワード入力に何時間も費やしていましたが、今では数分で終わり、ダウンロード数は40%増加しました。SEOスコア機能は素晴らしいです！」',
-                review_2_details: '📍 カリフォルニア州、ロサンゼルス • コンテンツクリエイター',
-                review_2_text: '「フルタイムのクリエイターとして、時間は金なりです。このツールにより、メタデータ入力の時間を毎週少なくとも10時間は節約できています。一括処理は電光石火の速さで、AIが生成するキーワードは的確です。今年最高の投資です！」',
-                review_3_details: '📍 フロリダ州、マイアミ • ストック寄稿者',
-                review_3_text: '「最初は半信半疑でしたが、MetaGen Pro は期待以上でした。キーワードの提案は非常に適切で、多言語機能により海外の購入者にもリーチできるようになりました。Adobe Stock の収益がわずか3ヶ月で2倍になりました！」',
-                review_4_details: '📍 イリノイ州、シカゴ • グラフィックデザイナー',
-                review_4_text: '「著作権チェック機能だけでも価値があります！これにより、リジェクトされる可能性を何度も回避できました。自動生成機能と合わせれば、本気でストックフォトに取り組む人には必須のツールです。」',
-                review_5_details: '📍 ワシントン州、シアトル • 自然写真家',
-                review_5_text: '「毎月何百枚もの自然写真をアップロードしていますが、MetaGen Pro ならそれらすべてを簡単に管理・最適化できます。CSV書き出し機能もワークフローにシームレスに組み込めます。」',
-                review_6_details: '📍 テキサス州、オースティン • フリーランスビデオグラファー',
-                review_6_text: '「動画メタデータの救世主です！AIが正確にシーンを特定し、完璧なタイトルを生成してくれます。Shutterstock の動画ポートフォリオの視認性が劇的に向上しました。」',
-
-                stat_users: 'アクティブユーザー（米国）',
-                stat_satisfaction: '満足度',
-                stat_images: '毎日最適化される画像数',
-                stat_rating: '平均評価',
-                "faq_title": "よくある質問 — MetaGen Pro",
-                "faq_q1": "🚀 MetaGen Pro を使い始めるには？",
-                "faq_a1": "<strong>ステップ 1:</strong> Googleアカウントまたはメールアドレスで登録・ログインします。<br><strong>ステップ 2:</strong> 設定で Google Gemini API キーを設定します（<a href='https://aistudio.google.com/app/apikey' target='_blank'>Google AI Studio</a> で無料で取得可能）。<br><strong>ステップ 3:</strong> 画像（JPG, PNG, SVG, EPS）をアップロードします（一度に最大500ファイルまで！）。<br><strong>ステップ 4:</strong> ターゲットプラットフォームを選択して「メタデータ生成」をクリックします。<br><strong>ステップ 5:</strong> 確認・編集し、メタデータをファイルに埋め込んでダウンロードします！",
-                "faq_q2": "💰 MetaGen Pro は無料ですか？料金は？",
-                "faq_a2": "<p><strong>どなたでも無料プランをご利用いただけます！</strong> Metagen Proには、強力な無料プラン（月間120枚、1日最大25枚）があります。ただし、ヘビーユーザー向けには、<strong>Pro</strong>（月額12ドル - 月間2000枚、1日最大70枚）と<strong>Premium</strong>（月額29ドル - 月間3000枚、1日最大100枚）のプランをご用意しています。有料プランでは、メタデータの自動埋め込み、Excelエクスポート、FTP直接アップロードなどの高度な機能をご利用いただけます。</p>",
-                "faq_q3": "🔑 APIキーを取得するには？安全ですか？",
-                "faq_a3": "<p><strong>いいえ、現在どのプランでもAPIキーは必要ありません！</strong>無料、プロ、プレミアムのすべてのプランにおいて、メタデータは自社サーバーとSupabase Edge Functions専用AIモデル（高度なAIモデル）を使用して処理されます。</p><p><strong>セキュリティ：</strong>お客様のデータはすべて完全に<strong>安全</strong>であり、処理後すぐにサーバーから削除されます。</p>",
-                "faq_q4": "📁 サポートされているファイル形式は？",
-                "faq_a4": "<p><strong>対応形式:</strong></p><ul><li><strong>JPG/JPEG:</strong> EXIF埋め込みをフルサポート</li><li><strong>PNG:</strong> メタデータ埋め込みをフルサポート</li><li><strong>SVG:</strong> XMP埋め込みをフルサポート</li><li><strong>EPS:</strong> SVGに変換して処理（ConvertAPIキーが必要）</li></ul><p>一度に最大 <strong>500ファイル</strong> までアップロード可能です！</p>",
-                "faq_q5": "🎯 どのストックプラットフォームに対応していますか？",
-                "faq_a5": "<p>主要なすべてのプラットフォームに最適化されています：Shutterstock, Adobe Stock, Magnific, Vecteezy, Pond5, 123RF, iStock, Getty Images など。AIが各サイトの要件に自動的に適応します！</p>",
-                "faq_q6": "📊 SEOスコアとキーワードバッジとは？",
-                "faq_a6": "<p><strong>SEOスコア:</strong> 検索アルゴリズムへの最適化度を測定します。</p><p><strong>バッジ:</strong></p><ul><li>🟢 <strong>緑:</strong> 単一語（高ボリューム）</li><li>🟡 <strong>黄:</strong> 2語（ベストバランス）</li><li>🔵 <strong>青:</strong> 3語以上（ロングテール）</li></ul>",
-                "faq_q7": "⚡ 一括処理（バッチ処理）の仕組みは？",
-                "faq_a7": "<p>最大500枚の画像をアップロードし、「選択項目を処理」をクリックすると、AIが並列処理します。非常に高速で、100枚の処理も1枚のときとほぼ同じ時間で完了します！</p>",
-                "faq_q8": "🎨 「画像からプロンプト（Image to Prompt）」機能とは？",
-                "faq_a8": "<p>画像を Midjourney や DALL-E などの画像生成AI用の詳細なプロンプトに変換します。成功しているストック画像の構成を分析するのに最適です！</p>",
-                "faq_q9": "🔒 データは保護されますか？画像は保存されますか？",
-                "faq_a9": "<p><strong>100% プライベートです！</strong> 処理はブラウザ上で行われます。画像を保存することは一切ありません。データは処理後すぐに消去されます。</p>",
-                "faq_q10": "🔧 トラブルシューティング: よくある問題",
-                "faq_a10": "<ul><li><strong>APIキーエラー:</strong> 設定のキーを再確認してください。</li><li><strong>ファイルが大きすぎる:</strong> 20MB未満に抑えてください。</li><li><strong>動作が遅い:</strong> 他のブラウザタブを閉じてみてください。</li></ul>",
-                "faq_q11": "🎭 AI画像生成機能の仕組みは？",
-                "faq_a11": "<p>FLUXモデルを使用して直接画像を作成できます。Together AI キーを設定し、プロンプトを入力して、ストックポートフォリオ用のユニークな画像を生成しましょう！</p>",
-                "faq_q12": "💬 ヘルプやフィードバックの連絡先は？",
-                "faq_a12": "<p><strong>metagenp@gmail.com</strong> までメールをいただくか、アプリ内のフィードバックボタンをご利用ください。重要な問題には12時間以内に回答いたします！</p>"
-
-            }
-        };
-
 
         function toggleLanguageDropdown() {
             document.getElementById('languageDropdown').classList.toggle('show');
@@ -14730,6 +13433,27 @@ Format Example:
 
         // Initialize Language on Load
         document.addEventListener('DOMContentLoaded', () => {
+            if (typeof translations !== 'undefined' && translations) {
+                // Add Spam Shield Translations
+                if (translations['en']) {
+                    translations['en']['toggle_spam_shield'] = "🛡️ Spam Shield";
+                    translations['en']['spam_risk_high'] = "High Spam Risk";
+                    translations['en']['spam_risk_medium'] = "Medium Spam Risk";
+                    translations['en']['spam_risk_low'] = "Low Risk";
+                    translations['en']['spam_duplicate_title'] = "Duplicate title detected with:";
+                    translations['en']['spam_keyword_overlap'] = "Keyword overlap detected:";
+                    translations['en']['spam_suggestion'] = "Change title/keywords to avoid spam flags.";
+                }
+                if (translations['bn']) {
+                    translations['bn']['toggle_spam_shield'] = "🛡️ স্প্যাম শিল্ড";
+                    translations['bn']['spam_risk_high'] = "উচ্চ স্প্যাম ঝুঁকি";
+                    translations['bn']['spam_risk_medium'] = "মাঝারি স্প্যাম ঝুঁকি";
+                    translations['bn']['spam_risk_low'] = "কম ঝুঁকি";
+                    translations['bn']['spam_duplicate_title'] = "ডুপ্লিকেট টাইটেল পাওয়া গেছে:";
+                    translations['bn']['spam_keyword_overlap'] = "কিওয়ার্ড ওভারল্যাপ সনাক্ত হয়েছে:";
+                    translations['bn']['spam_suggestion'] = "স্প্যামিং এড়াতে টাইটেল/কিওয়ার্ড পরিবর্তন করুন।";
+                }
+            }
             const savedLang = localStorage.getItem('selectedLanguage') || 'en';
             setLanguage(savedLang);
         });
@@ -14740,9 +13464,9 @@ Format Example:
         }
 
 
-// ===========================================
-// SECTION 6: Back-to-Top Scroll Handler
-// ===========================================
+        // ===========================================
+        // SECTION 6: Back-to-Top Scroll Handler
+        // ===========================================
         window.addEventListener('scroll', function () {
             const btn = document.getElementById('backToTop');
             if (btn) {
@@ -14757,9 +13481,9 @@ Format Example:
         });
 
 
-// ===========================================
-// SECTION 7: AI Chat Widget & Payment Modal
-// ===========================================
+        // ===========================================
+        // SECTION 7: AI Chat Widget & Payment Modal
+        // ===========================================
         (function () {
             const chatToggle = document.getElementById('aiChatToggle');
             const chatWindow = document.getElementById('aiChatWindow');
@@ -14915,7 +13639,7 @@ Format Example:
                         const profileData = profileDoc.exists ? profileDoc.data() : null;
 
                         dbPlan = (profileData?.plan || '').toLowerCase();
-                        isPaidPlan = (dbPlan === 'pro' || dbPlan === 'premium');
+                        isPaidPlan = (dbPlan === 'pro' || dbPlan === 'premium' || dbPlan === 'agency');
                     }
                 } catch (e) {
                     console.warn('Plan check failed for chat:', e);
@@ -14954,7 +13678,7 @@ Format Example:
                     }
 
                     let generatedText = data.text || (data.choices && data.choices[0].message.content) || (data.candidates && data.candidates[0].content.parts[0].text) || JSON.stringify(data);
-                    return generatedText.replace(/^```[a-z]*\s*|\s*```$/gi, '').trim();
+                    return generatedText.replace(/^```[a - z] *\s *|\s * ```$/gi, '').trim();
 
                 } catch (error) {
                     console.error("AI Assistant Error:", error);
@@ -15043,6 +13767,8 @@ Format Example:
             // Generate keywords
             try {
                 const suggestions = await generateKeywordSuggestions(keyword);
+
+                // FIXED: Removed extra spaces around the ID
                 const listContainer = document.getElementById(`suggestion-list-${cardId}`);
                 if (!listContainer) return; // Modal was closed
 
@@ -15051,16 +13777,19 @@ Format Example:
                         `<span class="suggestion-pill" onclick="addSuggestedKeyword('${cardId}', '${s.replace(/'/g, "\\'")}')">+ ${s}</span>`
                     ).join('');
                 } else {
-                    listContainer.innerHTML = '<div class="suggestion-loading" style="color:#EF4444">No suggestions found. Please configure API Keys or Pro plan.</div>';
+                    listContainer.innerHTML = '<div class="suggestion-loading" style="color:#EF4444">No suggestions found. Please try another keyword.</div>';
                 }
-                modal.querySelector('.suggestion-loading').style.display = 'none';
+
+                const loadingIndicator = modal.querySelector('.suggestion-loading');
+                if (loadingIndicator) loadingIndicator.style.display = 'none';
 
             } catch (error) {
                 console.error("Suggestion error:", error);
                 const listContainer = document.getElementById(`suggestion-list-${cardId}`);
                 if (listContainer) {
                     listContainer.innerHTML = `<div class="suggestion-loading" style="color:#EF4444">Error generating keywords.</div>`;
-                    modal.querySelector('.suggestion-loading').style.display = 'none';
+                    const loadingIndicator = modal.querySelector('.suggestion-loading');
+                    if (loadingIndicator) loadingIndicator.style.display = 'none';
                 }
             }
         };
@@ -15358,25 +14087,25 @@ Format Example:
 
 
 
-// ===========================================
-// SECTION 8: PDF.js Worker Init
-// ===========================================
+        // ===========================================
+        // SECTION 8: PDF.js Worker Init
+        // ===========================================
         window.addEventListener('load', function () {
             if (typeof pdfjsLib !== 'undefined') {
                 pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
             }
         });
 
-// ===========================================
-// SECTION 9: EmailJS Init
-// ===========================================
+        // ===========================================
+        // SECTION 9: EmailJS Init
+        // ===========================================
         (function () {
             emailjs.init("k8DHHjzVzM5RV2tZz");
         })();
 
-// ===========================================
-// SECTION 10: Paddle/Auth/Payment Logic
-// ===========================================
+        // ===========================================
+        // SECTION 10: Paddle/Auth/Payment Logic
+        // ===========================================
         // ১. পডেল (Paddle) ডাইনামিক লোড ফাংশন
         function loadPaddle() {
             if (window.paddleLoaded) return Promise.resolve();
@@ -15400,49 +14129,64 @@ Format Example:
         }
 
         // ২. মেইন পেমেন্ট হ্যান্ডেলার (Monthly vs Yearly + Agency + Credit Packs)
+        // পেমেন্ট হ্যান্ডেলার ফাংশন (USD/INR এবং Monthly/Yearly অনুযায়ী Price ID নির্বাচন করবে)
         async function handlePayment(planType) {
-            // Monthly/Yearly toggle for subscription plans
-            const toggle = document.getElementById('pricingToggle');
-            const isYearly = toggle ? toggle.checked : false;
+            // কারেন্সি টগল এখন একটি 'select' এলিমেন্ট
+            const currencyToggle = document.getElementById('currencyToggle');
+            const pricingToggle = document.getElementById('pricingToggle');
 
-            // পডেল প্রাইস আইডি ম্যাপিং
+            const currency = currencyToggle ? currencyToggle.value : 'usd'; // 'usd', 'inr', বা 'bdt'
+            const isYearly = pricingToggle ? pricingToggle.checked : false;
+            const period = isYearly ? 'yearly' : 'monthly';
+
             const priceMap = {
                 'pro': {
-                    monthly: 'pri_01kqfns94nxjkkx13fev08r17y',
-                    yearly: 'pri_01kqfmww2dq13cfgp8f31wjj0w'
+                    'usd': { monthly: 'pri_01kqfns94nxjkkx13fev08r17y', yearly: 'pri_01kqfmww2dq13cfgp8f31wjj0w' },
+                    'inr': { monthly: 'pri_01kwss5rmspb1m7p3a91bypvjk', yearly: 'pri_01kwtvm621ew05cf7sh9hpb9xb' },
+                    'bdt': { monthly: 'pri_pro_bdt_m', yearly: 'pri_pro_bdt_y' }
                 },
                 'premium': {
-                    monthly: 'pri_01kqfnkzh5r1sns8qk6nw055vc',
-                    yearly: 'pri_01kq7jac3fw4q51j18426yzqr0'
+                    'usd': { monthly: 'pri_01kqfnkzh5r1sns8qk6nw055vc', yearly: 'pri_01kq7jac3fw4q51j18426yzqr0' },
+                    'inr': { monthly: 'pri_01kwtvbwqbkvky6femj18rne6t', yearly: 'pri_01kwtvgpvxea75qhr48fzhwm66' },
+                    'bdt': { monthly: 'pri_prem_bdt_m', yearly: 'pri_prem_bdt_y' }
                 },
                 'agency': {
-                    monthly: 'pri_01krqxzwcg75487rs8zjhrzran',
-                    yearly: 'pri_01krqxzwcg75487rs8zjhrzran' // Same for now
+                    'usd': { monthly: 'pri_01krqxzwcg75487rs8zjhrzran', yearly: 'pri_ag_usd_y' },
+                    'inr': { monthly: 'pri_01kwtvyd8a9xz8238ch7nt69n0', yearly: 'pri_ag_inr_y' },
+                    'bdt': { monthly: 'pri_ag_bdt_m', yearly: 'pri_ag_bdt_y' }
                 },
-                'starter_pack': 'pri_01krqybgp7ds4e3vs0amd0mgw6',
-                'power_pack': 'pri_01krqyfxsvb8c82ntrtmg14137'
+                'starter': { // আপনার HTML এ আইডি 'starter' হলে এখানেও 'starter' রাখুন
+                    'usd': 'pri_01krqybgp7ds4e3vs0amd0mgw6',
+                    'inr': 'pri_st_inr',
+                    'bdt': 'pri_st_bdt'
+                },
+                'power': {
+                    'usd': 'pri_01krqyfxsvb8c82ntrtmg14137',
+                    'inr': 'pri_pw_inr',
+                    'bdt': 'pri_pw_bdt'
+                }
             };
 
             const plan = priceMap[planType];
             if (!plan) {
-                alert(`Unknown plan: ${planType}. Please contact support.`);
+                console.error(`Plan not found: ${planType}`);
                 return;
             }
 
-            // Credit packs are flat strings, subscription plans are objects
+            // সঠিক Price ID নির্ধারণ
             let targetPriceId;
-            if (typeof plan === 'string') {
-                targetPriceId = plan;
+            if (planType === 'starter' || planType === 'power') {
+                targetPriceId = plan[currency];
             } else {
-                targetPriceId = isYearly ? plan.yearly : plan.monthly;
+                targetPriceId = plan[currency][period];
             }
 
-            if (!targetPriceId || targetPriceId.includes('YOUR_')) {
-                alert("Price ID is not set yet. Please check back later.");
+            if (!targetPriceId || targetPriceId.includes('id_here')) {
+                alert("Price ID configuration is missing for this selection.");
                 return;
             }
 
-            // চেকআউট ওপেন করুন
+            console.log("Launching Paddle with ID:", targetPriceId);
             await openPaddleCheckout(targetPriceId);
         }
 
@@ -15481,7 +14225,6 @@ Format Example:
             }
         }
 
-
         // ৩. পারফরম্যান্স বুস্টার: অদরকারি স্ক্রিপ্ট ডিলে লোড
         async function loadNonCriticalScripts() {
             console.log("Optimizing Page: Loading heavy assets...");
@@ -15513,90 +14256,9 @@ Format Example:
             }, 4500);
         });
 
-// ===========================================
-// SECTION 11: Team Management & Admin
-// ===========================================
-        async function openTeamManagement() {
-            const modal = document.getElementById('teamManagementModal');
-            modal.style.display = 'flex';
-            const user = auth.currentUser;
-            const adminToken = await user.getIdToken();
-
-            try {
-                const res = await fetch('https://metagen-pro-api.metagenp.workers.dev/team/info', {
-                    method: 'POST',
-                    headers: { 'Authorization': `Bearer ${adminToken}`, 'Content-Type': 'application/json' },
-                    body: JSON.stringify({})
-                });
-                const data = await res.json();
-                if (data.error) throw new Error(data.error);
-
-                document.getElementById('teamUsageText').textContent = `${data.teamMonthlyUsage}/${data.monthlyLimit}`;
-                const pct = Math.min((data.teamMonthlyUsage / data.monthlyLimit) * 100, 100);
-                document.getElementById('teamUsageFill').style.width = `${pct}%`;
-
-                const list = document.getElementById('teamMemberList');
-                list.innerHTML = '';
-                data.members.forEach(m => {
-                    const div = document.createElement('div');
-                    div.style = 'display:flex; justify-content:space-between; align-items:center; padding:10px; border-bottom:1px solid var(--border-color);';
-                    div.innerHTML = `
-                            <span>${m} ${m === user.email ? '<small>(Owner)</small>' : ''}</span>
-                            ${m !== user.email ? `<button onclick="removeTeamMember('${m}')" style="color:#EF4444; background:none; border-none; cursor:pointer;"><i class="fas fa-trash"></i></button>` : ''}
-                        `;
-                    list.appendChild(div);
-                });
-                if (data.members.length === 0) list.innerHTML = '<div style="text-align:center; color:var(--text-muted); padding:20px;">No members added yet.</div>';
-
-            } catch (e) {
-                alert('Failed to load team info: ' + e.message);
-            }
-        }
-
-        async function inviteTeamMember() {
-            const emailInput = document.getElementById('teamMemberEmail');
-            const targetEmail = emailInput.value.trim().toLowerCase();
-            if (!targetEmail) return;
-
-            const user = auth.currentUser;
-            const adminToken = await user.getIdToken();
-            try {
-                const res = await fetch('https://metagen-pro-api.metagenp.workers.dev/team/invite', {
-                    method: 'POST',
-                    headers: { 'Authorization': `Bearer ${adminToken}`, 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ memberEmail: targetEmail })
-                });
-                const data = await res.json();
-                if (data.error) throw new Error(data.error);
-                alert('Member invited successfully!');
-                emailInput.value = '';
-                openTeamManagement();
-            } catch (e) {
-                alert('Invite failed: ' + e.message);
-            }
-        }
-
-        async function removeTeamMember(targetEmail) {
-            if (!confirm(`Are you sure you want to remove ${targetEmail} from your team?`)) return;
-            const user = auth.currentUser;
-            const adminToken = await user.getIdToken();
-            try {
-                const res = await fetch('https://metagen-pro-api.metagenp.workers.dev/team/remove', {
-                    method: 'POST',
-                    headers: { 'Authorization': `Bearer ${adminToken}`, 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ memberEmail: targetEmail })
-                });
-                const data = await res.json();
-                if (data.error) throw new Error(data.error);
-                openTeamManagement();
-            } catch (e) {
-                alert('Removal failed: ' + e.message);
-            }
-        }
-
         async function openBroadcastModal() {
             const user = auth.currentUser;
-            const ADMIN_EMAILS = ['metagenp@gmail.com', 'pradipcob84@gmail.com'];
+            const ADMIN_EMAILS = ['metagenp@gmail.com', 'pradipgraphic@gmail.com', 'support@aimetagenpro.com', 'pradipcob84@gmail.com'];
 
             if (!user || !ADMIN_EMAILS.includes(user.email)) {
                 alert("Only admins can send broadcasts.");
@@ -15677,7 +14339,7 @@ Format Example:
             if (file && file.type.startsWith('image/')) _initHealingCanvas(file);
         }
 
-        function _initHealingCanvas(file) {
+        function _initHealingCanvas(file, regions = null) {
             healingOriginalFile = file;
             const img = new Image();
             img.onload = function () {
@@ -15692,8 +14354,40 @@ Format Example:
                 }
                 canvas.width = w;
                 canvas.height = h;
+                canvas.dataset.originalWidth = w;
+                canvas.dataset.originalHeight = h;
+                canvas.style.width = w + 'px';
+                canvas.style.height = h + 'px';
                 ctx.drawImage(img, 0, 0, w, h);
                 healingMaskHistory = [ctx.getImageData(0, 0, w, h)];
+
+                if (regions && Array.isArray(regions)) {
+                    ctx.fillStyle = '#FF0000'; // মাস্কের লাল রং
+                    ctx.globalAlpha = 0.5;      // অর্ধ-স্বচ্ছতা
+
+                    regions.forEach(reg => {
+                        if (!Array.isArray(reg) || reg.length < 4) return;
+
+                        const x1 = (reg[0] / 100) * w;
+                        const y1 = (reg[1] / 100) * h;
+                        const x2 = (reg[2] / 100) * w;
+                        const y2 = (reg[3] / 100) * h;
+
+                        const boxW = x2 - x1;
+                        const boxH = y2 - y1;
+
+                        // Prevent masking the entire image for global issues
+                        if (boxW >= w * 0.95 && boxH >= h * 0.95) {
+                            return;
+                        }
+
+                        ctx.fillRect(x1, y1, boxW, boxH);
+                    });
+                    ctx.globalAlpha = 1.0; // আলফা রিস্টোর করুন
+
+                    healingMaskHistory.push(ctx.getImageData(0, 0, w, h));
+                }
+
                 document.getElementById('healingUploadArea').style.display = 'none';
                 document.getElementById('healingWorkspace').style.display = 'block';
                 document.getElementById('healingResultContainer').style.display = 'none';
@@ -15734,6 +14428,166 @@ Format Example:
             canvas.ontouchend = () => { if (healingIsDrawing) { healingIsDrawing = false; healingMaskHistory.push(ctx.getImageData(0, 0, canvas.width, canvas.height)); } };
         }
 
+        async function autoDetectWatermarks() {
+            if (!healingOriginalFile) {
+                const el = document.getElementById('healingError');
+                el.textContent = 'Please load an image first!';
+                el.style.display = 'block';
+                return;
+            }
+            const errEl = document.getElementById('healingError');
+            const loadingEl = document.getElementById('healingLoading');
+            const autoBtn = document.getElementById('healingAutoDetectBtn') || document.querySelector('.orange-button');
+            const origText = autoBtn ? autoBtn.innerHTML : 'Auto Detect';
+
+            errEl.style.display = 'none';
+            loadingEl.style.display = 'block';
+            loadingEl.innerHTML = '<i class="fas fa-spinner fa-spin"></i> AI is scanning for watermarks & logos...';
+
+            if (autoBtn) {
+                autoBtn.disabled = true;
+                autoBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Scanning...';
+            }
+
+            try {
+                const user = firebase.auth().currentUser;
+                if (!user) throw new Error('Please login first');
+                const idToken = await user.getIdToken();
+
+                // Get base64 data of current image
+                const base64Data = await new Promise((resolve) => {
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        const img = new Image();
+                        img.onload = () => {
+                            let w = img.width, h = img.height;
+                            const MAX_DIM = 1024;
+                            if (w > MAX_DIM || h > MAX_DIM) {
+                                if (w > h) { h *= MAX_DIM / w; w = MAX_DIM; }
+                                else { w *= MAX_DIM / h; h = MAX_DIM; }
+                            }
+                            const canvas = document.createElement('canvas');
+                            canvas.width = w; canvas.height = h;
+                            canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+                            resolve(canvas.toDataURL('image/jpeg', 0.8).split(',')[1]);
+                        };
+                        img.src = e.target.result;
+                    };
+                    reader.readAsDataURL(healingOriginalFile);
+                });
+
+                // 🔥 HIGHLY OPTIMIZED PROMPT FOR LOGO + TEXT GROUPING
+                const visionPrompt = `Analyze this image and detect ANY watermarks, logos, copyright text, or brand names (like "Let's Enhance.io"). 
+        CRITICAL INSTRUCTION: If a logo has an icon/graphic AND text next to it, you MUST group them together into ONE single large bounding box that covers BOTH the icon and the entire text completely.
+        Return ONLY a valid JSON object:
+        {
+          "issues": [
+            {
+              "type": "watermark",
+              "regions": [[xmin, ymin, xmax, ymax]]
+            }
+          ]
+        }
+        The "regions" array must contain coordinates [xmin, ymin, xmax, ymax] as PERCENTAGES (0 to 100). Make the boxes generous. If nothing is found, return {"issues": []}. Return RAW JSON ONLY.`;
+
+                const proxyUrl = "https://metagen-pro-api.metagenp.workers.dev/generate";
+                const response = await fetch(proxyUrl, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Authorization": `Bearer ${idToken}`
+                    },
+                    body: JSON.stringify({
+                        action: "qualityCheck",
+                        prompt: visionPrompt,
+                        image: base64Data,
+                        mimeType: "image/jpeg",
+                        email: user.email || "unknown",
+                        provider: "gemini"
+                    })
+                });
+
+                if (!response.ok) {
+                    const errData = await response.json().catch(() => ({}));
+                    throw new Error(errData.error || 'Failed to detect watermarks');
+                }
+
+                const data = await response.json();
+                let resStr = data.text || data.metadata || (data.candidates && data.candidates[0].content.parts[0].text) || "";
+                resStr = resStr.replace(/```json/g, '').replace(/```/g, '').trim();
+                const results = JSON.parse(resStr);
+
+                const issues = results.issues || [];
+                let regions = [];
+                issues.forEach(issue => {
+                    if (issue.regions && Array.isArray(issue.regions)) {
+                        regions = regions.concat(issue.regions);
+                    }
+                });
+
+                if (regions.length === 0) {
+                    errEl.textContent = 'No watermarks detected! You can manually paint over it with the brush.';
+                    errEl.style.display = 'block';
+                    errEl.style.color = '#F59E0B';
+                } else {
+                    const canvas = document.getElementById('healingCanvas');
+                    const ctx = canvas.getContext('2d');
+                    const w = canvas.width;
+                    const h = canvas.height;
+
+                    ctx.fillStyle = '#FF0000';
+                    ctx.globalAlpha = 0.5;
+
+                    regions.forEach(reg => {
+                        if (!Array.isArray(reg) || reg.length < 4) return;
+
+                        const x1 = (reg[0] / 100) * w;
+                        const y1 = (reg[1] / 100) * h;
+                        const x2 = (reg[2] / 100) * w;
+                        const y2 = (reg[3] / 100) * h;
+
+                        let boxW = x2 - x1;
+                        let boxH = y2 - y1;
+
+                        if (boxW >= w * 0.95 && boxH >= h * 0.95) return;
+
+                        // 🔥 MASSIVE PADDING TO COVER ENTIRE LOGO AND TEXT
+                        let padX = boxW * 0.35; // 35% extra width
+                        let padY = boxH * 0.45; // 45% extra height
+
+                        // Force minimum mask size for very thin/small detections
+                        if (boxW < w * 0.15) padX += w * 0.08;
+                        if (boxH < h * 0.12) padY += h * 0.06;
+
+                        const finalX = Math.max(0, x1 - padX);
+                        const finalY = Math.max(0, y1 - padY);
+                        const finalW = Math.min(w - finalX, boxW + (padX * 2));
+                        const finalH = Math.min(h - finalY, boxH + (padY * 2));
+
+                        ctx.fillRect(finalX, finalY, finalW, finalH);
+                    });
+
+                    ctx.globalAlpha = 1.0;
+                    healingMaskHistory.push(ctx.getImageData(0, 0, w, h));
+
+                    loadingEl.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Removing watermark...';
+                    await processHealing();
+                }
+
+            } catch (err) {
+                console.error("Auto detect error:", err);
+                errEl.textContent = "AI missed it. Please use the manual brush tool.";
+                errEl.style.display = 'block';
+                errEl.style.color = '#EF4444';
+            } finally {
+                loadingEl.style.display = 'none';
+                if (autoBtn) {
+                    autoBtn.disabled = false;
+                    autoBtn.innerHTML = origText;
+                }
+            }
+        }
+
         function clearHealingMask() {
             const canvas = document.getElementById('healingCanvas');
             const ctx = canvas.getContext('2d');
@@ -15756,6 +14610,9 @@ Format Example:
             healingOriginalImage = null;
             healingOriginalFile = null;
             healingMaskHistory = [];
+            if (typeof window.resetHealingZoom === 'function') {
+                window.resetHealingZoom();
+            }
         }
 
         function _generateMaskFromCanvas() {
@@ -15848,6 +14705,116 @@ Format Example:
             }
         }
 
+        // --- 🤖 AUTO WATERMARK/TEXT REMOVAL FUNCTION ---
+        async function processAutoTextRemoval() {
+            if (!healingOriginalFile) {
+                const el = document.getElementById('healingError');
+                el.textContent = 'Please load an image first!';
+                el.style.display = 'block';
+                return;
+            }
+            const errEl = document.getElementById('healingError');
+            const loadingEl = document.getElementById('healingLoading');
+            const processBtn = document.getElementById('healingProcessBtn');
+            const autoBtn = document.getElementById('healingAutoTextBtn');
+            const noiseBlurBtn = document.getElementById('healingNoiseBlurBtn');
+            const downloadBtn = document.getElementById('healingDownloadBtn');
+            const resultContainer = document.getElementById('healingResultContainer');
+
+            errEl.style.display = 'none';
+            loadingEl.style.display = 'block';
+            loadingEl.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Auto-detecting & removing watermarks...';
+            processBtn.disabled = true;
+            if (autoBtn) autoBtn.disabled = true;
+            if (noiseBlurBtn) noiseBlurBtn.disabled = true;
+            resultContainer.style.display = 'none';
+            downloadBtn.style.display = 'none';
+
+            try {
+                const user = firebase.auth().currentUser;
+                if (!user) throw new Error('Please login first');
+                const idToken = await user.getIdToken();
+
+                const origW = healingOriginalImage.naturalWidth || healingOriginalImage.width;
+                const origH = healingOriginalImage.naturalHeight || healingOriginalImage.height;
+
+                // মূল ইমেজের রেজোলিউশন বজায় রাখতে ক্যানভাস অঙ্কন
+                const fullImgCanvas = document.createElement('canvas');
+                fullImgCanvas.width = origW;
+                fullImgCanvas.height = origH;
+                fullImgCanvas.getContext('2d').drawImage(healingOriginalImage, 0, 0, origW, origH);
+
+                const imageBlob = await new Promise(r => fullImgCanvas.toBlob(r, 'image/jpeg', 0.9));
+                const formData = new FormData();
+                formData.append('image_file', imageBlob, 'image.jpg');
+
+                // আমাদের নতুন তৈরি করা ক্লাউডফ্লেয়ার ওয়ার্কার এন্ডপয়েন্টে কল করা
+                const response = await fetch('https://metagen-pro-api.metagenp.workers.dev/clipdrop/remove-text', {
+                    method: 'POST',
+                    headers: { 'Authorization': 'Bearer ' + idToken },
+                    body: formData
+                });
+
+                if (!response.ok) {
+                    const errData = await response.json().catch(() => ({}));
+                    throw new Error(errData.error || 'Auto watermark removal failed (' + response.status + ')');
+                }
+
+                const blob = await response.blob();
+                document.getElementById('healingResultImg').src = URL.createObjectURL(blob);
+                resultContainer.style.display = 'block';
+                downloadBtn.style.display = 'flex';
+
+            } catch (err) {
+                errEl.textContent = err.message;
+                errEl.style.display = 'block';
+            } finally {
+                loadingEl.style.display = 'none';
+                processBtn.disabled = false;
+                if (autoBtn) autoBtn.disabled = false;
+                if (noiseBlurBtn) noiseBlurBtn.disabled = false;
+                // লোডিং টেক্সটকে ডিফল্ট অবস্থায় ফিরিয়ে আনা
+                loadingEl.innerHTML = '<i class="fas fa-spinner fa-spin"></i> AI is healing your image...';
+            }
+        }
+
+        // --- 🔍 AI IMAGE HEALING ZOOM ENGINE ---
+        window.healingZoomLevel = 100; // ডিফল্ট জুম ১০০%
+
+        window.adjustHealingZoom = function (amount) {
+            const canvas = document.getElementById('healingCanvas');
+            const zoomLabel = document.getElementById('healingZoomVal');
+            if (!canvas || !zoomLabel) return;
+
+            // জুম রেঞ্জ ১০০% থেকে ৪০০% এর মধ্যে সীমাবদ্ধ
+            window.healingZoomLevel = Math.max(100, Math.min(400, window.healingZoomLevel + amount));
+            zoomLabel.textContent = window.healingZoomLevel + '%';
+
+            const scale = window.healingZoomLevel / 100;
+
+            // অরিজিনাল ক্যানভাস সাইজ রিড করে বড় করা
+            const originalW = canvas.dataset.originalWidth ? parseFloat(canvas.dataset.originalWidth) : canvas.width;
+            const originalH = canvas.dataset.originalHeight ? parseFloat(canvas.dataset.originalHeight) : canvas.height;
+
+            canvas.style.width = (originalW * scale) + 'px';
+            canvas.style.height = (originalH * scale) + 'px';
+        };
+
+        window.resetHealingZoom = function () {
+            const canvas = document.getElementById('healingCanvas');
+            const zoomLabel = document.getElementById('healingZoomVal');
+            if (!canvas || !zoomLabel) return;
+
+            window.healingZoomLevel = 100;
+            zoomLabel.textContent = '100%';
+
+            const originalW = canvas.dataset.originalWidth ? parseFloat(canvas.dataset.originalWidth) : canvas.width;
+            const originalH = canvas.dataset.originalHeight ? parseFloat(canvas.dataset.originalHeight) : canvas.height;
+
+            canvas.style.width = originalW + 'px';
+            canvas.style.height = originalH + 'px';
+        };
+
         function downloadHealedImage() {
             const img = document.getElementById('healingResultImg');
             if (!img.src) return;
@@ -15855,6 +14822,84 @@ Format Example:
             a.href = img.src;
             a.download = 'healed_' + (healingOriginalFile ? healingOriginalFile.name : 'image.png');
             a.click();
+        }
+
+        async function processNoiseBlurFix() {
+            if (!healingOriginalFile) {
+                const el = document.getElementById('healingError');
+                el.textContent = 'Please load an image first!';
+                el.style.display = 'block';
+                return;
+            }
+            const errEl = document.getElementById('healingError');
+            const loadingEl = document.getElementById('healingLoading');
+            const processBtn = document.getElementById('healingProcessBtn');
+            const noiseBlurBtn = document.getElementById('healingNoiseBlurBtn');
+            const downloadBtn = document.getElementById('healingDownloadBtn');
+            const resultContainer = document.getElementById('healingResultContainer');
+
+            errEl.style.display = 'none';
+            loadingEl.style.display = 'block';
+            loadingEl.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Enhancing & Denoising Subject...';
+            processBtn.disabled = true;
+            if (noiseBlurBtn) noiseBlurBtn.disabled = true;
+            resultContainer.style.display = 'none';
+            downloadBtn.style.display = 'none';
+
+            try {
+                const user = firebase.auth().currentUser;
+                if (!user) throw new Error('Please login first');
+                const idToken = await user.getIdToken();
+
+                const origW = healingOriginalImage.naturalWidth || healingOriginalImage.width;
+                const origH = healingOriginalImage.naturalHeight || healingOriginalImage.height;
+
+                // Draw original unscaled image to a canvas without masks
+                const fullImgCanvas = document.createElement('canvas');
+                fullImgCanvas.width = origW;
+                fullImgCanvas.height = origH;
+                fullImgCanvas.getContext('2d').drawImage(healingOriginalImage, 0, 0, origW, origH);
+
+                const imageBlob = await new Promise(r => fullImgCanvas.toBlob(r, 'image/jpeg', 0.9));
+                const formData = new FormData();
+                formData.append('image_file', imageBlob, 'image.jpg');
+                // Target width for smoothing without massive scale-up to keep API happy
+                let targetW = origW * 2;
+                let targetH = origH * 2;
+                if (targetW > 4096 || targetH > 4096) {
+                    const scale = 4096 / Math.max(targetW, targetH);
+                    targetW = Math.round(targetW * scale);
+                    targetH = Math.round(targetH * scale);
+                }
+
+                formData.append('target_width', String(targetW));
+                formData.append('target_height', String(targetH));
+
+                const response = await fetch('https://metagen-pro-api.metagenp.workers.dev/clipdrop/upscale', {
+                    method: 'POST',
+                    headers: { 'Authorization': 'Bearer ' + idToken },
+                    body: formData
+                });
+
+                if (!response.ok) {
+                    const errData = await response.json().catch(() => ({}));
+                    throw new Error(errData.error || 'Enhancement failed (' + response.status + ')');
+                }
+
+                const blob = await response.blob();
+                document.getElementById('healingResultImg').src = URL.createObjectURL(blob);
+                resultContainer.style.display = 'block';
+                downloadBtn.style.display = 'flex';
+                loadingEl.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
+            } catch (err) {
+                errEl.textContent = err.message;
+                errEl.style.display = 'block';
+                loadingEl.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
+            } finally {
+                loadingEl.style.display = 'none';
+                processBtn.disabled = false;
+                if (noiseBlurBtn) noiseBlurBtn.disabled = false;
+            }
         }
 
         // =====================================================
@@ -15903,6 +14948,9 @@ Format Example:
                 document.getElementById('salesBatchWorkspace').style.display = 'none';
                 document.getElementById('salesResultPanel').style.display = 'none';
                 document.getElementById('salesError').style.display = 'none';
+
+                const scanOverlay = document.getElementById('salesScanOverlay');
+                if (scanOverlay) scanOverlay.style.display = 'none';
             };
             reader.readAsDataURL(file);
         }
@@ -15933,8 +14981,11 @@ Format Example:
                     card.id = id;
                     card.style = 'display:flex; background:var(--bg-input); border:1px solid var(--border-color); border-radius:12px; overflow:hidden; min-height:120px;';
                     card.innerHTML = `
-                        <div style="width:120px; min-width:120px; background:var(--bg-tertiary); display:flex; align-items:center; justify-content:center; border-right:1px solid var(--border-color);">
-                            <img src="${imgData}" style="max-width:100%; max-height:120px; object-fit:contain;" />
+                        <div style="width:120px; min-width:120px; background:var(--bg-tertiary); display:flex; align-items:center; justify-content:center; border-right:1px solid var(--border-color); position:relative; overflow:hidden;">
+                       <img loading='lazy' src="${imgData}" style="max-width:100%; max-height:120px; object-fit:contain; position:relative; z-index:1;" />
+                          <div id="${id}_scanOverlay" class="sales-scan-overlay" style="display:none; z-index:2;">
+                             <div class="sales-scan-line"></div>
+                          </div>
                         </div>
                         <div style="flex:1; padding:12px 16px; display:flex; flex-direction:column; justify-content:center;">
                             <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
@@ -15978,10 +15029,14 @@ Format Example:
             const errEl = document.getElementById('salesError');
             const resultPanel = document.getElementById('salesResultPanel');
             const analyzeBtn = document.getElementById('salesAnalyzeBtn');
+            const scanOverlay = document.getElementById('salesScanOverlay');
             errEl.style.display = 'none';
             loadingEl.style.display = 'block';
             resultPanel.style.display = 'none';
             analyzeBtn.disabled = true;
+
+            if (scanOverlay) scanOverlay.style.display = 'block';
+
             try {
                 const user = firebase.auth().currentUser;
                 if (!user) throw new Error('Please login first');
@@ -16009,6 +15064,7 @@ Format Example:
             } finally {
                 loadingEl.style.display = 'none';
                 analyzeBtn.disabled = false;
+                if (scanOverlay) scanOverlay.style.display = 'none';
             }
         }
 
@@ -16075,11 +15131,14 @@ Format Example:
                 const statusEl = document.getElementById(item.id + '_status');
                 const errEl = document.getElementById(item.id + '_error');
                 const resEl = document.getElementById(item.id + '_result');
+                const scanOverlay = document.getElementById(item.id + '_scanOverlay');
 
                 statusEl.textContent = 'Processing...';
                 statusEl.style.background = 'rgba(59,130,246,0.1)';
                 statusEl.style.color = '#3B82F6';
                 errEl.style.display = 'none';
+
+                if (scanOverlay) scanOverlay.style.display = 'block';
 
                 try {
                     while (!item.base64) {
@@ -16126,10 +15185,2216 @@ Format Example:
                     statusEl.style.color = '#EF4444';
                     errEl.textContent = err.message;
                     errEl.style.display = 'block';
+                } finally {
+                    if (scanOverlay) scanOverlay.style.display = 'none';
                 }
             }
 
             analyzeBtn.disabled = false;
         }
-      });
-</script>
+
+
+        window.sendToHealing = function (cardId, issueIdx = null) {
+            const fileData = uploadedFilesData.find(f => f.id === cardId);
+            if (!fileData) {
+                alert("Image data not found!");
+                return;
+            }
+
+            const healingModeBtn = document.querySelector('.mode-button[data-section="healing"]');
+            if (healingModeBtn) {
+                healingModeBtn.click();
+            }
+
+            const fileToProcess = fileData.previewFile || fileData.fileObject;
+
+            const badge = document.getElementById(`quality-badge-${cardId}`);
+            let regions = [];
+            if (badge && badge.dataset.results) {
+                try {
+                    const results = JSON.parse(badge.dataset.results);
+                    const issues = results.issues || [];
+                    if (issueIdx !== null && issues[issueIdx]) {
+                        if (issues[issueIdx].regions) {
+                            regions = issues[issueIdx].regions;
+                        }
+                    } else {
+                        issues.forEach(issue => {
+                            if (issue.regions && Array.isArray(issue.regions)) {
+                                regions = regions.concat(issue.regions);
+                            }
+                        });
+                    }
+                } catch (e) {
+                    console.error("Error reading regions:", e);
+                }
+            }
+
+            if (typeof _initHealingCanvas === 'function') {
+                _initHealingCanvas(fileToProcess, regions);
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            } else {
+                console.error("Healing function not found!");
+            }
+        };
+
+        // --- Dynamic Real-time AI Trend Forecasting ---
+async function loadRealTimeTrends() {
+    const container = document.getElementById('liveTrendsContainer');
+    if (!container) return;
+
+    // এপিআই কল করার সময় স্পিনার দেখানোর জন্য রিসেট করা
+    container.innerHTML = `
+        <span class="image-spinner" style="display:inline-block; width:18px; height:18px; border-width:2px; margin:0;"></span>
+        <span style="color: var(--text-muted); font-size: 0.85em; margin-left: 8px;">Fetching Freepik style latest trends...</span>
+    `;
+
+    try {
+        const user = auth.currentUser;
+        const accessToken = user ? await user.getIdToken() : "";
+
+        // ব্যাকএন্ড ক্লাউডফ্লেয়ার ওয়ার্কারের এপিআই এন্ডপয়েন্ট
+        const response = await fetch('https://metagen-pro-api.metagenp.workers.dev/generate', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': 'Bearer ' + accessToken
+            },
+            body: JSON.stringify({
+                action: 'trending',
+                prompt: 'Act as a Freepik and microstock trend analyst. Generate 40 highly specific, unique, and current commercial search trends (similar to "Punk Grunge Revival", "Digital Fatigue", "Anxiety Grounding", "Analog Hobbies"). Do NOT return generic broad terms like "business", "technology", or "sustainability". Return strictly as a comma-separated list. Do not use quotes or special characters.',
+                email: user ? user.email : 'guest'
+            })
+        });
+
+        if (!response.ok) throw new Error('API offline');
+        const data = await response.json();
+
+        let text = data.text || data.metadata || "";
+
+        let trends = text.split(',')
+            .map(t => t.replace(/[\n\r]/g, ' ').replace(/["']/g, '').trim())
+            .filter(t => t.length > 2);
+
+        if (trends.length === 0) throw new Error('Empty data');
+
+        container.innerHTML = trends.map(topic => `
+            <span class="meta-keyword-pill" onclick="openTrendPromptModal('${topic}')" style="background: rgba(139,92,246,0.08); border: 1px solid rgba(139,92,246,0.2); color: #8B5CF6; padding: 6px 12px; border-radius: 20px; font-size: 0.8em; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 5px; transition: background 0.2s;" onmouseover="this.style.background='rgba(139,92,246,0.15)'" onmouseout="this.style.background='rgba(139,92,246,0.08)'">
+                <i class="fas fa-chart-line" style="font-size:0.85em;"></i> ${topic}
+            </span>
+        `).join('');
+
+    } catch (e) {
+        console.warn("Real-time trends API fallback triggered:", e);
+        const fallbackTrends = ["Punk Grunge Revival", "Digital Fatigue", "Anxiety Grounding", "Analog Hobbies", "Corporate Memphis", "Y2K Nostalgia"];
+        container.innerHTML = fallbackTrends.map(topic => `
+            <span class="meta-keyword-pill" onclick="openTrendPromptModal('${topic}')" style="background: var(--bg-tertiary); border: 1px solid var(--border-color); color: var(--text-primary); padding: 6px 12px; border-radius: 20px; font-size: 0.8em; cursor: pointer; display: inline-flex; align-items: center; gap: 5px;" onmouseover="this.style.borderColor='var(--accent-orange)'" onmouseout="this.style.borderColor='var(--border-color)'">
+                <i class="fas fa-chart-line" style="color: var(--accent-orange); font-size:0.85em;"></i> ${topic}
+            </span>
+        `).join('');
+    }
+}
+
+async function openTrendPromptModal(topic) {
+    const modal = document.getElementById('trendPromptModal');
+    const title = document.getElementById('trendPromptTitle');
+    const list = document.getElementById('trendPromptList');
+
+    title.innerHTML = '<i class="fas fa-magic"></i> Prompts for: ' + topic;
+    list.innerHTML = `
+        <div style="text-align: center; padding: 40px;">
+            <div class="image-spinner" style="display:inline-block; width:30px; height:30px; border-width:3px; margin:0 auto 15px auto;"></div>
+            <p style="color: var(--text-muted);">AI is crafting high-converting ultra-detailed prompts...</p>
+        </div>
+    `;
+
+    modal.style.display = 'flex';
+
+    try {
+        const user = auth.currentUser;
+        const accessToken = user ? await user.getIdToken() : "";
+
+        const response = await fetch('https://metagen-pro-api.metagenp.workers.dev/generate', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': 'Bearer ' + accessToken
+            },
+            body: JSON.stringify({
+                action: 'trending',
+                // [UPDATED] - প্রম্পটটি অত্যন্ত বিস্তারিত, লং এবং আল্ট্রা-হাই ডিটেইল প্রম্পট পাওয়ার জন্য পুনর্গঠন করা হলো
+                prompt: `Act as a world-class AI Image Generation Prompt Engineer (Midjourney v6, DALL-E 3, Stable Diffusion XL). 
+Generate exactly 5 ULTRA-DETAILED, COMPREHENSIVE, and HIGHLY SPECIFIC prompts for the trend concept: "${topic}".
+
+CRITICAL REQUIREMENTS FOR EACH PROMPT:
+1. Length: Each prompt MUST be at least 60-90 words long. Avoid short 2-line summaries!
+2. Detailed Breakdown: You MUST include rich details about:
+   - Subject & Focal Point: Highly detailed visual specs, character/object attributes, clothing, textures, expression, action.
+   - Environment & Atmosphere: Intricate background elements, surroundings, mood, weather, spatial depth.
+   - Cinematic Lighting & Shadow: Volumetric lighting, ray-tracing, golden hour/cinematic neon/soft shadows, reflections.
+   - Photography & Technical Details: Exact camera specifications (e.g., shot on 85mm f/1.4 lens, Hasselblad H6D, macro photography, wide-angle cinematic shot, Kodak Portra 400 film grain).
+   - Render & Aesthetic Polish: Masterpiece quality, photorealistic, 8k resolution, Unreal Engine 5 render style, hyper-detailed textures, vibrant color grading.
+
+OUTPUT FORMAT REQUIREMENTS:
+Return ONLY a valid JSON object containing a "prompts" array of strings. 
+Example JSON structure:
+{
+  "prompts": [
+    "A breathtaking high-fashion commercial portrait embodying '${topic}', focusing on a stylized character with intricate cyberpunk line patterns on skin, wearing reflective metallic silk garments. Set against an atmospheric foggy dystopian city backdrop illuminated by moody purple and teal neon lighting. Captured using a Hasselblad medium format camera with an 85mm f/1.2 lens, showcasing deep depth of field, natural bokeh, 8k resolution, cinematic ray-traced reflections, Unreal Engine 5 visual style, award-winning photorealism.",
+    "..."
+  ]
+}
+Strictly NO intro text, NO markdown code blocks (\`\`\`json), NO explanatory chatter. Output ONLY raw JSON.`,
+                email: user ? user.email : 'guest'
+            })
+        });
+
+        if (!response.ok) throw new Error('API failed');
+        const data = await response.json();
+
+        // --- 📊 Log Activity ---
+        if (user) {
+            logActivity('Live Trend Analysis', {
+                keyword: topic,
+                result: '5 Detailed Prompts Generated'
+            });
+        }
+
+        let text = data.text || data.metadata || "";
+        let prompts = [];
+
+        // JSON Parsing (Robust Method)
+        try {
+            let cleanText = text.replace(/```json/gi, '').replace(/```/g, '').trim();
+            let startIdx = cleanText.indexOf('{');
+            let endIdx = cleanText.lastIndexOf('}');
+            if (startIdx !== -1 && endIdx !== -1) {
+                let parsed = JSON.parse(cleanText.substring(startIdx, endIdx + 1));
+                if (parsed.prompts && Array.isArray(parsed.prompts)) {
+                    prompts = parsed.prompts;
+                } else if (Array.isArray(parsed)) {
+                    prompts = parsed;
+                }
+            }
+        } catch (e) {
+            console.warn("Trend prompt JSON parsing failed, using regex fallback.");
+        }
+
+        // Fallback: যদি JSON পার্স করতে সমস্যা হয়
+        if (!Array.isArray(prompts) || prompts.length === 0) {
+            prompts = text.split(/(?:\d+\.|\n-|\n\*)/)
+                .map(line => line.replace(/\*\*/g, '').trim())
+                .filter(line => line.length > 30);
+        }
+
+        title.innerHTML = '<i class="fas fa-magic"></i> ' + topic + " Detailed Prompts";
+        var cardsHtml = '';
+
+        prompts.forEach(function (p, i) {
+            var promptText = p.trim();
+            var safeText = promptText.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            var htmlFormattedText = safeText.replace(/\n/g, '<br>');
+
+            cardsHtml += '<div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px; padding: 15px; margin-bottom: 12px; display: flex; flex-direction: column; gap: 10px;">'
+                + '<span style="font-size: 0.75em; font-weight: 700; color: var(--accent-orange); text-transform: uppercase;">Prompt ' + (i + 1) + ' (Ultra-Detailed)</span>'
+                + '<p style="color: var(--text-primary); font-size: 0.88em; margin: 0; line-height: 1.6; text-align: justify;">' + htmlFormattedText + '</p>'
+                + '<div style="text-align: right;">'
+                + '<button onclick="copyTrendPrompt(this)" data-prompt="' + safeText + '" style="background: rgba(139,92,246,0.1); color: #8B5CF6; border: 1px solid rgba(139,92,246,0.3); padding: 6px 14px; border-radius: 6px; font-size: 0.8em; font-weight: 600; cursor: pointer; transition: all 0.2s;">'
+                + '<i class="fas fa-copy"></i> Copy Prompt</button>'
+                + '</div></div>';
+        });
+
+        list.innerHTML = cardsHtml;
+
+        if (prompts.length === 0) {
+            list.innerHTML = '<p style="color: var(--text-muted); text-align:center;">Could not generate prompts. Please try again.</p>';
+        }
+    } catch (e) {
+        console.error("Trend Prompt Error:", e);
+        title.innerHTML = "Error";
+        list.innerHTML = '<p style="color: #EF4444; text-align:center;">Error generating prompts. Please try again.</p>';
+    }
+}
+
+        function copyTrendPrompt(btn) {
+            var text = btn.getAttribute('data-prompt');
+            // decode HTML entities for clipboard
+            var ta = document.createElement('textarea');
+            ta.innerHTML = text;
+            navigator.clipboard.writeText(ta.value);
+            var orig = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-check"></i> Copied';
+            setTimeout(function () { btn.innerHTML = orig; }, 2000);
+        }
+
+        function closeTrendPromptModal() {
+            document.getElementById('trendPromptModal').style.display = 'none';
+        }
+
+        // --- Smart Folder Watcher Logic (Premium) ---
+        document.addEventListener("DOMContentLoaded", () => {
+            const smartWatcherBtn = document.getElementById('smartWatcherBtn');
+            const smartWatcherPanel = document.getElementById('smartWatcherPanel');
+            const stopWatcherBtn = document.getElementById('stopWatcherBtn');
+            const watcherDirName = document.getElementById('watcherDirName');
+            const watcherProcessedCount = document.getElementById('watcherProcessedCount');
+            const watcherStatusLog = document.getElementById('watcherStatusLog');
+
+            let watcherInterval = null;
+            let processedFilesCache = new Set();
+            let watcherDirHandle = null;
+            let isProcessing = false;
+            let processedCount = 0;
+
+            function logWatcherMsg(msg) {
+                const div = document.createElement('div');
+                div.textContent = msg;
+                watcherStatusLog.appendChild(div);
+                watcherStatusLog.scrollTop = watcherStatusLog.scrollHeight;
+            }
+
+            async function processNewFile(fileHandle, parentDir) {
+                try {
+                    const file = await fileHandle.getFile();
+                    const fileNameLower = file.name.toLowerCase();
+                    const isSvg = fileNameLower.endsWith('.svg');
+                    const isEps = fileNameLower.endsWith('.eps');
+                    const isImage = fileNameLower.match(/\.(jpg|jpeg|png|webp)$/i);
+
+                    if (!isSvg && !isEps && !isImage) return;
+                    if (file.name.includes('_metagen_')) return;
+
+                    logWatcherMsg(`Found new: ${file.name}`);
+
+                    let base64Image = '';
+                    let mimeType = file.type || 'image/jpeg';
+
+                    if (isEps) {
+                        logWatcherMsg(`Extracting preview for EPS...`);
+                        const formData = new FormData();
+                        formData.append('file', file);
+                        const res = await fetch(`https://metagen-eps-server.onrender.com/api/extract-eps`, {
+                            method: 'POST',
+                            body: formData
+                        });
+                        const data = await res.json();
+                        if (data.success) {
+                            base64Image = data.base64;
+                            mimeType = 'image/jpeg';
+                        } else {
+                            throw new Error("Failed to extract EPS preview");
+                        }
+                    } else if (isSvg) {
+                        const pngDataUrl = await window.svgFileToPngDataUrl(file, 512, 512);
+                        base64Image = pngDataUrl.split(',')[1];
+                        mimeType = 'image/png';
+                    } else {
+                        const MAX_DIMENSION = 800;
+                        base64Image = await new Promise((resolve, reject) => {
+                            const reader = new FileReader();
+                            reader.onload = (e) => {
+                                const img = new Image();
+                                img.onload = () => {
+                                    let width = img.width;
+                                    let height = img.height;
+                                    if (width > MAX_DIMENSION || height > MAX_DIMENSION) {
+                                        if (width > height) { height *= MAX_DIMENSION / width; width = MAX_DIMENSION; }
+                                        else { width *= MAX_DIMENSION / height; height = MAX_DIMENSION; }
+                                        const canvas = document.createElement('canvas');
+                                        canvas.width = width; canvas.height = height;
+                                        const ctx = canvas.getContext('2d');
+                                        ctx.drawImage(img, 0, 0, width, height);
+                                        resolve(canvas.toDataURL('image/jpeg', 0.9).split(',')[1]);
+                                    } else {
+                                        resolve(e.target.result.split(',')[1]);
+                                    }
+                                };
+                                img.onerror = reject;
+                                img.src = e.target.result;
+                            };
+                            reader.onerror = reject;
+                            reader.readAsDataURL(file);
+                        });
+                    }
+
+                    logWatcherMsg(`Generating Metadata via AI...`);
+                    const plan = (window.userUsageData && window.userUsageData.plan) ? window.userUsageData.plan : 'free';
+                    const email = (window.userUsageData && window.userUsageData.email) ? window.userUsageData.email : 'unknown';
+                    const token = auth && auth.currentUser ? await auth.currentUser.getIdToken() : '';
+
+                    const vectorInstruction = (isSvg || isEps) ? `\n\nIMPORTANT - VECTOR MODE:\n- This is a vector illustration or logo.\n- Keywords MUST include: "vector illustration", "eps", "svg".` : '';
+                    const promptText = `Analyze this image and generate stock photography metadata. Format strictly as JSON with keys: "title", "description", "keywords".\n- Title: A stock photo title between 10 and 20 words.\n- Description: Description between 30 and 50 words.\n- Keywords: CSV string of 35 to 45 SEO-friendly keywords.${vectorInstruction}`;
+
+                    const response = await fetch("https://metagen-pro-api.metagenp.workers.dev/generate", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+                        body: JSON.stringify({ action: "generate", image: base64Image, mimeType: mimeType, prompt: promptText, provider: 'groq', email: email, plan: plan })
+                    });
+
+                    if (!response.ok) throw new Error("API failed: " + response.statusText);
+                    const data = await response.json();
+
+                    let metadataText = "";
+                    if (data.metadata) metadataText = typeof data.metadata === 'string' ? data.metadata : JSON.stringify(data.metadata);
+                    else if (data.text) metadataText = data.text;
+                    else if (data.candidates && data.candidates[0].content.parts[0]) metadataText = data.candidates[0].content.parts[0].text;
+
+                    let cleanedJsonString = metadataText.replace(/^```json\s*|```$/g, '').trim();
+
+                    // Robust JSON Parsing
+                    const jsonStart = cleanedJsonString.indexOf('{');
+                    const jsonEnd = cleanedJsonString.lastIndexOf('}');
+                    if (jsonStart !== -1 && jsonEnd !== -1) {
+                        cleanedJsonString = cleanedJsonString.substring(jsonStart, jsonEnd + 1);
+                    }
+
+                    const parsedMetadata = JSON.parse(cleanedJsonString);
+
+                    logWatcherMsg(`Embedding Metadata...`);
+                    const outDir = await parentDir.getDirectoryHandle('MetaGen_Processed', { create: true });
+
+                    let processedBlob;
+                    let newName;
+
+                    // FIX: AI Array দিলে সেটি সেফলি String-এ কনভার্ট করে নেওয়া হচ্ছে
+                    const safeKeywordsStr = Array.isArray(parsedMetadata.keywords)
+                        ? parsedMetadata.keywords.join(', ')
+                        : (parsedMetadata.keywords || '');
+
+                    if (isEps) {
+                        const formData = new FormData();
+                        formData.append('title', parsedMetadata.title || '');
+                        formData.append('description', parsedMetadata.description || '');
+                        formData.append('keywords', safeKeywordsStr); // Fixed Keywords
+                        formData.append('file', file);
+                        const embedRes = await fetch('https://metagen-eps-server.onrender.com/api/embed-eps', {
+                            method: 'POST',
+                            body: formData
+                        });
+                        if (!embedRes.ok) throw new Error("Failed to embed EPS metadata on server.");
+                        processedBlob = await embedRes.blob();
+                        newName = file.name.split('.').slice(0, -1).join('.') + '_metagen_' + Date.now() + '.eps';
+                    } else if (isSvg) {
+                        const svgContent = await file.text();
+                        const parser = new DOMParser();
+                        const xmlDoc = parser.parseFromString(svgContent, "image/svg+xml");
+                        const svgRoot = xmlDoc.documentElement;
+
+                        let titleNode = svgRoot.querySelector("title");
+                        if (!titleNode) { titleNode = xmlDoc.createElementNS("http://www.w3.org/2000/svg", "title"); svgRoot.insertBefore(titleNode, svgRoot.firstChild); }
+                        titleNode.textContent = parsedMetadata.title || "";
+
+                        let descNode = svgRoot.querySelector("desc");
+                        if (!descNode) { descNode = xmlDoc.createElementNS("http://www.w3.org/2000/svg", "desc"); svgRoot.insertBefore(descNode, titleNode.nextSibling); }
+                        descNode.textContent = parsedMetadata.description || "";
+
+                        const oldMetadata = svgRoot.querySelectorAll("metadata");
+                        oldMetadata.forEach(el => el.remove());
+
+                        let metadataNode = xmlDoc.createElementNS("http://www.w3.org/2000/svg", "metadata");
+                        metadataNode.id = "metagen-placeholder";
+                        svgRoot.insertBefore(metadataNode, descNode.nextSibling);
+
+                        const serializer = new XMLSerializer();
+                        let svgString = serializer.serializeToString(xmlDoc);
+
+                        const escapeXml = (str) => (str || "").replace(/[<>&'"]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '\'': '&apos;', '"': '&quot;' }[c]));
+                        const titleStr = escapeXml(parsedMetadata.title);
+                        const descStr = escapeXml(parsedMetadata.description);
+
+                        // FIX: Safe keyword string দিয়ে Array বানানো হচ্ছে
+                        const keywordsArray = safeKeywordsStr.split(',').map(k => k.trim()).filter(Boolean);
+                        const keywordsRdf = keywordsArray.map(k => `<rdf:li>${escapeXml(k)}</rdf:li>`).join('\n                                    ');
+
+                        const xmpContent = `
+<x:xmpmeta xmlns:x="adobe:ns:meta/" x:xmptk="Adobe XMP Core 5.6-c138 79.159824, 2016/09/14-01:09:01">
+    <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+        <rdf:Description rdf:about=""
+            xmlns:dc="http://purl.org/dc/elements/1.1/"
+            xmlns:photoshop="http://ns.adobe.com/photoshop/1.0/"
+            xmlns:xmp="http://ns.adobe.com/xap/1.0/">
+            <dc:format>image/svg+xml</dc:format>
+            <dc:title>
+                <rdf:Alt>
+                    <rdf:li xml:lang="x-default">${titleStr}</rdf:li>
+                </rdf:Alt>
+            </dc:title>
+            <dc:description>
+                <rdf:Alt>
+                    <rdf:li xml:lang="x-default">${descStr}</rdf:li>
+                </rdf:Alt>
+            </dc:description>
+            <dc:subject>
+                <rdf:Bag>
+                    ${keywordsRdf}
+                </rdf:Bag>
+            </dc:subject>
+            <photoshop:Headline>${titleStr}</photoshop:Headline>
+            <photoshop:Description>${descStr}</photoshop:Description>
+            <xmp:CreatorTool>MetaGen Pro Smart Watcher</xmp:CreatorTool>
+        </rdf:Description>
+    </rdf:RDF>
+</x:xmpmeta>`;
+                        const xmpWithPacket = `<metadata id="metagen-data"><?xpacket begin="﻿" id="W5M0MpCehiHzreSzNTczkc9d"?>${xmpContent}<?xpacket end="w"?></metadata>`;
+
+                        svgString = svgString.replace(/<metadata[^>]*id="metagen-placeholder"[^>]*>(.*?)<\/metadata>|<metadata[^>]*id="metagen-placeholder"[^>]*\/>/si, xmpWithPacket);
+                        if (!svgString.startsWith('<?xml')) { svgString = '<?xml version="1.0" encoding="utf-8"?>\n' + svgString; }
+
+                        processedBlob = new Blob([svgString], { type: "image/svg+xml;charset=utf-8" });
+                        newName = file.name.split('.').slice(0, -1).join('.') + '_metagen_' + Date.now() + '.svg';
+                    } else {
+                        // Standard Image (JPEG) via Piexif
+                        let originalImageDataUrl = await new Promise((resolve, reject) => {
+                            const r = new FileReader();
+                            r.onload = e => resolve(e.target.result);
+                            r.onerror = reject;
+                            r.readAsDataURL(file);
+                        });
+
+                        let exifObj;
+                        try { exifObj = piexif.load(originalImageDataUrl); } catch (err) { exifObj = { "0th": {}, "Exif": {}, "GPS": {}, "1st": {}, "thumbnail": null }; }
+                        if (!exifObj["0th"]) exifObj["0th"] = {};
+
+                        function toUTF16LE(str) {
+                            const bytes = [];
+                            for (let i = 0; i < str.length; i++) {
+                                const code = str.charCodeAt(i);
+                                bytes.push(code & 0xff); bytes.push(code >> 8);
+                            }
+                            bytes.push(0, 0); return bytes;
+                        }
+
+                        if (exifObj["0th"]) {
+                            delete exifObj["0th"][piexif.ImageIFD.ImageDescription];
+                            delete exifObj["0th"][piexif.ImageIFD.DocumentName];
+                        }
+
+                        exifObj["0th"][piexif.ImageIFD.XPTitle] = toUTF16LE(parsedMetadata.title || "");
+                        exifObj["0th"][piexif.ImageIFD.XPSubject] = toUTF16LE(parsedMetadata.description || "");
+                        exifObj["0th"][piexif.ImageIFD.XPComment] = toUTF16LE(parsedMetadata.description || "");
+                        exifObj["0th"][piexif.ImageIFD.XPKeywords] = toUTF16LE(parsedMetadata.keywords || "");
+                        exifObj["0th"][piexif.ImageIFD.XPAuthor] = toUTF16LE("MetaGen Pro Smart Watcher");
+
+                        const exifBytes = piexif.dump(exifObj);
+                        const newImageDataUrl = piexif.insert(exifBytes, originalImageDataUrl);
+
+                        const byteString = atob(newImageDataUrl.split(',')[1]);
+                        const ab = new ArrayBuffer(byteString.length);
+                        const ia = new Uint8Array(ab);
+                        for (let i = 0; i < byteString.length; i++) ia[i] = byteString.charCodeAt(i);
+
+                        processedBlob = new Blob([ab], { type: 'image/jpeg' });
+                        newName = file.name.split('.').slice(0, -1).join('.') + '_metagen_' + Date.now() + '.jpg';
+                    }
+
+                    const newFileHandle = await outDir.getFileHandle(newName, { create: true });
+                    const writable = await newFileHandle.createWritable();
+                    await writable.write(processedBlob);
+                    await writable.close();
+
+                    processedCount++;
+                    watcherProcessedCount.textContent = processedCount;
+                    logWatcherMsg(`Saved: ${newName}`);
+
+                } catch (e) {
+                    console.error("Smart Watcher error:", e);
+                    logWatcherMsg("Error processing: " + (fileHandle ? fileHandle.name : "Unknown"));
+                }
+            }
+            async function pollDirectory() {
+                if (!watcherDirHandle || isProcessing) return;
+                isProcessing = true;
+                try {
+                    for await (const entry of watcherDirHandle.values()) {
+                        if (entry.kind === 'file' && entry.name.match(/\.(jpg|jpeg|png|webp|svg|eps)$/i)) {
+                            if (!processedFilesCache.has(entry.name)) {
+                                processedFilesCache.add(entry.name);
+                                await processNewFile(entry, watcherDirHandle);
+                            }
+                        }
+                    }
+                } catch (e) {
+                    logWatcherMsg("Polling error: " + e.message);
+                    stopWatcher();
+                }
+                isProcessing = false;
+            }
+
+            async function startWatcher() {
+                // Only allow Premium or Pro depending on platform config
+                const plan = (window.userUsageData && window.userUsageData.plan) ? window.userUsageData.plan.toLowerCase() : 'free';
+                if (plan !== 'premium' && plan !== 'pro') {
+                    alert("Smart Folder Watcher is a Premium feature. Please upgrade your plan!");
+                    if (typeof openPricingModal === 'function') openPricingModal();
+                    return;
+                }
+
+                try {
+                    watcherDirHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
+                    watcherDirName.textContent = watcherDirHandle.name;
+                    smartWatcherPanel.style.display = 'block';
+                    logWatcherMsg("Started watching directory...");
+
+                    processedCount = 0;
+                    watcherProcessedCount.textContent = "0";
+
+                    // Initial scan
+                    for await (const entry of watcherDirHandle.values()) {
+                        if (entry.kind === 'file') {
+                            processedFilesCache.add(entry.name);
+                        }
+                    }
+                    logWatcherMsg(`Found ${processedFilesCache.size} existing files. Waiting for new files...`);
+
+                    watcherInterval = setInterval(pollDirectory, 5000);
+                } catch (err) {
+                    console.warn(err);
+                    if (err.name !== 'AbortError') {
+                        alert("Error starting watcher: " + err.message);
+                    }
+                }
+            }
+
+            function stopWatcher() {
+                if (watcherInterval) clearInterval(watcherInterval);
+                watcherInterval = null;
+                watcherDirHandle = null;
+                smartWatcherPanel.style.display = 'none';
+                processedFilesCache.clear();
+                logWatcherMsg("Watcher stopped.");
+            }
+
+            if (smartWatcherBtn) smartWatcherBtn.addEventListener('click', startWatcher);
+            if (stopWatcherBtn) stopWatcherBtn.addEventListener('click', stopWatcher);
+        });
+
+        // ====== INDEXEDDB SESSION LOGIC ======
+        window.SessionDB = {
+            dbName: 'MetaGenPro_SessionDB',
+            dbVersion: 2,
+            storeName: 'activeSession',
+
+            async getDB() {
+                return new Promise((resolve, reject) => {
+                    const req = indexedDB.open(this.dbName, this.dbVersion);
+                    req.onupgradeneeded = (e) => {
+                        const db = e.target.result;
+                        if (!db.objectStoreNames.contains(this.storeName)) {
+                            db.createObjectStore(this.storeName, { keyPath: 'id' });
+                        }
+                        if (!db.objectStoreNames.contains('metadataHistory')) {
+                            db.createObjectStore('metadataHistory', { keyPath: 'id' });
+                        }
+                    };
+                    req.onsuccess = () => resolve(req.result);
+                    req.onerror = () => reject(req.error);
+                });
+            },
+
+            async saveCurrentSession() {
+                try {
+                    const db = await this.getDB();
+                    const tx = db.transaction([this.storeName, 'metadataHistory'], 'readwrite');
+                    const store = tx.objectStore(this.storeName);
+                    const histStore = tx.objectStore('metadataHistory');
+                    await new Promise((resolve) => {
+                        const clearReq = store.clear();
+                        clearReq.onsuccess = resolve;
+                    });
+
+                    if (!window.uploadedFilesData || window.uploadedFilesData.length === 0) return;
+                    for (let data of window.uploadedFilesData) {
+                        store.put({
+                            id: data.id,
+                            name: data.name,
+                            fileObject: data.fileObject,
+                            previewFile: data.previewFile,
+                            title: data.title || '',
+                            description: data.description || '',
+                            keywords: data.keywords || '',
+                            category: data.category || '',
+                            status: data.status || '',
+                            salesProbability: data.salesProbability,
+                            demandLevel: data.demandLevel,
+                            competitionLevel: data.competitionLevel,
+                            trendingScore: data.trendingScore,
+                            bestPlatforms: data.bestPlatforms,
+                            strengths: data.strengths
+                        });
+
+                        if (data.title && data.title !== 'Error' && data.status === 'success') {
+                            const size = data.fileObject ? data.fileObject.size : 0;
+                            const histId = encodeURIComponent(data.name) + '_' + size;
+
+                            // Get stored thumbnail or capture if missing
+                            let thumb = data.thumbnail;
+                            if (!thumb && typeof captureThumbnail === 'function') {
+                                thumb = captureThumbnail(data.id, 100);
+                            }
+
+                            histStore.put({
+                                id: histId,
+                                name: data.name,
+                                title: data.title,
+                                description: data.description || '',
+                                keywords: data.keywords || '',
+                                thumbnail: thumb, // Save the base64 thumbnail
+                                timestamp: Date.now()
+                            });
+                        }
+                    }
+                } catch (e) {
+                    console.warn("Could not save session to IndexedDB:", e);
+                }
+            },
+
+            async loadMetadataHistory() {
+                return new Promise(async (resolve) => {
+                    try {
+                        const db = await this.getDB();
+                        const tx = db.transaction('metadataHistory', 'readonly');
+                        const store = tx.objectStore('metadataHistory');
+                        const req = store.getAll();
+                        req.onsuccess = () => resolve(req.result);
+                        req.onerror = () => resolve([]);
+                    } catch (e) {
+                        resolve([]);
+                    }
+                });
+            },
+
+            async clearSession() {
+                try {
+                    const db = await this.getDB();
+                    const tx = db.transaction(this.storeName, 'readwrite');
+                    const store = tx.objectStore(this.storeName);
+                    store.clear();
+                } catch (e) { }
+            },
+
+            async loadSession() {
+                return new Promise(async (resolve) => {
+                    try {
+                        const db = await this.getDB();
+                        const tx = db.transaction(this.storeName, 'readonly');
+                        const store = tx.objectStore(this.storeName);
+                        const req = store.getAll();
+                        req.onsuccess = () => resolve(req.result);
+                        req.onerror = () => resolve([]);
+                    } catch (e) {
+                        resolve([]);
+                    }
+                });
+            }
+        };
+
+        window.scheduleSessionSave = function () {
+            if (window._sessionSaveTimer) clearTimeout(window._sessionSaveTimer);
+            window._sessionSaveTimer = setTimeout(() => {
+                if (typeof window.SessionDB !== 'undefined') window.SessionDB.saveCurrentSession();
+            }, 1000);
+        };
+
+        window.addEventListener('load', async () => {
+            // Restore from IndexedDB
+            const savedData = await window.SessionDB.loadSession();
+            if (savedData && savedData.length > 0) {
+                if (confirm(`We found ${savedData.length} images and metadata from the previous session. Do you want to restore the previous files and metadata?`)) {
+                    // Start restoration
+                    const fileList = savedData.map(d => d.fileObject).filter(f => f != null && typeof f === 'object');
+                    if (fileList.length > 0) {
+                        if (typeof window.handleFiles === 'function') await window.handleFiles(fileList);
+
+                        // Wait briefly for DOM to render the new cards
+                        setTimeout(() => {
+                            savedData.forEach((d, index) => {
+                                const newlyAdded = window.uploadedFilesData[index];
+                                if (newlyAdded) {
+                                    newlyAdded.title = d.title;
+                                    newlyAdded.description = d.description;
+                                    newlyAdded.keywords = d.keywords;
+                                    newlyAdded.status = d.status;
+                                    newlyAdded.salesProbability = d.salesProbability;
+                                    newlyAdded.demandLevel = d.demandLevel;
+                                    newlyAdded.competitionLevel = d.competitionLevel;
+                                    newlyAdded.trendingScore = d.trendingScore;
+                                    newlyAdded.bestPlatforms = d.bestPlatforms;
+                                    newlyAdded.strengths = d.strengths;
+                                    newlyAdded.category = d.category;
+
+                                    // Update DOM
+                                    const cardDOM = document.getElementById(newlyAdded.id);
+                                    if (cardDOM) {
+                                        const metaContainer = document.getElementById('meta-' + newlyAdded.id);
+                                        if (metaContainer) metaContainer.style.display = 'block';
+
+                                        const metaCol = cardDOM.querySelector('.card-meta-col');
+                                        if (metaCol) metaCol.style.display = 'flex';
+
+                                        const tEl = cardDOM.querySelector('.meta-title');
+                                        if (tEl && d.title) {
+                                            tEl.textContent = d.title;
+                                            const clarityBtn = document.getElementById(`check-clarity-btn-${newlyAdded.id}`);
+                                            if (clarityBtn) clarityBtn.style.display = 'inline-flex';
+                                        }
+
+                                        const dEl = cardDOM.querySelector('.meta-description');
+                                        const dSection = document.getElementById('desc-section-' + newlyAdded.id);
+                                        if (dEl && d.description) {
+                                            if (dSection) dSection.style.display = 'block';
+                                            dEl.textContent = d.description;
+                                        }
+
+                                        // Restore Category
+                                        const aiCategorySelect = document.getElementById(`ai-category-${newlyAdded.id}`);
+                                        if (aiCategorySelect && d.category) {
+                                            aiCategorySelect.value = d.category;
+                                        }
+
+                                        if (d.keywords && typeof window.updateKeywordsDisplay === 'function') {
+                                            window.updateKeywordsDisplay(newlyAdded.id);
+                                        } else {
+                                            const kwEl = cardDOM.querySelector('.meta-keywords');
+                                            if (kwEl && d.keywords) {
+                                                kwEl.innerHTML = '';
+                                                d.keywords.split(',').forEach(k => {
+                                                    if (!k.trim()) return;
+                                                    const s = document.createElement('span');
+                                                    s.className = 'meta-keyword';
+                                                    s.textContent = k.trim();
+                                                    kwEl.appendChild(s);
+                                                });
+                                            }
+                                        }
+
+                                        if (d.status === 'success') {
+                                            const statusEl = document.getElementById('status-' + newlyAdded.id);
+                                            if (statusEl) {
+                                                statusEl.textContent = 'Generated';
+                                                statusEl.style.color = '#10B981';
+                                                statusEl.style.background = 'rgba(16,185,129,0.1)';
+                                            }
+
+                                            // Restore SEO Meter
+                                            if (typeof calculateSeoScore === 'function' && typeof updateSeoMeter === 'function') {
+                                                const seoScore = calculateSeoScore(d);
+                                                updateSeoMeter(newlyAdded.id, seoScore);
+                                            }
+
+                                            cardDOM.style.borderColor = "#10B981";
+                                            cardDOM.classList.add('metadata-generated', 'generated');
+
+                                            // Disable processing state if any
+                                            cardDOM.classList.remove('processing');
+                                            const spinner = cardDOM.querySelector('.loading-spinner');
+                                            if (spinner) spinner.style.display = 'none';
+                                        }
+                                    }
+                                }
+                            });
+                        }, 1200);
+                    }
+                } else {
+                    window.SessionDB.clearSession();
+                }
+            }
+
+            // Setup MutationObserver to save on changes dynamically
+            setTimeout(() => {
+                const container = document.getElementById('filePreviewContainer');
+                if (container) {
+                    const observer = new MutationObserver(() => {
+                        window.scheduleSessionSave();
+                    });
+                    observer.observe(container, { childList: true, subtree: true, characterData: true, attributes: true });
+                }
+            }, 1000);
+        });
+
+        // --- SECURE METADATA HISTORY PLATFORM ENGINE ---
+        window.cachedHistory = [];
+
+        // কপি লজিক (উইন্ডো স্কোপ)
+        window.copyHistoryField = function (btn, encodedItem, field) {
+            try {
+                const item = JSON.parse(decodeURIComponent(encodedItem));
+                let text = item[field] || '';
+
+                if (field === 'keywords' && Array.isArray(text)) {
+                    text = text.join(', ');
+                }
+
+                navigator.clipboard.writeText(text);
+
+                const originalHTML = btn.innerHTML;
+                btn.innerHTML = '<i class="fas fa-check"></i> Copied';
+                btn.style.background = 'rgba(16, 185, 129, 0.15)';
+                btn.style.color = '#10B981';
+
+                setTimeout(() => {
+                    btn.innerHTML = originalHTML;
+                    btn.style.background = '';
+                    btn.style.color = '';
+                }, 1500);
+            } catch (err) {
+                console.error("Copy failed:", err);
+            }
+        };
+
+        // সিএসভি এক্সপোর্ট লজিক (উইন্ডো স্কোপ)
+        window.exportHistoryCsv = async function () {
+            try {
+                if (typeof window.SessionDB === 'undefined') {
+                    alert("Session database is not initialized.");
+                    return;
+                }
+                const allHistory = await window.SessionDB.loadMetadataHistory();
+                if (!allHistory || allHistory.length === 0) {
+                    alert("No history found to export.");
+                    return;
+                }
+
+                allHistory.sort((a, b) => b.timestamp - a.timestamp);
+
+                let csvContent = "Filename,Title,Description,Keywords,Timestamp\n";
+                allHistory.forEach(item => {
+                    const name = (item.name || "").replace(/"/g, '""');
+                    const title = (item.title || "").replace(/"/g, '""');
+                    const desc = (item.description || "").replace(/"/g, '""');
+                    const keywords = (item.keywords || "").replace(/"/g, '""');
+                    const dateStr = new Date(item.timestamp).toLocaleString().replace(/"/g, '""');
+
+                    csvContent += `"${name}","${title}","${desc}","${keywords}","${dateStr}"\n`;
+                });
+
+                const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement("a");
+                link.href = url;
+                link.setAttribute("download", `metagen_history_export_${Date.now()}.csv`);
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                URL.revokeObjectURL(url);
+            } catch (e) {
+                console.error("Export History Error:", e);
+                alert("Export failed: " + e.message);
+            }
+        };
+
+        // হিস্ট্রি ক্লিয়ার লজিক (উইন্ডো স্কোপ)
+        window.clearAllHistory = async function () {
+            if (!confirm("Are you sure you want to permanently delete your entire metadata history? This cannot be undone.")) return;
+            try {
+                if (typeof window.SessionDB === 'undefined') {
+                    alert("Session database is not initialized.");
+                    return;
+                }
+                const db = await window.SessionDB.getDB();
+                const tx = db.transaction('metadataHistory', 'readwrite');
+                const store = tx.objectStore('metadataHistory');
+                const req = store.clear();
+                req.onsuccess = () => {
+                    alert("History cleared successfully!");
+                    window.openMetadataHistoryModal();
+                };
+                req.onerror = () => {
+                    alert("Failed to clear history.");
+                };
+            } catch (e) {
+                console.error(e);
+            }
+        };
+
+        window.deleteHistoryItem = async function (histId) {
+            if (!confirm("Are you sure you want to delete this item from your history?")) return;
+            try {
+                if (typeof window.SessionDB === 'undefined') {
+                    alert("Session database is not initialized.");
+                    return;
+                }
+                const db = await window.SessionDB.getDB();
+                const tx = db.transaction('metadataHistory', 'readwrite');
+                const store = tx.objectStore('metadataHistory');
+                const req = store.delete(histId);
+                req.onsuccess = () => {
+                    // সফলভাবে ডিলিট হলে মোডাল রিফ্রেশ করবে
+                    window.openMetadataHistoryModal();
+                };
+                req.onerror = () => {
+                    alert("Failed to delete the history item.");
+                };
+            } catch (e) {
+                console.error("Delete History Item Error:", e);
+            }
+        };
+
+        // মোডাল ওপেন লজিক
+        window.openMetadataHistoryModal = async function () {
+            const modal = document.getElementById('metadataHistoryModal');
+            const list = document.getElementById('metadataHistoryList');
+            const upsell = document.getElementById('metadataHistoryUpsell');
+            const limitText = document.getElementById('metadataHistoryTierLimitText');
+            const searchInput = document.getElementById('historySearchInput');
+
+            if (searchInput) searchInput.value = '';
+            modal.style.display = 'flex';
+            list.innerHTML = '<div style="text-align: center; margin-top: 40px; color: var(--text-muted);"><i class="fas fa-spinner fa-spin"></i> Fetching history database...</div>';
+
+            try {
+                let currentPlan = 'free';
+                if (window.userUsageData) {
+                    const rawPlan = String(window.userUsageData.plan || '').toLowerCase();
+                    if (rawPlan.includes('premium') || window.userUsageData.limit >= 100) currentPlan = 'premium';
+                    else if (rawPlan.includes('pro')) currentPlan = 'pro';
+                }
+
+                let limitMs = 24 * 60 * 60 * 1000;
+                if (currentPlan === 'pro') limitMs = 30 * 24 * 60 * 60 * 1000;
+                if (currentPlan === 'premium') limitMs = Infinity;
+
+                if (currentPlan === 'free') limitText.textContent = "Free tier is limited to last 24hrs history.";
+                else if (currentPlan === 'pro') limitText.textContent = "Pro tier is limited to last 30 days history.";
+
+                const allHistory = typeof window.SessionDB !== 'undefined' ? await window.SessionDB.loadMetadataHistory() : [];
+                allHistory.sort((a, b) => b.timestamp - a.timestamp);
+                window.cachedHistory = allHistory;
+
+                let visibleItems = [];
+                let hasHiddenBlocks = false;
+
+                allHistory.forEach(item => {
+                    const age = Date.now() - (item.timestamp || 0);
+                    if (age <= limitMs) {
+                        visibleItems.push(item);
+                    } else {
+                        hasHiddenBlocks = true;
+                    }
+                });
+
+                window.renderHistoryItems(visibleItems);
+
+                if (hasHiddenBlocks && currentPlan !== 'premium') {
+                    upsell.style.display = 'block';
+                } else {
+                    upsell.style.display = 'none';
+                }
+
+            } catch (e) {
+                list.innerHTML = '<div style="color:#EF4444; text-align:center;"><i class="fas fa-exclamation-triangle"></i> Error loading history.</div>';
+                console.error(e);
+            }
+        };
+
+        // হিস্ট্রি আইটেম রেন্ডার লজিক
+        window.renderHistoryItems = function (items) {
+            const list = document.getElementById('metadataHistoryList');
+            if (!list) return;
+
+            if (items.length === 0) {
+                list.innerHTML = '<div style="text-align: center; margin-top: 40px; color: var(--text-muted);"><i class="fas fa-folder-open"></i> No matching history records found.</div>';
+                return;
+            }
+
+            let html = `
+            <style>
+                .hist-card {
+                    display: flex; gap: 16px; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 16px; align-items: flex-start; transition: transform 0.2s, box-shadow 0.2s; box-shadow: var(--shadow-sm);
+                }
+                .hist-thumb {
+                    width: 100px; height: 100px; background: var(--bg-input); border-radius: 8px; overflow: hidden; display: flex; align-items: center; justify-content: center; flex-shrink: 0; border: 1px solid var(--border-color);
+                }
+                .hist-content {
+                    flex-grow: 1; display: flex; flex-direction: column; justify-content: space-between; min-width: 0;
+                }
+                .hist-actions {
+                    display: flex;
+                    flex-wrap: wrap;
+                    gap: 6px;
+                    border-top: 1px solid rgba(255,255,255,0.05);
+                    padding-top: 10px;
+                    justify-content: flex-start;
+                }
+                .hist-actions > button {
+                    flex: 1 1 auto;
+                    min-width: 70px;
+                    padding: 6px 8px;
+                    font-size: 0.75em;
+                    font-weight: 600;
+                    border: none;
+                    border-radius: 6px;
+                    cursor: pointer;
+                    transition: 0.2s;
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    gap: 5px;
+                    white-space: nowrap;
+                }
+                @media (max-width: 600px) {
+                    .hist-card {
+                        flex-direction: column;
+                        align-items: center;
+                        text-align: center;
+                    }
+                    .hist-thumb {
+                        width: 100%;
+                        height: 160px;
+                    }
+                    .hist-content {
+                        width: 100%;
+                    }
+                    .hist-actions {
+                        justify-content: center;
+                    }
+                }
+            </style>
+            `;
+
+            items.forEach(item => {
+                let dateStr = 'Unknown Date';
+                if (item.timestamp) {
+                    try {
+                        const d = new Date(item.timestamp);
+                        if (!isNaN(d.getTime())) {
+                            dateStr = d.toLocaleString();
+                        }
+                    } catch (e) { }
+                }
+
+                // Handle keywords if it is an array or string
+                let kwString = '';
+                if (typeof item.keywords === 'string') {
+                    kwString = item.keywords;
+                } else if (Array.isArray(item.keywords)) {
+                    kwString = item.keywords.join(', ');
+                }
+
+                const safeItemString = encodeURIComponent(JSON.stringify({
+                    ...item,
+                    keywords: kwString // Normalize keywords inside safe item string
+                }));
+
+                const kwArray = kwString.split(',').map(k => k.trim()).filter(Boolean);
+
+                html += `
+                    <div class="hist-card">
+                        <!-- Thumbnail -->
+                        <div class="hist-thumb">
+                            ${item.thumbnail ? `<img src="${item.thumbnail}" style="width: 100%; height: 100%; object-fit: cover;" alt="thumb" />` : '<i class="fas fa-file-image" style="font-size: 2em; color: var(--text-muted);"></i>'}
+                        </div>
+                        <!-- Metadata Column -->
+                        <div class="hist-content">
+                            <div>
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; gap: 10px; flex-wrap: wrap;">
+                                    <span style="font-size: 0.8em; color: var(--text-muted); font-family: monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 250px;" title="${item.name}">${item.name}</span>
+                                    <span style="font-size: 0.75em; color: var(--text-muted); white-space: nowrap;">${dateStr}</span>
+                                </div>
+                                <div style="font-weight: 700; font-size: 1.05em; color: var(--text-primary); margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${item.title}">${item.title || 'Untitled'}</div>
+                                <div style="font-size: 0.85em; color: var(--text-secondary); margin-bottom: 6px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;" title="${item.description}">${item.description || 'No description available'}</div>
+                            </div>
+                            <!-- Tags & Actions -->
+                            <div>
+                                <div style="font-size: 0.8em; color: var(--accent-orange); display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 10px; max-height: 40px; overflow: hidden; justify-content: inherit;">
+                                    ${kwArray.slice(0, 8).map(k => `<span style="background: var(--bg-input); padding: 2px 6px; border-radius: 4px; font-size: 0.85em; border: 1px solid rgba(255,255,255,0.05);">${k}</span>`).join('')}
+                                    ${kwArray.length > 8 ? `<span style="font-size:0.8em; color: var(--text-muted); align-self: center;">+${kwArray.length - 8} more</span>` : ''}
+                                </div>
+                                <div class="hist-actions">
+                                    <button class="action-button" onclick="window.copyHistoryField(this, '${safeItemString}', 'title')" style="background: rgba(139, 92, 246, 0.1); color: #8B5CF6;"><i class="fas fa-copy"></i> Title</button>
+                                    <button class="action-button" onclick="window.copyHistoryField(this, '${safeItemString}', 'description')" style="background: rgba(139, 92, 246, 0.1); color: #8B5CF6;"><i class="fas fa-copy"></i> Desc</button>
+                                    <button class="action-button" onclick="window.copyHistoryField(this, '${safeItemString}', 'keywords')" style="background: rgba(139, 92, 246, 0.1); color: #8B5CF6;"><i class="fas fa-copy"></i> Keywords</button>
+                                    <button class="action-button" onclick="window.restoreHistoryItemToGrid('${safeItemString}')" style="background: rgba(16, 185, 129, 0.15); color: #10B981;"><i class="fas fa-plus-circle"></i> Load</button>
+                                    <button class="action-button" onclick="window.deleteHistoryItem('${(item.id || '').replace(/'/g, "\\'")}')" style="background: rgba(239, 68, 68, 0.1); color: #EF4444;"><i class="fas fa-trash-alt"></i> Delete</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+            list.innerHTML = html;
+        };
+
+        // মোডাল ক্লোজ
+        window.closeMetadataHistoryModal = function () {
+            document.getElementById('metadataHistoryModal').style.display = 'none';
+        };
+
+        // --- 🩹 OPTIMIZED WORKSPACE RESTORE ENGINE ---
+        window.updateDescription = function (element) {
+            const card = element.closest('.file-preview-card');
+            if (!card) return;
+            const cardId = card.id;
+
+            const fileData = uploadedFilesData.find(f => f.id === cardId);
+            if (!fileData) return;
+
+            fileData.description = element.innerText.trim();
+
+            // Update Count
+            const count = fileData.description.split(/\s+/).filter(w => w.length > 0).length;
+            const countElem = document.getElementById(`desc-count-${card.id}`);
+            if (countElem) countElem.textContent = `(${count})`;
+
+            // Update SEO Score
+            if (typeof calculateSeoScore === 'function' && typeof updateSeoMeter === 'function') {
+                const score = calculateSeoScore(fileData);
+                updateSeoMeter(cardId, score);
+            }
+        };
+
+        window.restoreHistoryItemToGrid = function (encodedItem) {
+            try {
+                const item = JSON.parse(decodeURIComponent(encodedItem));
+                if (!item) return;
+
+                const previewContainer = document.getElementById('filePreviewContainer');
+                if (!previewContainer) {
+                    alert("Preview container not found.");
+                    return;
+                }
+
+                // ডুপ্লিকেট এড়াতে ফাইলটি অলরেডি গ্রিডে সক্রিয় আছে কি না চেক করুন
+                let existing = window.uploadedFilesData.find(f => f.name === item.name);
+
+                if (existing) {
+                    existing.title = item.title;
+                    existing.description = item.description;
+                    existing.keywords = item.keywords;
+                    existing.status = 'success';
+
+                    // সরাসরি চলমান DOM উপাদান আপডেট করুন
+                    const cardDOM = document.getElementById(existing.id);
+                    if (cardDOM) {
+                        const metaCol = cardDOM.querySelector('.card-meta-col');
+                        if (metaCol) metaCol.style.display = 'flex';
+                        const tEl = cardDOM.querySelector('.meta-title');
+                        if (tEl) tEl.textContent = item.title;
+                        const dEl = cardDOM.querySelector('.meta-description');
+                        const dSection = document.getElementById('desc-section-' + existing.id);
+                        if (dEl) {
+                            if (dSection) dSection.style.display = item.description ? 'block' : 'none';
+                            dEl.textContent = item.description;
+                        }
+                        if (typeof window.updateKeywordsDisplay === 'function') {
+                            window.updateKeywordsDisplay(existing.id);
+                        }
+                        cardDOM.style.borderColor = "#10B981";
+                        cardDOM.classList.add('metadata-generated');
+                        cardDOM.classList.remove('processing');
+
+                        const titleCountElem = document.getElementById(`title-count-${existing.id}`);
+                        if (titleCountElem && item.title) {
+                            const count = item.title.split(/\s+/).filter(w => w.length > 0).length;
+                            titleCountElem.textContent = `(${count})`;
+                        }
+
+                        const descCountElem = document.getElementById(`desc-count-${existing.id}`);
+                        if (descCountElem && item.description) {
+                            const count = item.description.split(/\s+/).filter(w => w.length > 0).length;
+                            descCountElem.textContent = `(${count})`;
+                        }
+                    }
+                    alert(`Metadata updated for active file: ${item.name}`);
+                } else {
+                    // একটি ভার্চুয়াল ফাইল অবজেক্ট তৈরি করুন
+                    const mockFile = new File([""], item.name, { type: "image/jpeg" });
+                    const cardId = 'file-' + Date.now() + '-' + Math.random().toString(36).substring(2, 9);
+
+                    const fileData = {
+                        id: cardId,
+                        name: item.name,
+                        fileObject: mockFile,
+                        title: item.title,
+                        description: item.description,
+                        keywords: item.keywords,
+                        status: 'success',
+                        thumbnail: item.thumbnail
+                    };
+
+                    window.uploadedFilesData.push(fileData);
+
+                    // সরাসরি মেমরি থাম্বনেইল ব্যবহার করে নতুন DOM কার্ড তৈরি করুন
+                    const card = document.createElement('div');
+                    card.className = 'file-preview-card metadata-generated success';
+                    card.id = cardId;
+                    card.style.borderColor = "#10B981";
+
+                    const placeholderSrc = `data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48L3N2Zz4=`;
+                    const finalImgSrc = item.thumbnail || placeholderSrc;
+
+                    card.innerHTML = `
+                        <div class="card-image-col">
+                            <div class="card-checkbox-container">
+                                <input type="checkbox" class="bulk-checkbox" data-file-id="${cardId}" onchange="window.handleCheckboxChange()">
+                            </div>
+                            <div class="card-image-actions">
+                                <button class="card-image-action-btn regenerate" title="Regenerate" onclick="regenerateMetadata(this)"><span style="font-size:1.1em;">&#x21bb;</span></button>
+                                <button class="card-image-action-btn close" title="Close" onclick="closeCard(this)"><span style="font-size:1.1em;">&#x2716;</span></button>
+                            </div>
+                            <img loading='lazy' src="${finalImgSrc}" alt="${item.name}" class="thumbnail-medium" style="position: relative; overflow: hidden; border-radius: 12px; width: 100%; height: auto; aspect-ratio: 1; object-fit: cover;">
+                            
+                            <div class="image-properties-overlay">
+                                <div class="prop-row"><span class="prop-label">Name:</span><span class="prop-value">${item.name}</span></div>
+                                <div class="prop-row"><span class="prop-label">Size:</span><span class="prop-value">Restored</span></div>
+                                <div class="prop-row"><span class="prop-label">Dims:</span><span class="prop-value">Restored</span></div>
+                            </div>
+
+                            <!-- SEO Score Meter -->
+                            <div class="seo-meter-container" id="seo-meter-${cardId}" style="display:none;">
+                                <div class="locked-overlay" id="seo-lock-${cardId}" style="display:none;" onclick="showProUpgradeAlert()">
+                                    <div class="lock-icon" title="Pro Feature">🔒</div>
+                                </div>
+                                <div class="seo-score-header">
+                                    <span><span data-i18n="seo_score">SEO Score</span><button class="seo-info-icon" onclick="openSeoInfoModal()" title="Learn how to improve SEO Score">i</button></span>
+                                    <span class="seo-badge excellent" id="seo-badge-${cardId}">0 / 100 🟢 Excellent</span>
+                                </div>
+                                <div class="seo-progress-bg">
+                                    <div class="seo-progress-fill excellent" id="seo-progress-${cardId}" style="width: 0%;"></div>
+                                </div>
+                                <div class="seo-suggestions" id="seo-suggestions-${cardId}" style="color:var(--text-muted); font-size:0.75em; margin-top:8px; display:none; flex-direction:column; gap:4px; padding:6px; border-radius:4px; background:var(--bg-tertiary); border: 1px dashed var(--border-color);"></div>
+                            </div>
+
+                            <div class="card-filename" style="display:none;">${item.name}</div>
+                        </div>
+                        <div class="card-meta-col" style="display: flex;">
+                            <div class="meta-translation-controls" style="margin-bottom: 15px; padding: 6px; background: var(--bg-input); border-radius: 6px; border: 1px solid #334155; display: flex; justify-content: space-between; align-items: center;">
+                                <div style="display: flex; gap: 10px; align-items: center;">
+                                    <span style="font-size: 0.7em; color: var(--text-muted);"><i class="fas fa-language"></i> <span data-i18n="translate">Translate</span>:</span>
+                                    <select id="translate-lang-${cardId}" style="padding: 4px 8px; border-radius: 4px; background: var(--bg-input); color: var(--text-primary); border: 1px solid var(--border-color);">
+                                         <option value="en">English</option>
+                                         <option value="es">Spanish</option>
+                                         <option value="fr">French</option>
+                                         <option value="de">German</option>
+                                         <option value="ja">Japanese</option>
+                                         <option value="pt">Portuguese</option>
+                                         <option value="it">Italian</option>
+                                         <option value="bn">Bengali</option>
+                                         <option value="hi">Hindi</option>
+                                         <option value="ar">Arabic</option>
+                                         <option value="zh">Chinese</option>
+                                         <option value="ko">Korean</option>
+                                         <option value="id">Indonesian</option>
+                                    </select>
+                                    <button class="action-button blue-button" style="padding: 4px 12px; font-size: 0.65em; white-space: nowrap; flex-shrink: 0;" onclick="translateMetadata('${cardId}')"><span data-i18n="go">Go</span></button>
+                                </div>
+                            </div>
+                            <div class="meta-section">
+                                <div class="meta-section-label"><span><span data-i18n="label_title">Title</span> <span id="title-count-${cardId}" class="meta-count"></span></span><button class="copy-btn" onclick="copyToClipboard(this, 'title')"><i class="icon-copy"></i><span data-i18n="btn_copy">Copy</span></button></div>
+                                <div class="meta-title" contenteditable="true" oninput="window.updateTitle(this)">${item.title || ''}</div>
+                            </div>
+                            <div class="meta-section" id="desc-section-${cardId}" style="${item.description ? 'display: block;' : 'display: none;'}">
+                                <div class="meta-section-label"><span><span data-i18n="label_desc">Description</span> <span id="desc-count-${cardId}" class="meta-count"></span></span><button class="copy-btn" onclick="copyToClipboard(this, 'description')"><i class="icon-copy"></i><span data-i18n="btn_copy">Copy</span></button></div>
+                                <div class="meta-description" contenteditable="true" oninput="window.updateDescription(this)">${item.description || ''}</div>
+                            </div>
+                            <div class="meta-section">
+                                <div class="meta-section-label"><span><span data-i18n="label_keywords">Keywords</span> <span id="keyword-count-${cardId}" class="meta-count"></span></span><button class="copy-btn" onclick="copyToClipboard(this, 'keywords')"><i class="icon-copy"></i><span data-i18n="btn_copy">Copy</span></button></div>
+                                <div class="meta-keywords"></div>
+                                <div class="keyword-add-container">
+                                    <input type="text" class="keyword-add-input" data-i18n="placeholder_add_kw" placeholder="Add keyword..." id="keyword-input-${cardId}" onkeypress="if(event.key === 'Enter') addKeyword('${cardId}')">
+                                    <button class="keyword-add-btn" style='white-space: nowrap; flex-shrink: 0;' onclick="addKeyword('${cardId}')">+ <span data-i18n="btn_add">Add</span></button>
+                                </div>
+                                <div class="keyword-preset-container" style="margin-top: 8px; display: flex; gap: 8px; align-items: center;">
+                                    <select class="preset-select-dropdown" data-card-id="${cardId}" onchange="window.applyPresetToCard('${cardId}', this.value)" style="flex: 1; padding: 4px 8px; border-radius: 4px; background: var(--bg-input); color: var(--text-primary); border: 1px solid var(--border-color); font-size: 0.72em;">
+                                        <option value="">📁 Apply Preset/Templates...</option>
+                                    </select>
+                                    <button class="action-button blue-button" onclick="window.savePresetFromCard('${cardId}')" title="Save current keywords as preset template" style="padding: 4px 8px; font-size: 0.72em; margin-top: 0; white-space: nowrap; flex-shrink: 0;">
+                                        <i class="fas fa-save"></i> Save Preset
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+
+                    previewContainer.appendChild(card);
+
+                    // ওয়ার্ড কাউন্টার মান সেট
+                    const titleCountElem = document.getElementById(`title-count-${cardId}`);
+                    if (titleCountElem && item.title) {
+                        const count = item.title.split(/\s+/).filter(w => w.length > 0).length;
+                        titleCountElem.textContent = `(${count})`;
+                    }
+
+                    const descCountElem = document.getElementById(`desc-count-${cardId}`);
+                    if (descCountElem && item.description) {
+                        const count = item.description.split(/\s+/).filter(w => w.length > 0).length;
+                        descCountElem.textContent = `(${count})`;
+                    }
+
+                    // কিওয়ার্ড পিলগুলো তৈরি করুন
+                    if (typeof window.updateKeywordsDisplay === 'function') {
+                        window.updateKeywordsDisplay(cardId);
+                    }
+
+                    // এসইও স্কোর আপডেট
+                    if (typeof calculateSeoScore === 'function' && typeof updateSeoMeter === 'function') {
+                        const seoScore = calculateSeoScore(fileData);
+                        updateSeoMeter(cardId, seoScore);
+                    }
+
+                    alert(`Restored ${item.name} into the active workspace.`);
+                }
+
+                window.closeMetadataHistoryModal();
+
+                // আপলোড এরিয়া হাইড করুন এবং প্রসেসিং এরিয়া দেখান
+                const uploadSection = document.querySelector('.file-upload-section');
+                const addMoreBtn = document.getElementById('addMoreFilesButton');
+                const processingArea = document.querySelector('.file-processing-area');
+                if (uploadSection) uploadSection.style.display = 'none';
+                if (addMoreBtn) addMoreBtn.style.display = 'inline-flex';
+                if (processingArea) processingArea.style.display = 'block';
+
+                // বাটন অ্যাক্টিভেশন স্ট্যাটাস আপডেট
+                if (typeof updateAllButtonStates === 'function') {
+                    updateAllButtonStates();
+                }
+
+            } catch (err) {
+                console.error("Restore failed:", err);
+                alert("Could not restore item to workspace.");
+            }
+        };
+
+        // =====================================================
+        // ========== AI BACKGROUND REMOVAL (ClipDrop) =========
+        // =====================================================
+        let bgRemoveFilesData = [];
+
+        function loadBgRemoveImages(event) {
+            handleBgRemoveFiles(event.target.files);
+            event.target.value = '';
+        }
+
+        function handleBgRemoveDrop(event) {
+            event.preventDefault();
+            event.stopPropagation();
+            event.currentTarget.style.borderColor = 'var(--border-color)';
+            handleBgRemoveFiles(event.dataTransfer.files);
+        }
+
+        function handleBgRemoveFiles(files) {
+            if (!files || files.length === 0) return;
+
+            // Plan Check
+            const currentPlan = window.userUsageData?.plan?.toLowerCase() || 'free';
+            if (currentPlan !== 'pro' && currentPlan !== 'premium' && currentPlan !== 'agency') {
+                alert("Remove Background is a PRO/PREMIUM feature. Please upgrade your plan.");
+                if (typeof scrollToPricing === 'function') scrollToPricing();
+                return;
+            }
+
+            document.getElementById('bgRemoveUploadArea').style.display = 'none';
+            document.getElementById('bgRemoveWorkspace').style.display = 'block';
+
+            Array.from(files).forEach(file => {
+                if (!file.type.startsWith('image/')) return;
+
+                const id = 'bgrm_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+                bgRemoveFilesData.push({
+                    id: id,
+                    file: file,
+                    processedBlob: null,
+                    status: 'pending'
+                });
+
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const fileData = bgRemoveFilesData.find(f => f.id === id);
+                    if (fileData) {
+                        fileData.originalDataUrl = e.target.result;
+                        renderBgRemoveGrid();
+                    }
+                };
+                reader.readAsDataURL(file);
+            });
+        }
+
+        function renderBgRemoveGrid() {
+            const grid = document.getElementById('bgRemoveGrid');
+            document.getElementById('bgRemoveCount').innerText = bgRemoveFilesData.length;
+            grid.innerHTML = '';
+
+            bgRemoveFilesData.forEach(item => {
+                const imgSrc = item.processedBlob ? URL.createObjectURL(item.processedBlob) : item.originalDataUrl;
+                let statusHtml = '';
+                if (item.status === 'processing') statusHtml = '<div style="position:absolute; top:5px; left:5px; background:rgba(0,0,0,0.6); color:white; padding:4px 8px; border-radius:6px; font-size:0.75em; font-weight:bold; z-index:5;"><i class="fas fa-spinner fa-spin"></i> Processing</div>';
+                else if (item.status === 'success') statusHtml = '<div style="position:absolute; top:5px; left:5px; background:#10B981; color:white; padding:4px 8px; border-radius:6px; font-size:0.75em; font-weight:bold; z-index:5;"><i class="fas fa-check"></i> Done</div>';
+                else if (item.status === 'error') statusHtml = '<div style="position:absolute; top:5px; left:5px; background:#EF4444; color:white; padding:4px 8px; border-radius:6px; font-size:0.75em; font-weight:bold; z-index:5;"><i class="fas fa-times"></i> Error</div>';
+
+                let actionButtons = '';
+                if (item.status === 'success') {
+                    actionButtons = `
+                <button onclick="downloadBgRemoved('${item.id}')" class="action-button green-button" style="width:100%; padding:8px; font-size:0.85em; margin-bottom:8px; display:flex; justify-content:center; gap:6px;"><i class="fas fa-download"></i> Download PNG</button>
+                <button onclick="sendBgRemovedToMeta('${item.id}')" class="action-button blue-button" style="width:100%; padding:8px; font-size:0.85em; display:flex; justify-content:center; gap:6px;"><i class="fas fa-share-square"></i> Send Metadata</button>
+            `;
+                } else {
+                    actionButtons = `<button onclick="processSingleBgRemove('${item.id}')" class="action-button orange-button" style="width:100%; padding:8px; font-size:0.85em; display:flex; justify-content:center; gap:6px;" ${item.status === 'processing' ? 'disabled' : ''}><i class="fas fa-cut"></i> Remove BG</button>`;
+                }
+
+                grid.innerHTML += `
+            <div id="${item.id}" style="background:var(--bg-input); border:1px solid var(--border-color); border-radius:12px; overflow:hidden; display:flex; flex-direction:column; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+                <div style="position:relative; height:180px; background:repeating-conic-gradient(#80808033 0 25%, transparent 0 50%) 50% / 20px 20px;">
+                    <button onclick="window.removeSingleBgRemoveItem('${item.id}')" title="Remove Image" style="position:absolute; top:5px; right:5px; background:rgba(239, 68, 68, 0.85); color:white; border:none; border-radius:50%; width:26px; height:26px; cursor:pointer; display:flex; align-items:center; justify-content:center; z-index:10; transition: background 0.2s;" onmouseover="this.style.background='rgba(239, 68, 68, 1)'" onmouseout="this.style.background='rgba(239, 68, 68, 0.85)'"><i class="fas fa-times"></i></button>
+                    <img src="${imgSrc}" style="width:100%; height:100%; object-fit:contain;" />
+                    ${statusHtml}
+                </div>
+                <div style="padding:15px; flex:1; display:flex; flex-direction:column; justify-content:space-between;">
+                    <div style="font-size:0.85em; font-weight:600; margin-bottom:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:var(--text-primary);" title="${item.file.name}">${item.file.name}</div>
+                    <div>
+                        ${actionButtons}
+                    </div>
+                </div>
+            </div>
+        `;
+            });
+        }
+
+        window.removeSingleBgRemoveItem = function (id) {
+            bgRemoveFilesData = bgRemoveFilesData.filter(f => f.id !== id);
+            if (bgRemoveFilesData.length === 0) {
+                clearBgRemoveWorkspace();
+            } else {
+                renderBgRemoveGrid();
+            }
+        };
+
+        function clearBgRemoveWorkspace() {
+            bgRemoveFilesData = [];
+            document.getElementById('bgRemoveWorkspace').style.display = 'none';
+            document.getElementById('bgRemoveUploadArea').style.display = 'block';
+            renderBgRemoveGrid();
+        }
+
+        async function processSingleBgRemove(id) {
+            const item = bgRemoveFilesData.find(f => f.id === id);
+            if (!item || item.status === 'success') return;
+
+            item.status = 'processing';
+            renderBgRemoveGrid();
+
+            try {
+                const user = firebase.auth().currentUser;
+                if (!user) throw new Error("Please login first");
+                const idToken = await user.getIdToken();
+
+                const formData = new FormData();
+                formData.append('image_file', item.file);
+
+                // Note: Make sure 'remove-background' endpoint is configured in your Cloudflare worker pointing to Clipdrop.
+                const response = await fetch('https://metagen-pro-api.metagenp.workers.dev/clipdrop/remove-background', {
+                    method: 'POST',
+                    headers: { 'Authorization': 'Bearer ' + idToken },
+                    body: formData
+                });
+
+                if (!response.ok) {
+                    const errData = await response.json().catch(() => ({}));
+                    throw new Error(errData.error || 'API Error: Check Clipdrop balance or config');
+                }
+
+                const blob = await response.blob();
+                item.processedBlob = blob;
+                item.status = 'success';
+
+            } catch (err) {
+                console.error("BG Remove Error:", err);
+                item.status = 'error';
+                alert(`Failed to remove background for ${item.file.name}: ${err.message}`);
+            } finally {
+                renderBgRemoveGrid();
+            }
+        }
+
+        async function processBgRemovalBatch() {
+            const pendingItems = bgRemoveFilesData.filter(f => f.status !== 'success');
+            if (pendingItems.length === 0) {
+                alert("All images are already processed!");
+                return;
+            }
+
+            const loadingEl = document.getElementById('bgRemoveLoading');
+            const processBtn = document.getElementById('bgRemoveProcessAllBtn');
+
+            loadingEl.style.display = 'block';
+            processBtn.disabled = true;
+
+            // Concurrent processing (2 at a time to prevent API rate limiting)
+            const CONCURRENCY = 2;
+            for (let i = 0; i < pendingItems.length; i += CONCURRENCY) {
+                const chunk = pendingItems.slice(i, i + CONCURRENCY);
+                await Promise.all(chunk.map(item => processSingleBgRemove(item.id)));
+                await new Promise(r => setTimeout(r, 1000)); // Rate limit delay
+            }
+
+            loadingEl.style.display = 'none';
+            processBtn.disabled = false;
+            alert("Batch Background Removal Complete!");
+        }
+
+        function downloadBgRemoved(id) {
+            const item = bgRemoveFilesData.find(f => f.id === id);
+            if (!item || !item.processedBlob) return;
+
+            const url = URL.createObjectURL(item.processedBlob);
+            const a = document.createElement('a');
+            a.href = url;
+            const baseName = item.file.name.substring(0, item.file.name.lastIndexOf('.')) || item.file.name;
+            a.download = baseName + '_nobg.png';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        function sendBgRemovedToMeta(id) {
+            const item = bgRemoveFilesData.find(f => f.id === id);
+            if (!item || !item.processedBlob) return;
+
+            const baseName = item.file.name.substring(0, item.file.name.lastIndexOf('.')) || item.file.name;
+            const newFile = new File([item.processedBlob], baseName + '_nobg.png', { type: 'image/png' });
+
+            // Push directly to Metadata Generator queue
+            if (typeof handleFiles === 'function') {
+                handleFiles([newFile]);
+
+                // Auto-switch to metadata section
+                const metaTabBtn = document.querySelector('.mode-button[data-section="meta"]');
+                if (metaTabBtn) {
+                    metaTabBtn.click();
+                    // Scroll top
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                }
+            }
+        }
+
+
+
+        // =============================================
+        // SEO AUTO-FIX HANDLER
+        // =============================================
+        window.fixSeoIssue = async function (cardId, fixType) {
+            const fileData = uploadedFilesData.find(f => f.id === cardId);
+            if (!fileData) return;
+
+            const card = document.getElementById(cardId);
+            if (!card) return;
+
+            let fixBtn = null;
+            const suggestionsContainer = document.getElementById(`seo-suggestions-${cardId}`);
+            if (suggestionsContainer) {
+                const buttons = suggestionsContainer.querySelectorAll('button');
+                buttons.forEach(btn => {
+                    if (btn.textContent.includes('Fix') && btn.getAttribute('onclick') && btn.getAttribute('onclick').includes(fixType)) {
+                        fixBtn = btn;
+                    }
+                });
+            }
+
+            let originalBtnHtml = fixBtn ? fixBtn.innerHTML : '';
+            if (fixBtn) {
+                fixBtn.innerHTML = '⚡ Fixing...';
+                fixBtn.disabled = true;
+            }
+
+            let changed = false;
+
+            if (fixType === 'trim_title' || fixType === 'trim_desc') {
+                const user = typeof auth !== 'undefined' ? auth.currentUser : null;
+                let authHeaders = {};
+                if (user) {
+                    try {
+                        const token = await user.getIdToken();
+                        authHeaders["Authorization"] = `Bearer ${token}`;
+                    } catch (e) {
+                        console.warn("Could not get ID token:", e);
+                    }
+                }
+
+                const valueToFix = fixType === 'trim_title' ? (fileData.title || '') : (fileData.description || '');
+
+                try {
+                    const response = await fetch("https://metagen-pro-api.metagenp.workers.dev/api/fix-seo-issue", {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json",
+                            ...authHeaders
+                        },
+                        body: JSON.stringify({
+                            fixType: fixType,
+                            text: valueToFix
+                        })
+                    });
+
+                    if (!response.ok) {
+                        const errData = await response.json().catch(() => ({}));
+                        throw new Error(errData.error || `HTTP ${response.status}`);
+                    }
+
+                    const data = await response.json();
+                    if (data.success && data.fixedText) {
+                        if (fixType === 'trim_title') {
+                            fileData.title = data.fixedText.trim();
+                            const titleEl = card.querySelector('.meta-title');
+                            if (titleEl) titleEl.textContent = fileData.title;
+                            const titleCount = document.getElementById(`title-count-${cardId}`);
+                            if (titleCount) {
+                                const count = fileData.title.split(/\s+/).filter(w => w.length > 0).length;
+                                titleCount.textContent = `(${count})`;
+                            }
+                            if (typeof showCustomAlert === 'function') showCustomAlert(`✨ Title optimized using AI to ${fileData.title.length} characters.`, 'success');
+                        } else {
+                            fileData.description = data.fixedText.trim();
+                            const descEl = card.querySelector('.meta-description');
+                            if (descEl) descEl.textContent = fileData.description;
+                            const descCount = document.getElementById(`desc-count-${cardId}`);
+                            if (descCount) {
+                                const count = fileData.description.split(/\s+/).filter(w => w.length > 0).length;
+                                descCount.textContent = `(${fileData.description.length})`;
+                            }
+                            if (typeof showCustomAlert === 'function') showCustomAlert(`✨ Description optimized using AI to ${fileData.description.length} characters.`, 'success');
+                        }
+                        changed = true;
+                    } else {
+                        throw new Error("Invalid response format");
+                    }
+                } catch (error) {
+                    console.error("AI SEO Fix failed, falling back to smart trim:", error);
+                    if (fixType === 'trim_title') {
+                        let title = (fileData.title || '').trim();
+                        if (title.length > 70) {
+                            let trimmed = title.substring(0, 70);
+                            const lastSpace = trimmed.lastIndexOf(' ');
+                            if (lastSpace > 30) trimmed = trimmed.substring(0, lastSpace);
+                            fileData.title = trimmed;
+                            const titleEl = card.querySelector('.meta-title');
+                            if (titleEl) titleEl.textContent = fileData.title;
+                            const titleCount = document.getElementById(`title-count-${cardId}`);
+                            if (titleCount) {
+                                const count = fileData.title.split(/\s+/).filter(w => w.length > 0).length;
+                                titleCount.textContent = `(${count})`;
+                            }
+                            changed = true;
+                        }
+                    } else {
+                        let desc = (fileData.description || '').trim();
+                        if (desc.length > 160) {
+                            let trimmed = desc.substring(0, 155);
+                            const lastPeriod = trimmed.lastIndexOf('.');
+                            if (lastPeriod > 80) {
+                                trimmed = trimmed.substring(0, lastPeriod + 1);
+                            } else {
+                                const lastSpace = trimmed.lastIndexOf(' ');
+                                if (lastSpace > 80) trimmed = trimmed.substring(0, lastSpace);
+                            }
+                            fileData.description = trimmed;
+                            const descEl = card.querySelector('.meta-description');
+                            if (descEl) descEl.textContent = fileData.description;
+                            const descCount = document.getElementById(`desc-count-${cardId}`);
+                            if (descCount) descCount.textContent = `(${fileData.description.length})`;
+                            changed = true;
+                        }
+                    }
+                }
+            } else {
+                switch (fixType) {
+                    case 'remove_duplicates': {
+                        let keywords = Array.isArray(fileData.keywords)
+                            ? fileData.keywords
+                            : (fileData.keywords || '').split(',').map(k => k.trim()).filter(Boolean);
+                        const seen = new Set();
+                        const unique = [];
+                        keywords.forEach(kw => {
+                            const lower = kw.toLowerCase();
+                            if (!seen.has(lower)) {
+                                seen.add(lower);
+                                unique.push(kw);
+                            }
+                        });
+                        const removedCount = keywords.length - unique.length;
+                        if (removedCount > 0) {
+                            fileData.keywords = unique;
+                            if (typeof window.updateKeywordsDisplay === 'function') window.updateKeywordsDisplay(cardId);
+                            changed = true;
+                            if (typeof showCustomAlert === 'function') showCustomAlert(`🗑️ Removed ${removedCount} duplicate keyword(s).`, 'success');
+                        }
+                        break;
+                    }
+
+                    case 'fix_title_stuffing': {
+                        let title = (fileData.title || '').trim();
+                        const words = title.split(/\s+/);
+                        const wordCount = {};
+                        const cleaned = [];
+                        words.forEach(w => {
+                            const lower = w.toLowerCase();
+                            wordCount[lower] = (wordCount[lower] || 0) + 1;
+                            if (lower.length <= 3 || wordCount[lower] <= 2) {
+                                cleaned.push(w);
+                            }
+                        });
+                        const newTitle = cleaned.join(' ');
+                        if (newTitle !== title) {
+                            fileData.title = newTitle;
+                            const titleEl = card.querySelector('.meta-title');
+                            if (titleEl) titleEl.textContent = fileData.title;
+                            const titleCount = document.getElementById(`title-count-${cardId}`);
+                            if (titleCount) {
+                                const count = fileData.title.split(/\s+/).filter(w => w.length > 0).length;
+                                titleCount.textContent = `(${count})`;
+                            }
+                            changed = true;
+                            if (typeof showCustomAlert === 'function') showCustomAlert('🧹 Removed repeated words from title.', 'success');
+                        }
+                        break;
+                    }
+                }
+            }
+
+            if (fixBtn) {
+                fixBtn.innerHTML = originalBtnHtml;
+                fixBtn.disabled = false;
+            }
+
+            if (changed && typeof calculateSeoScore === 'function' && typeof updateSeoMeter === 'function') {
+                const newSeo = calculateSeoScore(fileData);
+                updateSeoMeter(cardId, newSeo);
+                if (typeof window.scheduleSessionSave === 'function') {
+                    window.scheduleSessionSave();
+                }
+            }
+        };
+
+
+        // =============================================
+        // DAILY STREAK TRACKER SYSTEM
+        // =============================================
+        (function initStreakSystem() {
+            const STREAK_KEY = 'metagen_streak_data';
+
+            function getStreakData() {
+                try {
+                    return JSON.parse(localStorage.getItem(STREAK_KEY)) || { currentStreak: 0, lastActiveDate: null, bonusClaimed: {} };
+                } catch { return { currentStreak: 0, lastActiveDate: null, bonusClaimed: {} }; }
+            }
+
+            function saveStreakData(data) {
+                localStorage.setItem(STREAK_KEY, JSON.stringify(data));
+            }
+
+            function getTodayDateStr() {
+                return new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+            }
+
+            function getYesterdayDateStr() {
+                const d = new Date();
+                d.setDate(d.getDate() - 1);
+                return d.toISOString().split('T')[0];
+            }
+
+            function refreshStreakOnLoad() {
+                const data = getStreakData();
+                const today = getTodayDateStr();
+                const yesterday = getYesterdayDateStr();
+
+                if (data.lastActiveDate === today) {
+                    // Already active today, just render
+                } else if (data.lastActiveDate === yesterday) {
+                    // Streak continues but not yet marked for today
+                } else if (data.lastActiveDate) {
+                    // Streak broken - reset
+                    data.currentStreak = 0;
+                    data.bonusClaimed = {};
+                    saveStreakData(data);
+                }
+                renderStreakUI(data);
+            }
+
+            window.recordStreakActivity = function () {
+                const data = getStreakData();
+                const today = getTodayDateStr();
+
+                if (data.lastActiveDate === today) return; // Already recorded today
+
+                const yesterday = getYesterdayDateStr();
+            if (data.lastActiveDate === yesterday || !data.lastActiveDate) {
+                // [NEW LOGIC] ৭ দিন পূর্ণ হলে পরের দিন অটোমেটিক আবার Day 1 থেকে শুরু হবে
+                if (data.currentStreak >= 7) {
+                    data.currentStreak = 1;
+                    data.bonusClaimed = {}; // আগের বোনাস হিস্ট্রি ক্লিয়ার করে নতুন সাইকেল শুরু
+                } else {
+                    data.currentStreak = (data.currentStreak || 0) + 1;
+                }
+            } else {
+                data.currentStreak = 1; // Streak broken (গ্যাপ দিলে), start fresh
+                data.bonusClaimed = {};
+            }
+            data.lastActiveDate = today;
+
+                // Calculate bonus
+                const bonusMap = { 1: 1, 2: 2, 3: 3, 4: 4, 5: 5, 6: 6, 7: 10 };
+                const bonus = bonusMap[data.currentStreak] || 0;
+                const dayKey = 'day' + data.currentStreak;
+
+                if (bonus > 0 && !data.bonusClaimed[dayKey]) {
+                    data.bonusClaimed[dayKey] = true;
+
+                    // 1. Update local limits immediately for UI
+                    if (window.userUsageData) {
+                        if (typeof window.userUsageData.limit === 'number') {
+                            window.userUsageData.limit += bonus; // Increase today's working limit
+                        }
+                        // Increase total monthly limit locally
+                        window.userUsageData.referralBonus = (window.userUsageData.referralBonus || 0) + bonus;
+                        if (typeof updateUsageUI === 'function') updateUsageUI();
+                    }
+
+                    // 2. 🟢 SAVE PERMANENTLY VIA WORKER API (Secured with Auth) 🟢
+                    if (typeof auth !== 'undefined' && auth.currentUser) {
+                        (async () => {
+                            try {
+                                const idToken = await auth.currentUser.getIdToken();
+                                const res = await fetch('https://metagen-pro-api.metagenp.workers.dev/user/claim-streak-bonus', {
+                                    method: 'POST',
+                                    headers: {
+                                        'Content-Type': 'application/json',
+                                        'Authorization': 'Bearer ' + idToken
+                                    },
+                                    body: JSON.stringify({
+                                        streakDay: data.currentStreak,
+                                        bonus: bonus
+                                    })
+                                });
+                                const result = await res.json();
+                                if (result.success) {
+                                    console.log(`Streak bonus +${bonus} permanently saved to database. Total: ${result.totalBonus}`);
+                                } else {
+                                    console.error("Streak bonus save failed:", result.error || result.message);
+                                }
+                            } catch (err) {
+                                console.error("Failed to save streak bonus:", err);
+                            }
+                        })();
+                    }
+
+                    // 3. Show the new popup modal
+                    const rewardModal = document.getElementById('streakRewardModal');
+                    if (rewardModal) {
+                        const daySpan = document.getElementById('streakRewardDay');
+                        const amountSpan = document.getElementById('streakRewardAmount');
+                        if (daySpan) daySpan.textContent = data.currentStreak;
+                        if (amountSpan) amountSpan.textContent = bonus;
+                        
+                        rewardModal.style.display = 'flex';
+                        
+                        // Show confetti animation if available (from JS library)
+                        if (typeof confetti === 'function') {
+                            confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 } });
+                        }
+                    } else {
+                        // Fallback to Toast if modal HTML is missing
+                        if (typeof showCustomAlert === 'function') {
+                            showCustomAlert(`🔥 Streak Day ${data.currentStreak}! +${bonus} bonus credit${bonus > 1 ? 's' : ''} earned!`, 'success');
+                        } else {
+                            const existingToast = document.querySelector('.trial-toast');
+                            if (existingToast) existingToast.remove();
+                            const toast = document.createElement('div');
+                            toast.className = 'trial-toast';
+                            toast.innerHTML = `🔥 Streak Day ${data.currentStreak}! +${bonus} bonus credit${bonus > 1 ? 's' : ''} earned!`;
+                            document.body.appendChild(toast);
+                            setTimeout(() => { if (toast.parentNode) toast.remove(); }, 4200);
+                        }
+                    }
+                }
+
+                saveStreakData(data);
+                renderStreakUI(data);
+            };
+
+            function renderStreakUI(data) {
+                const streak = data.currentStreak || 0;
+                const label = document.getElementById('streakCountLabel');
+                const hint = document.getElementById('streakHint');
+                const fill = document.getElementById('streakDotFill');
+
+                if (label) label.textContent = streak + ' Day' + (streak !== 1 ? 's' : '');
+                if (fill) fill.style.width = Math.min(streak / 7 * 90, 90) + '%';
+
+                // Update dots
+                const dots = document.querySelectorAll('.streak-dot');
+                dots.forEach(dot => {
+                    const day = parseInt(dot.getAttribute('data-day'));
+                    if (day <= streak) {
+                        dot.style.background = '#F97316';
+                        dot.style.borderColor = '#F97316';
+                        dot.style.color = '#fff';
+                    } else {
+                        dot.style.background = 'var(--bg-secondary)';
+                        dot.style.borderColor = 'var(--border-color)';
+                        dot.style.color = 'var(--text-muted)';
+                    }
+                });
+
+                // Update hint
+                if (hint) {
+                    const today = getTodayDateStr();
+                    if (data.lastActiveDate === today) {
+                        if (streak >= 7) {
+                            hint.innerHTML = '🏆 <b>Streak Master!</b> 7-day streak complete! +10 bonus credits earned!';
+                            hint.style.color = '#F97316';
+                        } else {
+                            hint.innerHTML = `✅ Active today! Come back tomorrow for Day ${streak + 1} bonus.`;
+                            hint.style.color = '#10B981';
+                        }
+                    } else {
+                        hint.textContent = 'Process any file today to build your streak!';
+                        hint.style.color = 'var(--text-muted)';
+                    }
+                }
+            }
+
+            // Init on page load
+            refreshStreakOnLoad();
+        })();
+
+
+        // =============================================
+        // KEYWORD PRESETS MANAGER SYSTEM
+        // =============================================
+        (function initPresetsSystem() {
+            const PRESETS_KEY = 'metagen_keyword_presets';
+
+            function getPresets() {
+                try { return JSON.parse(localStorage.getItem(PRESETS_KEY)) || []; }
+                catch { return []; }
+            }
+
+            function savePresets(presets) {
+                localStorage.setItem(PRESETS_KEY, JSON.stringify(presets));
+            }
+
+            function renderSidebarPresets() {
+                const presets = getPresets();
+                const listEl = document.getElementById('sidebarPresetsList');
+                if (!listEl) return;
+
+                if (presets.length === 0) {
+                    listEl.innerHTML = '<div style="font-size:0.75em; color:var(--text-muted); text-align:center; padding: 10px 0;">No presets saved yet.</div>';
+                    return;
+                }
+
+                listEl.innerHTML = presets.map((p, i) => `
+                    <div style="display:flex; justify-content:space-between; align-items:center; padding:6px 8px; background:var(--bg-input); border-radius:6px; border:1px solid var(--border-color);">
+                        <div style="flex:1; min-width:0;">
+                            <div style="font-size:0.8em; font-weight:700; color:var(--text-primary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${p.name}">${p.name}</div>
+                            <div style="font-size:0.68em; color:var(--text-muted);">${p.keywords.length} keywords</div>
+                        </div>
+                        <button onclick="window.deletePreset(${i})" title="Delete" style="border:none; background:none; color:#EF4444; cursor:pointer; font-size:1em; padding:2px 6px;">×</button>
+                    </div>
+                `).join('');
+            }
+
+            function refreshAllPresetDropdowns() {
+                const presets = getPresets();
+                const dropdowns = document.querySelectorAll('.preset-select-dropdown');
+                dropdowns.forEach(dd => {
+                    const cardId = dd.getAttribute('data-card-id');
+                    // Keep first option, replace rest
+                    dd.innerHTML = '<option value="">📁 Apply Preset/Templates...</option>';
+                    presets.forEach((p, i) => {
+                        const opt = document.createElement('option');
+                        opt.value = i;
+                        opt.textContent = `${p.name} (${p.keywords.length} kw)`;
+                        dd.appendChild(opt);
+                    });
+                });
+            }
+
+            // Save preset from a card's current keywords
+            window.savePresetFromCard = function (cardId) {
+                const fileData = (typeof uploadedFilesData !== 'undefined') ? uploadedFilesData.find(f => f.id === cardId) : null;
+                if (!fileData || !fileData.keywords) {
+                    if (typeof showCustomAlert === 'function') showCustomAlert('No keywords to save. Generate metadata first.', 'warning');
+                    else alert('No keywords to save. Generate metadata first.');
+                    return;
+                }
+
+                const keywords = Array.isArray(fileData.keywords) ? fileData.keywords.filter(k => k && k.trim()) : fileData.keywords.split(',').map(k => k.trim()).filter(Boolean);
+                if (keywords.length === 0) {
+                    if (typeof showCustomAlert === 'function') showCustomAlert('No keywords found on this card.', 'warning');
+                    else alert('No keywords found on this card.');
+                    return;
+                }
+
+                const name = prompt('Enter a name for this preset:', fileData.title || 'My Preset');
+                if (!name || !name.trim()) return;
+
+                const presets = getPresets();
+                presets.push({ name: name.trim(), keywords: keywords });
+                savePresets(presets);
+                renderSidebarPresets();
+                refreshAllPresetDropdowns();
+
+                if (typeof showCustomAlert === 'function') showCustomAlert(`✅ Preset "${name.trim()}" saved with ${keywords.length} keywords!`, 'success');
+            };
+
+            // Apply preset to a card
+            window.applyPresetToCard = function (cardId, presetIndex) {
+                if (presetIndex === '' || presetIndex === null || presetIndex === undefined) return;
+                const presets = getPresets();
+                const preset = presets[parseInt(presetIndex)];
+                if (!preset) return;
+
+                const fileData = (typeof uploadedFilesData !== 'undefined') ? uploadedFilesData.find(f => f.id === cardId) : null;
+                if (!fileData) return;
+
+                // Merge: add preset keywords that don't already exist
+                let existing = Array.isArray(fileData.keywords) ? fileData.keywords : (fileData.keywords || '').split(',').map(k => k.trim()).filter(Boolean);
+                const existingLower = new Set(existing.map(k => k.toLowerCase()));
+
+                let addedCount = 0;
+                preset.keywords.forEach(kw => {
+                    if (!existingLower.has(kw.toLowerCase())) {
+                        existing.push(kw);
+                        existingLower.add(kw.toLowerCase());
+                        addedCount++;
+                    }
+                });
+
+                fileData.keywords = existing;
+                if (typeof window.updateKeywordsDisplay === 'function') window.updateKeywordsDisplay(cardId);
+
+                // Reset dropdown
+                const dd = document.querySelector(`.preset-select-dropdown[data-card-id="${cardId}"]`);
+                if (dd) dd.value = '';
+
+                if (typeof showCustomAlert === 'function') showCustomAlert(`📋 Applied "${preset.name}" — ${addedCount} new keyword${addedCount !== 1 ? 's' : ''} added!`, 'success');
+            };
+
+            // Delete preset
+            window.deletePreset = function (index) {
+                const presets = getPresets();
+                if (index < 0 || index >= presets.length) return;
+                const name = presets[index].name;
+                presets.splice(index, 1);
+                savePresets(presets);
+                renderSidebarPresets();
+                refreshAllPresetDropdowns();
+                if (typeof showCustomAlert === 'function') showCustomAlert(`🗑️ Preset "${name}" deleted.`, 'info');
+            };
+
+            // Create empty preset from sidebar input
+            window.createKeywordPresetFromSidebar = function () {
+                const input = document.getElementById('newPresetName');
+                const name = input ? input.value.trim() : '';
+                if (!name) {
+                    if (typeof showCustomAlert === 'function') showCustomAlert('Please enter a preset name.', 'warning');
+                    else alert('Please enter a preset name.');
+                    return;
+                }
+
+                const keywordsStr = prompt('Enter keywords (comma-separated):');
+                if (!keywordsStr || !keywordsStr.trim()) return;
+
+                const keywords = keywordsStr.split(',').map(k => k.trim()).filter(Boolean);
+                if (keywords.length === 0) return;
+
+                const presets = getPresets();
+                presets.push({ name: name, keywords: keywords });
+                savePresets(presets);
+                if (input) input.value = '';
+                renderSidebarPresets();
+                refreshAllPresetDropdowns();
+                if (typeof showCustomAlert === 'function') showCustomAlert(`✅ Preset "${name}" created with ${keywords.length} keywords!`, 'success');
+            };
+
+            // Expose refresh for dynamic card creation
+            window.refreshPresetDropdowns = refreshAllPresetDropdowns;
+
+            // Init on load
+            renderSidebarPresets();
+            refreshAllPresetDropdowns();
+
+            // Also refresh when new cards are created (MutationObserver)
+            let _presetRefreshTimer = null;
+            let _isRefreshing = false;
+            const observer = new MutationObserver(() => {
+                if (_isRefreshing) return; // Prevent re-entry
+                clearTimeout(_presetRefreshTimer);
+                _presetRefreshTimer = setTimeout(() => {
+                    _isRefreshing = true;
+                    observer.disconnect(); // Stop observing during refresh
+                    try {
+                        refreshAllPresetDropdowns();
+                    } catch (e) { console.warn('Preset refresh error:', e); }
+                    // Re-observe after a tick
+                    setTimeout(() => {
+                        const c = document.getElementById('filePreviewContainer');
+                        if (c) observer.observe(c, { childList: true });
+                        _isRefreshing = false;
+                    }, 50);
+                }, 300); // Debounce 300ms
+            });
+            const container = document.getElementById('filePreviewContainer');
+            if (container) observer.observe(container, { childList: true });
+        })();
+
+        window.loadReviewStats = function () {
+            // LocalStorage থেকে আগের রিভিউ ডেটা লোড করুন অথবা ডিফল্ট 1584 সেট করুন
+            let stats = JSON.parse(localStorage.getItem('metagen_review_stats'));
+            if (!stats) {
+                stats = { count: 1584, totalScore: 1584 * 4.9 };
+                localStorage.setItem('metagen_review_stats', JSON.stringify(stats));
+            }
+
+            let avg = (stats.totalScore / stats.count).toFixed(1);
+
+            // 5.0 এর উপরে যেন না যায়
+            if (parseFloat(avg) > 5.0) avg = "5.0";
+
+            let avgEl = document.getElementById('reviewAvgScore');
+            let countEl = document.getElementById('reviewTotalCount');
+
+            if (avgEl) avgEl.innerText = avg;
+            if (countEl) countEl.innerText = stats.count.toLocaleString();
+        };
+
+        window.openFeedbackWithRating = function (n) {
+            const feedbackModal = document.getElementById('feedbackModal');
+            if (feedbackModal) {
+                feedbackModal.style.display = 'flex';
+                if (typeof setRating === 'function') {
+                    setRating(n);
+                }
+                const typeSelect = document.getElementById('feedbackType');
+                if (typeSelect) typeSelect.value = 'General Feedback';
+            }
+        };
+
+        // Star Hover Effects
+        window.hoverStars = function (n) {
+            const stars = document.querySelectorAll('.review-stars-interactive i');
+            stars.forEach((star, index) => {
+                if (index < n) {
+                    star.style.color = '#F59E0B'; // Highlighted
+                    star.style.transform = 'scale(1.1)';
+                } else {
+                    star.style.color = '#4A5568'; // Muted
+                    star.style.transform = 'scale(1)';
+                }
+            });
+        };
+
+        window.resetHoverStars = function () {
+            const stars = document.querySelectorAll('.review-stars-interactive i');
+            stars.forEach(star => {
+                star.style.color = '#F59E0B'; // Reset to default Yellow
+                star.style.transform = 'scale(1)';
+            });
+        };
+
+        document.addEventListener('DOMContentLoaded', function () {
+            loadReviewStats();
+        });
+
+
+     
