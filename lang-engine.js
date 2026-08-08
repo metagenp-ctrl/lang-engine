@@ -367,7 +367,7 @@
                 "faq_q11": "🎭 How does the AI Image Generator work?",
                 "faq_a11": "<p>Use the FLUX model to generate images directly. Write a prompt and create unique images for your stock portfolio!</p>",
                 "faq_q12": "💬 How to get help or give feedback?",
-                "faq_a12": "<p>Email us at: <strong>metagenp@gmail.com</strong> or use the in-app feedback button. We try to respond within 12 hours!</p>"
+                "faq_a12": "<p>Email us at: <strong>metagenp@gmail.com</strong> or use the in-app feedback button. We try to respond within 12 hours!</p>",
                 "our_mission": "Our Mission: Empowering Global Creators",
                 "our_mission_p": "MetaGen Pro was born out of a simple observation: talented photographers were losing precious hours to data entry instead of capturing the world. We believe that every creator, regardless of their technical background, deserves access to professional-grade SEO tools.",
                 "our_mission_p2": "Our commitment to the stock community is built on three pillars: <strong>Accuracy</strong>, <strong>Efficiency</strong>, and <strong>Transparency</strong>. We don't just provide a tool; we provide a pathway to sustainable passive income for thousands of contributors worldwide. Based in Bangladesh, we are proud to serve a global community of over 1,500 active users.",
@@ -743,7 +743,7 @@
                 "faq_q11": "🎭 এআই ইমেজ জেনারেটর কিভাবে কাজ করে?",
                 "faq_a11": "<p>সরাসরি ছবি তৈরি করতে FLUX মডেল ব্যবহার করুন। প্রম্পট লিখুন এবং আপনার স্টক পোর্টফোলিও-র জন্য ইউনিক ছবি তৈরি করুন!</p>",
                 "faq_q12": "💬 সাহায্য বা ফিডব্যাকের জন্য কি করব?",
-                "faq_a12": "<p>আমাদের ইমেল করুন: <strong>metagenp@gmail.com</strong> অথবা অ্যাপের ফিডব্যাক বাটন ব্যবহার করুন। আমরা ১২ ঘণ্টার মধ্যে উত্তর দেওয়ার চেষ্টা করি!</p>"
+                "faq_a12": "<p>আমাদের ইমেল করুন: <strong>metagenp@gmail.com</strong> অথবা অ্যাপের ফিডব্যাক বাটন ব্যবহার করুন। আমরা ১২ ঘণ্টার মধ্যে উত্তর দেওয়ার চেষ্টা করি!</p>",
                 "our_mission": "আমাদের লক্ষ্য: বিশ্বব্যাপী ক্রিয়েটরদের ক্ষমতায়ন",
                 "our_mission_p": "MetaGen Pro-এর জন্ম একটি সাধারণ পর্যবেক্ষণ থেকে: মেধাবী আলোকচিত্রীরা বিশ্বকে ক্যামেরাবন্দী করার বদলে ডাটা এন্ট্রির পেছনে তাদের মূল্যবান সময় নষ্ট করছিলেন। আমরা বিশ্বাস করি যে, প্রতিটি ক্রিয়েটর, তাদের কারিগরি ব্যাকগ্রাউন্ড যাই হোক না কেন, পেশাদার মানের SEO টুল ব্যবহারের অধিকার রাখে।",
                 "our_mission_p2": "স্টক কমিউনিটির প্রতি আমাদের প্রতিশ্রুতি তিনটি স্তম্ভের ওপর প্রতিষ্ঠিত: <strong>নির্ভুলতা</strong>, <strong>দক্ষতা</strong>, এবং <strong>স্বচ্ছতা</strong>। আমরা শুধু একটি টুল প্রদান করি না; আমরা বিশ্বজুড়ে হাজার হাজার কন্ট্রিবিউটরের জন্য টেকসই প্যাসিভ ইনকামের পথ তৈরি করি। বাংলাদেশে ভিত্তিক হয়ে, আমরা বিশ্বজুড়ে ১,৫০০ এরও বেশি সক্রিয় ব্যবহারকারীর কমিউনিটিকে সেবা দিতে পেরে গর্বিত।",
@@ -1115,7 +1115,7 @@
                 "faq_q11": "🎭 AI इमेज जेनरेटर कैसे काम करता है?",
                 "faq_a11": "<p>सीधे चित्र बनाने के लिए FLUX मॉडल का उपयोग करें। अपनी Together AI कुंजी सेट करें, एक प्रॉम्प्ट दर्ज करें, और अपने स्टॉक पोर्टफोलियो के लिए अद्वितीय चित्र बनाएं!</p>",
                 "faq_q12": "💬 मुझे सहायता कैसे मिल सकती है या प्रतिक्रिया कैसे साझा कर सकता हूँ?",
-                "faq_a12": "<p>हमें <strong>metagenp@gmail.com</strong> पर ईमेल करें या ऐप में फीडबैक बटन का उपयोग करें। हम 12 घंटे के भीतर महत्वपूर्ण समस्याओं का उत्तर देते हैं!</p>"
+                "faq_a12": "<p>हमें <strong>metagenp@gmail.com</strong> पर ईमेल करें या ऐप में फीडबैक बटन का उपयोग करें। हम 12 घंटे के भीतर महत्वपूर्ण समस्याओं का उत्तर देते हैं!</p>",
                 "our_mission": "हमारा मिशन: वैश्विक रचनाकारों को सशक्त बनाना",
                 "our_mission_p": "MetaGen Pro की शुरुआत एक सरल अवलोकन से हुई थी: प्रतिभाशाली फोटोग्राफर दुनिया को कैद करने के बजाय डेटा प्रविष्टि (Data Entry) में अपना कीमती समय गंवा रहे थे। हमारा मानना है कि हर रचनाकार, चाहे उसकी तकनीकी पृष्ठभूमि कुछ भी हो, पेशेवर स्तर के SEO टूल का उपयोग करने का हकदार है।",
                 "our_mission_p2": "स्टॉक समुदाय के प्रति हमारी प्रतिबद्धता तीन स्तंभों पर बनी है: <strong>सटीकता</strong>, <strong>दक्षता</strong>, और <strong>पारदर्शिता</strong>। हम सिर्फ एक टूल प्रदान नहीं करते; हम दुनिया भर के हजारों योगदानकर्ताओं के लिए एक टिकाऊ निष्क्रिय आय (Passive Income) का मार्ग प्रदान करते हैं। बांग्लादेश में स्थित, हमें 1,500 से अधिक सक्रिय उपयोगकर्ताओं के वैश्विक समुदाय की सेवा करने पर गर्व है।",
@@ -1484,7 +1484,7 @@
                 "faq_q11": "🎭 ¿Cómo funciona el generador de imágenes IA?",
                 "faq_a11": "<p>Usa modelos FLUX para crear imágenes. Configura tu clave de Together AI, escribe un prompt y genera imágenes únicas para tu portafolio.</p>",
                 "faq_q12": "💬 ¿Cómo obtengo ayuda o envío comentarios?",
-                "faq_a12": "<p>Escríbenos a <strong>metagenp@gmail.com</strong> o usa el botón de Feedback. ¡Respondemos en menos de 12 horas a problemas críticos!</p>"
+                "faq_a12": "<p>Escríbenos a <strong>metagenp@gmail.com</strong> o usa el botón de Feedback. ¡Respondemos en menos de 12 horas a problemas críticos!</p>",
                 "our_mission": "Nuestra Misión: Empoderar a Creadores Globales",
                 "our_mission_p": "MetaGen Pro nació de una observación simple: fotógrafos talentosos perdían horas valiosas ingresando datos en lugar de capturar el mundo. Creemos que cada creador, independientemente de sus conocimientos técnicos, merece acceso a herramientas SEO de nivel profesional.",
                 "our_mission_p2": "Nuestro compromiso con la comunidad de stock se basa en tres pilares: <strong>Precisión</strong>, <strong>Eficiencia</strong> y <strong>Transparencia</strong>. No solo ofrecemos una herramienta; proporcionamos un camino hacia ingresos pasivos sostenibles para miles de colaboradores en todo el mundo. Con sede en Bangladesh, nos enorgullece servir a una comunidad global de más de 1,500 usuarios activos.",
@@ -1850,7 +1850,7 @@
                 "faq_q11": "🎭 Como funciona o gerador de imagens IA?",
                 "faq_a11": "<p>Use modelos FLUX para criar imagens. Configure sua chave Together AI e gere imagens exclusivas para seu portfólio!</p>",
                 "faq_q12": "💬 Como obtenho ajuda?",
-                "faq_a12": "<p>E-mail: <strong>metagenp@gmail.com</strong> ou use o botão Feedback. Respondemos em até 12 horas!</p>"
+                "faq_a12": "<p>E-mail: <strong>metagenp@gmail.com</strong> ou use o botão Feedback. Respondemos em até 12 horas!</p>",
                 "our_mission": "Nossa Missão: Capacitar Criadores Globais",
                 "our_mission_p": "O MetaGen Pro nasceu de uma observação simples: fotógrafos talentosos estavam perdendo horas preciosas com inserção de dados em vez de capturar o mundo. Acreditamos que todo criador, independentemente do seu conhecimento técnico, merece acesso a ferramentas de SEO de nível profissional.",
                 "our_mission_p2": "Nosso compromisso com a comunidade de stock é construído sobre três pilares: <strong>Precisão</strong>, <strong>Eficiência</strong> e <strong>Transparência</strong>. Não oferecemos apenas uma ferramenta; oferecemos um caminho para uma renda passiva sustentável para milhares de colaboradores em todo o mundo. Com sede em Bangladesh, temos orgulho de servir a uma comunidade global de mais de 1.500 usuários ativos.",
@@ -2216,7 +2216,7 @@
                 "faq_q11": "🎭 Bagaimana cara kerja AI Image Generator?",
                 "faq_a11": "<p>Gunakan model FLUX untuk membuat gambar. Masukkan kunci Together AI dan buat gambar unik untuk portofolio Anda!</p>",
                 "faq_q12": "💬 Butuh bantuan?",
-                "faq_a12": "<p>Email ke <strong>metagenp@gmail.com</strong> atau gunakan tombol Feedback. Kami balas dalam 12 jam!</p>"
+                "faq_a12": "<p>Email ke <strong>metagenp@gmail.com</strong> atau gunakan tombol Feedback. Kami balas dalam 12 jam!</p>",
                 "our_mission": "Misi Kami: Memberdayakan Kreator Global",
                 "our_mission_p": "MetaGen Pro lahir dari pengamatan sederhana: fotografer berbakat kehilangan waktu berharga untuk entri data daripada mengabadikan dunia. Kami percaya bahwa setiap kreator, terlepas dari latar belakang teknis mereka, berhak mendapatkan akses ke alat SEO tingkat profesional.",
                 "our_mission_p2": "Komitmen kami terhadap komunitas stock dibangun di atas tiga pilar: <strong>Akurasi</strong>, <strong>Efisiensi</strong>, dan <strong>Transparansi</strong>. Kami tidak hanya menyediakan alat; kami menyediakan jalur menuju pendapatan pasif yang berkelanjutan bagi ribuan kontributor di seluruh dunia. Berbasis di Bangladesh, kami bangga dapat melayani komunitas global dengan lebih dari 1.500 pengguna aktif.",
@@ -2581,7 +2581,7 @@
                 "faq_q10": "🔧 Fehlerbehebung",
                 "faq_a10": "<ul><li>API-Fehler? Key prüfen.</li><li>Datei zu groß? Max 20MB.</li></ul>",
                 "faq_q12": "💬 Hilfe & Feedback",
-                "faq_a12": "<p>E-Mail an <strong>metagenp@gmail.com</strong>. Wir antworten innerhalb von 12 Stunden!</p>"
+                "faq_a12": "<p>E-Mail an <strong>metagenp@gmail.com</strong>. Wir antworten innerhalb von 12 Stunden!</p>",
                 "our_mission": "Unsere Mission: Globale Creator stärken",
                 "our_mission_p": "MetaGen Pro entstand aus einer einfachen Beobachtung: Talentierte Fotografen verloren wertvolle Stunden mit der Dateneingabe, anstatt die Welt einzufangen. Wir glauben, dass jeder Creator, unabhängig von seinem technischen Hintergrund, Zugang zu professionellen SEO-Tools verdient.",
                 "our_mission_p2": "Unser Engagement für die Stock-Community basiert auf drei Säulen: <strong>Genauigkeit</strong>, <strong>Effizienz</strong> und <strong>Transparenz</strong>. Wir bieten nicht nur ein Tool; wir bieten Tausenden von Anbietern weltweit einen Weg zu nachhaltigem passivem Einkommen. Mit Sitz in Bangladesch sind wir stolz darauf, eine globale Community von über 1.500 aktiven Nutzern zu bedienen.",
@@ -2917,7 +2917,7 @@
                 "faq_q9": "🔒 Мои данные защищены?",
                 "faq_a9": "<p><strong>Полная приватность!</strong> Мы не храним ваши изображения. Все удаляется сразу после обработки.</p>",
                 "faq_q12": "💬 Поддержка",
-                "faq_a12": "<p>Пишите на <strong>metagenp@gmail.com</strong>. Мы отвечаем в течение 12 часов!</p>"
+                "faq_a12": "<p>Пишите на <strong>metagenp@gmail.com</strong>. Мы отвечаем в течение 12 часов!</p>",
                 "our_mission": "Наша миссия: Расширение возможностей авторов по всему миру",
                 "our_mission_p": "MetaGen Pro родился из простого наблюдения: талантливые фотографы тратили драгоценные часы на ввод данных вместо того, чтобы снимать мир. Мы верим, что каждый автор, независимо от его технической подготовки, заслуживает доступа к SEO-инструментам профессионального уровня.",
                 "our_mission_p2": "Наша приверженность стоковому сообществу строится на трех столпах: <strong>Точность</strong>, <strong>Эффективность</strong> и <strong>Прозрачность</strong>. Мы не просто предоставляем инструмент; мы открываем путь к устойчивому пассивному доходу для тысяч авторов по всему миру. Находясь в Бангладеш, мы гордимся тем, что обслуживаем глобальное сообщество, насчитывающее более 1 500 активных пользователей.",
@@ -3285,7 +3285,7 @@
                 "faq_q9": "🔒 Mes données sont-elles privées ?",
                 "faq_a9": "<p><strong>100% Privé !</strong> Le traitement se fait dans votre navigateur. Nous ne stockons JAMAIS vos images. Les données sont purgées après traitement.</p>",
                 "faq_q12": "💬 Comment obtenir de l'aide ?",
-                "faq_a12": "<p>Envoyez-nous un email à <strong>metagenp@gmail.com</strong> ou utilisez le bouton Feedback. Nous répondons sous 12 heures !</p>"
+                "faq_a12": "<p>Envoyez-nous un email à <strong>metagenp@gmail.com</strong> ou utilisez le bouton Feedback. Nous répondons sous 12 heures !</p>",
                 "our_mission": "Notre Mission : Autonomiser les Créateurs du Monde Entier",
                 "our_mission_p": "MetaGen Pro est né d'un constat simple : des photographes talentueux perdaient des heures précieuses à saisir des données au lieu de capturer le monde. Nous pensons que chaque créateur, quel que soit son bagage technique, mérite d'avoir accès à des outils SEO de niveau professionnel.",
                 "our_mission_p2": "Notre engagement envers la communauté du stock repose sur trois piliers : <strong>Précision</strong>, <strong>Efficacité</strong> et <strong>Transparence</strong>. Nous ne fournissons pas seulement un outil ; nous offrons une voie vers des revenus passifs durables pour des milliers de contributeurs à travers le monde. Basés au Bangladesh, nous sommes fiers de servir une communauté mondiale de plus de 1 500 utilisateurs actifs.",
@@ -3673,7 +3673,7 @@
                 "faq_q11": "🎭 AI画像生成機能の仕組みは？",
                 "faq_a11": "<p>FLUXモデルを使用して直接画像を作成できます。Together AI キーを設定し、プロンプトを入力して、ストックポートフォリオ用のユニークな画像を生成しましょう！</p>",
                 "faq_q12": "💬 ヘルプやフィードバックの連絡先は？",
-                "faq_a12": "<p><strong>metagenp@gmail.com</strong> までメールをいただくか、アプリ内のフィードバックボタンをご利用ください。重要な問題には12時間以内に回答いたします！</p>"
+                "faq_a12": "<p><strong>metagenp@gmail.com</strong> までメールをいただくか、アプリ内のフィードバックボタンをご利用ください。重要な問題には12時間以内に回答いたします！</p>",
                 "our_mission": "私たちのミッション：世界中のクリエイターを支援する",
                 "our_mission_p": "MetaGen Proは、シンプルな気づきから生まれました。才能あるフォトグラファーたちが、世界を撮影する代わりにデータ入力に貴重な時間を費やしていたのです。私たちは、技術的なバックグラウンドに関わらず、すべてのクリエイターがプロフェッショナルなSEOツールを利用できるべきだと信じています。",
                 "our_mission_p2": "ストックコミュニティに対する私たちの取り組みは、<strong>正確性</strong>、<strong>効率性</strong>、<strong>透明性</strong>という3つの柱に基づいています。単なるツールを提供するだけでなく、世界中の何千ものコントリビューターに持続可能な不労所得への道を提供します。バングラデシュを拠点とする私たちは、1,500人以上のアクティブユーザーからなるグローバルコミュニティにサービスを提供できることを誇りに思っています。",
