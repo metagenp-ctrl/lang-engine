@@ -34,11 +34,17 @@
         }
     }
 
-    // Load each module sequentially via script tags
-    modules.forEach(function (modulePath) {
+    // Load each module sequentially — wait for onload before loading the next
+    function loadNext(index) {
+        if (index >= modules.length) return;
         const script = document.createElement('script');
-        script.src = baseUrl + modulePath;
-        script.defer = true;
+        script.src = baseUrl + modules[index];
+        script.onload = function () { loadNext(index + 1); };
+        script.onerror = function () {
+            console.error('Failed to load module: ' + modules[index]);
+            loadNext(index + 1);
+        };
         document.head.appendChild(script);
-    });
+    }
+    loadNext(0);
 })();
