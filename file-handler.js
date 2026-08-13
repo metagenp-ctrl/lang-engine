@@ -1245,7 +1245,7 @@ document.addEventListener('DOMContentLoaded', function () {
     // --- ACTION BUTTONS ---
     if (clearAllButton) {
         clearAllButton.onclick = function () {
-            uploadedFilesData = [];
+            uploadedFilesData.length = 0;
             previewContainer.innerHTML = '';
             updateAllButtonStates();
 
@@ -1291,6 +1291,7 @@ document.addEventListener('DOMContentLoaded', function () {
         });
         return cardIds;
     }
+    window.getSelectedCards = getSelectedCards;
 
     // Delete selected files
     window.deleteSelectedFiles = function () {
