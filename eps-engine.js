@@ -10,6 +10,20 @@ document.addEventListener('DOMContentLoaded', function () {
     if (!window.uploadedFilesData) window.uploadedFilesData = [];
     const uploadedFilesData = window.uploadedFilesData;
 
+    function escapeXml(unsafe) {
+        if (!unsafe) return '';
+        return unsafe.replace(/[<>&'"]/g, function (c) {
+            switch (c) {
+                case '<': return '&lt;';
+                case '>': return '&gt;';
+                case '&': return '&amp;';
+                case '\'': return '&apos;';
+                case '"': return '&quot;';
+                default: return c;
+            }
+        });
+    }
+
     // ==========================================
     // ADOBE STOCK EPS10 GENERATOR (CLIENT-SIDE)
     // ==========================================
