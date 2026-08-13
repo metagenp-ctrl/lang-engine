@@ -270,7 +270,7 @@ document.addEventListener('DOMContentLoaded', function () {
     };
 
     window.batchQualityCheck = async function () {
-        const selectedCardIds = getSelectedCards();
+        const selectedCardIds = typeof window.getSelectedCards === 'function' ? window.getSelectedCards() : [];
         const filesToProcess = selectedCardIds.length > 0
             ? uploadedFilesData.filter(f => selectedCardIds.includes(f.id))
             : uploadedFilesData;
