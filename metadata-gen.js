@@ -909,7 +909,7 @@ document.addEventListener('DOMContentLoaded', function () {
         spinner.style.display = 'block';
         metaCol.style.display = 'none';
 
-        const selectedProvider = document.getElementById('aiProviderSelect')?.value || 'gemini';
+        const selectedProvider = document.getElementById('aiProviderSelect')?.value || 'groq';
 
         const minTitle = document.getElementById('minTitleWords')?.value || 10;
         const maxTitle = document.getElementById('maxTitleWords')?.value || 20;
@@ -1735,9 +1735,13 @@ ${isShort ? '- Since this is a SHORT/VERTICAL video, heavily prioritize keywords
         }
 
         // 2. Description Length Score (Max 25)
+        const activePlatforms = [...document.querySelectorAll('.platform-button.active')].map(btn => btn.dataset.platform);
+        const noDescriptionMode = activePlatforms.includes('adobe') || activePlatforms.includes('Magnific');
         const desc = (metadata.description || '').trim();
         const descLength = desc.length;
-        if (descLength >= 100 && descLength <= 160) {
+        if (noDescriptionMode) {
+            score += 25; // Full score since it's intentionally omitted
+        } else if (descLength >= 100 && descLength <= 160) {
             score += 25;
         } else if (descLength >= 70 && descLength < 100) {
             score += 20;
