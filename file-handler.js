@@ -1809,17 +1809,22 @@ document.addEventListener('DOMContentLoaded', function () {
             // Check plan and usage
             let usage = { count: 0, limit: 10 };
             let isProPremium = false;
+            let cachedPlan = 'free';
+            let cachedToken = '';
 
             if (user) {
                 try {
-                    const [profileDoc, usageData] = await Promise.all([
+                    const [profileDoc, usageData, idToken] = await Promise.all([
                         db.collection('users').doc(user.email).get(),
-                        getMetadataUsage(user.email)
+                        getMetadataUsage(user.email),
+                        user.getIdToken()
                     ]);
 
                     const profileData = profileDoc.exists ? profileDoc.data() : null;
                     const dbPlan = (profileData?.plan || '').toLowerCase();
                     isProPremium = (dbPlan === 'pro' || dbPlan === 'premium' || dbPlan === 'agency');
+                    cachedPlan = dbPlan;
+                    cachedToken = idToken || '';
                     usage = usageData;
                 } catch (e) {
                     console.warn('Initial data check failed', e);
@@ -1894,14 +1899,8 @@ document.addEventListener('DOMContentLoaded', function () {
                     if (currentCard) currentCard.style.borderColor = "#F97316";
 
                     try {
-                        // Live Usage Check
-                        const latestUsage = await getMetadataUsage(authUser?.email || "unknown");
-                        if (latestUsage.count >= latestUsage.limit) {
-                            throw new Error("Daily limit reached");
-                        }
-
-                        // 🧠 Call AI (Concurrent)
-                        const metadata = await generateMetadata(fileData);
+                        // 🧠 Call AI (Concurrent) — plan/token cached at batch level for speed
+                        const metadata = await generateMetadata(fileData, { token: cachedToken, plan: cachedPlan });
 
                         // Save Data
                         fileData.title = metadata.title;
