@@ -79,11 +79,14 @@
             avatarDefault.style.display = 'block';
         }
 
-        async function showMainApp(email, displayName, avatarUrl) {
-            hideLoadingState();
-            // Hide the login modal and show main app. If email provided, treat as logged-in.
-            document.getElementById('loginModal').classList.add('hidden');
-            document.querySelector('.app-container').style.display = 'flex';
+       async function showMainApp(email, displayName, avatarUrl) {
+            if (typeof hideLoadingState === 'function') hideLoadingState();
+           
+            const loginModal = document.getElementById('loginModal');
+            if (loginModal) loginModal.classList.add('hidden');
+
+            const appContainer = document.querySelector('.app-container');
+            if (appContainer) appContainer.style.display = 'flex';
 
             const usageIndicator = document.getElementById('headerUsageLimit');
 
