@@ -42,10 +42,12 @@
             const avatarInitial = document.getElementById('profileAvatarSmallInitial');
             const avatarDefault = document.getElementById('profileAvatarSmallDefault');
 
+            // ⚠️ Null Check: যদি পেজে এই এলিমেন্টগুলো না থাকে, তবে কোড এখানেই থেমে যাবে
+            if (!avatarImg || !avatarInitial || !avatarDefault) return;
+
             const firstName = displayName || email.split('@')[0];
             const initial = firstName.charAt(0).toUpperCase();
 
-            // FIX: Use Google avatarUrl if available, otherwise use Gravatar
             let finalSrc;
             if (avatarUrl) {
                 finalSrc = avatarUrl;
@@ -53,32 +55,30 @@
                 finalSrc = getGravatarUrl(email);
             }
 
-            // Set image source
             avatarImg.src = finalSrc;
 
-            // Hide default icon, show image
             avatarDefault.style.display = 'none';
             avatarImg.style.display = 'block';
             avatarInitial.style.display = 'none';
 
-            // If image fails to load (broken link), show initial letter instead
             avatarImg.onerror = function () {
                 avatarImg.style.display = 'none';
                 avatarInitial.textContent = initial;
                 avatarInitial.style.display = 'block';
             };
         }
+
         // Reset header profile button to default icon
         function resetHeaderProfileImage() {
             const avatarImg = document.getElementById('profileAvatarSmallImg');
             const avatarInitial = document.getElementById('profileAvatarSmallInitial');
             const avatarDefault = document.getElementById('profileAvatarSmallDefault');
 
-            avatarImg.style.display = 'none';
-            avatarInitial.style.display = 'none';
-            avatarDefault.style.display = 'block';
+            // ⚠️ Null Check: এলিমেন্ট থাকলে তবেই স্টাইল অ্যাপ্লাই হবে
+            if (avatarImg) avatarImg.style.display = 'none';
+            if (avatarInitial) avatarInitial.style.display = 'none';
+            if (avatarDefault) avatarDefault.style.display = 'block';
         }
-
        async function showMainApp(email, displayName, avatarUrl) {
             if (typeof hideLoadingState === 'function') hideLoadingState();
            
@@ -136,8 +136,11 @@
                     }
                 }
 
-                document.getElementById('userProfile').classList.add('visible');
-                document.getElementById('userEmail').textContent = `👤 ${email}`;
+                const userProfileEl = document.getElementById('userProfile');
+               if (userProfileEl) userProfileEl.classList.add('visible');
+
+               const userEmailEl = document.getElementById('userEmail');
+               if (userEmailEl) userEmailEl.textContent = `👤 ${email}`;
                 // Set header profile button image with name
                 const name = displayName || email.split('@')[0];
                 // FIX: Pass avatarUrl to the update function
@@ -215,8 +218,11 @@
                 }
             } else {
                 // Not logged in: hide the small user-profile panel
-                document.getElementById('userProfile').classList.remove('visible');
-                document.getElementById('userEmail').textContent = '';
+                const userProfileEl = document.getElementById('userProfile');
+                if (userProfileEl) userProfileEl.classList.remove('visible');
+
+                const userEmailEl = document.getElementById('userEmail');
+                if (userEmailEl) userEmailEl.textContent = '';
                 // Reset header profile button
                 resetHeaderProfileImage();
 
