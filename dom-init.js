@@ -1,6 +1,6 @@
 // MetaGen Pro - DOM Init Module
 document.addEventListener('DOMContentLoaded', function () {
-    if(typeof showLoadingState === 'function') showLoadingState();
+    if (typeof showLoadingState === 'function') showLoadingState();
     // --- NEW: Sidebar Toggle Logic ---
     const sidebarToggleBtn = document.getElementById('sidebarToggleBtn');
     const sidebar = document.getElementById('appSidebar');
@@ -80,9 +80,6 @@ document.addEventListener('DOMContentLoaded', function () {
     const exportButton = document.getElementById('exportButton');
     const embedMetadataButton = document.getElementById('embedMetadataButton');
     const clearAllButton = document.getElementById('clearAllButton');
-    window.uploadedFilesData = [];
-
-
 
     window.showProUpgradeAlert = function () {
         alert("Upgrade to Pro to unlock SEO Score & Rejection Predictor.");
