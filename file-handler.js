@@ -635,7 +635,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
 
     // Helper to capture a small thumbnail for history
-    function captureThumbnail(cardId, size = 120) {
+    window.captureThumbnail = function (cardId, size = 120) {
         const img = document.querySelector(`#${cardId} .thumbnail-medium`);
         if (!img || !img.complete || img.naturalWidth === 0) return null;
 
@@ -1664,19 +1664,19 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // ===== TRANSLATION FEATURE =====
     // ===== BATCH PROGRESS BAR HELPERS =====
-    let _bpStartTime = 0;
+    window._bpStartTime = 0;
 
-    const _bpStages = {
+    window._bpStages = {
         generate: { icon: '⚙️', label: 'Generating Metadata' },
         translate: { icon: '🌐', label: 'Translating Files' },
         prompt: { icon: '✨', label: 'Processing Prompts' }
     };
 
-    function showBatchProgress(stage) {
+    window.showBatchProgress = function (stage) {
         const overlay = document.getElementById('batchProgressOverlay');
         const fill = document.getElementById('bpFill');
         if (!overlay) return;
-        const s = _bpStages[stage] || _bpStages.generate;
+        const s = window._bpStages[stage] || window._bpStages.generate;
         document.getElementById('bpStageIcon').textContent = s.icon;
         document.getElementById('bpStageLabel').textContent = s.label;
         document.getElementById('bpChip').textContent = '0 / 0';
@@ -1689,10 +1689,10 @@ document.addEventListener('DOMContentLoaded', function () {
         overlay.style.display = 'block';
         // Smooth scroll to it
         overlay.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-        _bpStartTime = Date.now();
+        window._bpStartTime = Date.now();
     }
 
-    function updateBatchProgress(current, total, filename, stage) {
+    window.updateBatchProgress = function (current, total, filename, stage) {
         const overlay = document.getElementById('batchProgressOverlay');
         const fill = document.getElementById('bpFill');
         if (!overlay || overlay.style.display === 'none') return;
@@ -1713,7 +1713,7 @@ document.addEventListener('DOMContentLoaded', function () {
         // ETA
         const etaEl = document.getElementById('bpEta');
         if (etaEl && current > 0) {
-            const elapsed = (Date.now() - _bpStartTime) / 1000;
+            const elapsed = (Date.now() - window._bpStartTime) / 1000;
             const perFile = elapsed / current;
             const remaining = Math.round(perFile * (total - current));
             if (remaining > 0) {
@@ -1728,12 +1728,12 @@ document.addEventListener('DOMContentLoaded', function () {
         // Filename
         const fnEl = document.getElementById('bpFilename');
         if (fnEl && filename) {
-            const s = _bpStages[stage] || _bpStages.generate;
+            const s = window._bpStages[stage] || window._bpStages.generate;
             fnEl.innerHTML = `${s.icon} Processing: <strong>${filename}</strong>`;
         }
     }
 
-    function hideBatchProgress(success) {
+    window.hideBatchProgress = function (success) {
         const overlay = document.getElementById('batchProgressOverlay');
         const fill = document.getElementById('bpFill');
         if (!overlay) return;
@@ -1809,22 +1809,17 @@ document.addEventListener('DOMContentLoaded', function () {
             // Check plan and usage
             let usage = { count: 0, limit: 10 };
             let isProPremium = false;
-            let cachedPlan = 'free';
-            let cachedToken = '';
 
             if (user) {
                 try {
-                    const [profileDoc, usageData, idToken] = await Promise.all([
+                    const [profileDoc, usageData] = await Promise.all([
                         db.collection('users').doc(user.email).get(),
-                        getMetadataUsage(user.email),
-                        user.getIdToken()
+                        getMetadataUsage(user.email)
                     ]);
 
                     const profileData = profileDoc.exists ? profileDoc.data() : null;
                     const dbPlan = (profileData?.plan || '').toLowerCase();
                     isProPremium = (dbPlan === 'pro' || dbPlan === 'premium' || dbPlan === 'agency');
-                    cachedPlan = dbPlan;
-                    cachedToken = idToken || '';
                     usage = usageData;
                 } catch (e) {
                     console.warn('Initial data check failed', e);
@@ -1899,8 +1894,14 @@ document.addEventListener('DOMContentLoaded', function () {
                     if (currentCard) currentCard.style.borderColor = "#F97316";
 
                     try {
-                        // 🧠 Call AI (Concurrent) — plan/token cached at batch level for speed
-                        const metadata = await generateMetadata(fileData, { token: cachedToken, plan: cachedPlan });
+                        // Live Usage Check
+                        const latestUsage = await getMetadataUsage(authUser?.email || "unknown");
+                        if (latestUsage.count >= latestUsage.limit) {
+                            throw new Error("Daily limit reached");
+                        }
+
+                        // 🧠 Call AI (Concurrent)
+                        const metadata = await generateMetadata(fileData);
 
                         // Save Data
                         fileData.title = metadata.title;
