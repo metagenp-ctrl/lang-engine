@@ -24,9 +24,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
             let currentPlan = 'free';
 
-
             if (user) {
-
                 try {
                     const profileDoc = await db.collection('users').doc(user.email).get();
                     const profileData = profileDoc.exists ? profileDoc.data() : null;
@@ -115,7 +113,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
             if (!response.ok) {
                 if (response.status === 429) {
-                    showLimitModal(data.error);
+                    if (typeof showLimitModal === 'function') showLimitModal(data.error);
                     throw new Error("Daily limit reached");
                 }
                 throw new Error(`Edge API Error: ${data.error || response.statusText}`);
@@ -281,24 +279,47 @@ document.addEventListener('DOMContentLoaded', function () {
         }
 
         const btn = document.getElementById('batchQualityCheckButton');
-        const originalHTML = btn.innerHTML;
-        btn.disabled = true;
-        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Batch Checking...';
+        const originalHTML = btn ? btn.innerHTML : '';
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Batch Checking...';
+        }
 
-        showBatchProgress('quality'); // stage 'quality' will use default/prompt icon for now
+        // Safe call for showBatchProgress
+        if (typeof window.showBatchProgress === 'function') {
+            window.showBatchProgress('quality');
+        } else if (typeof showBatchProgress === 'function') {
+            showBatchProgress('quality');
+        }
 
         let count = 0;
         for (const fileData of filesToProcess) {
             count++;
-            updateBatchProgress(count, filesToProcess.length, fileData.name, 'quality');
+            
+            // Safe call for updateBatchProgress
+            if (typeof window.updateBatchProgress === 'function') {
+                window.updateBatchProgress(count, filesToProcess.length, fileData.name, 'quality');
+            } else if (typeof updateBatchProgress === 'function') {
+                updateBatchProgress(count, filesToProcess.length, fileData.name, 'quality');
+            }
+
             await checkImageQuality(fileData);
             // Minimal delay to avoid overwhelming the concurrent request limit
             await new Promise(r => setTimeout(r, 800));
         }
 
-        btn.disabled = false;
-        btn.innerHTML = originalHTML;
-        hideBatchProgress(true);
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = originalHTML;
+        }
+
+        // Safe call for hideBatchProgress
+        if (typeof window.hideBatchProgress === 'function') {
+            window.hideBatchProgress(true);
+        } else if (typeof hideBatchProgress === 'function') {
+            hideBatchProgress(true);
+        }
+
         alert(`Batch Quality Check Complete for ${filesToProcess.length} images.`);
     };
 
