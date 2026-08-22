@@ -890,7 +890,7 @@ document.addEventListener('DOMContentLoaded', function () {
         event.target.value = '';
     };
     // JS - Updated generateMetadata Function supporting Mistral
-    window.generateMetadata = async function (fileData, batchContext) {
+    window.generateMetadata = async function (fileData) {
         const card = document.getElementById(fileData.id);
         const spinner = card.querySelector('.image-spinner');
         const metaCol = card.querySelector('.card-meta-col');
@@ -979,15 +979,11 @@ document.addEventListener('DOMContentLoaded', function () {
             promptText = `Analyze this image and generate highly commercial metadata.\nFormat the output strictly as a JSON object with the keys: ${jsonFields}, "style", "mood", "rejection_prediction", "shutterstock_category", "requires_model_release", "requires_property_release", "is_ai_generated".\n- Title: Generate a highly commercial, SEO-optimized stock photo title. You MUST limit the title strictly between ${minTitle} and ${maxTitle} words. Keep it concise (Ideally 40-70 characters) to maximize SEO score. It MUST include the main subject, Action, and the detected Style and Mood. Do not use colons (:).${titleAddonString}\n- Keywords: ${keywordsPromptSegment}${descriptionPromptSegment}\n- Style: Detect the photographic style (e.g., Cinematic, Minimalist, Vintage).\n- Mood: Detect the mood of the image (e.g., Happy, Melancholic, Energetic).${vectorModeInstructions}\n- Rejection Prediction: Analyze technical quality (focus, lighting, noise, artifacts) for stock photography usage. Estimate probability of rejection (0-100) as integer in 'rejection_prediction'.\n- requires_model_release: true if the image contains recognizable people/faces, false otherwise.\n- requires_property_release: true if the image contains recognizable private properties, modern architecture, brands, logos, or artworks, false otherwise.\n- is_ai_generated: true if the image appears to be an AI-generated artwork (e.g., Midjourney, DALL-E) rather than a real photograph, false otherwise.\n- shutterstock_category: Pick the SINGLE most fitting Shutterstock category from this exact list: Abstract, Animals/Wildlife, Arts, Backgrounds/Textures, Beauty/Fashion, Buildings/Landmarks, Business/Finance, Celebrities, Education, Food and Drink, Healthcare/Medical, Holidays, Industrial, Interiors, Miscellaneous, Nature, Objects, Parks/Outdoor, People, Religion, Science, Signs/Symbols, Sports/Recreation, Technology, Transportation, Vintage. Return only the category name as a string.`;
         }
 
-        // --- PLAN CHECK LOGIC (Use cached batch context if available, else Firebase per-file) ---
+        // --- PLAN CHECK LOGIC (Firebase) ---
         const user = auth.currentUser;
         let dbPlan = "free";
         let accessToken = "";
-        if (batchContext && batchContext.token !== undefined) {
-            // ⚡ Batch mode: use pre-cached token and plan (no network calls)
-            accessToken = batchContext.token;
-            dbPlan = batchContext.plan || "free";
-        } else if (user) {
+        if (user) {
             try {
                 accessToken = await user.getIdToken();
                 const profileDoc = await db.collection('users').doc(user.email.toLowerCase()).get();
