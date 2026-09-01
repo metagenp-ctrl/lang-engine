@@ -2141,3 +2141,195 @@ body{margin:0;background:var(--bg-primary);color:var(--text-primary);font-family
             border: 1px solid rgba(239, 68, 68, 0.3);
         }
    
+
+/* ===== Metadata Generation Options Popup ===== */
+#metaGenOptionsOverlay {
+    display: none;
+    position: fixed;
+    z-index: 2000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.65);
+    backdrop-filter: blur(6px);
+    align-items: center;
+    justify-content: center;
+    animation: mgPopFadeIn 0.25s ease;
+}
+
+@keyframes mgPopFadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+.mg-popup-card {
+    background: var(--bg-modal, #1E293B);
+    border: 1px solid var(--border-color, #334155);
+    border-radius: 16px;
+    padding: 28px 32px 24px;
+    width: 90%;
+    max-width: 420px;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+    animation: mgPopSlideUp 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+@keyframes mgPopSlideUp {
+    from { opacity: 0; transform: translateY(30px) scale(0.95); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.mg-popup-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 20px;
+    padding-bottom: 14px;
+    border-bottom: 1px solid var(--border-color, #334155);
+}
+
+.mg-popup-header h3 {
+    margin: 0;
+    font-size: 1.15em;
+    font-weight: 700;
+    color: var(--accent-orange, #F97316);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.mg-popup-close {
+    background: none;
+    border: none;
+    color: var(--text-muted, #94A3B8);
+    font-size: 1.5em;
+    cursor: pointer;
+    transition: color 0.2s;
+    line-height: 1;
+    padding: 0;
+}
+
+.mg-popup-close:hover {
+    color: #EF4444;
+}
+
+.mg-popup-desc {
+    font-size: 0.82em;
+    color: var(--text-muted, #94A3B8);
+    margin-bottom: 18px;
+    line-height: 1.5;
+}
+
+.mg-checkbox-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 24px;
+}
+
+.mg-checkbox-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px;
+    background: var(--bg-input, #0F172A);
+    border: 1px solid var(--border-color, #334155);
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.mg-checkbox-item:hover {
+    border-color: var(--accent-orange, #F97316);
+    background: rgba(249, 115, 22, 0.05);
+}
+
+.mg-checkbox-item input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    accent-color: #F97316;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+.mg-checkbox-item .mg-cb-icon {
+    font-size: 1.1em;
+    width: 22px;
+    text-align: center;
+    flex-shrink: 0;
+}
+
+.mg-checkbox-item .mg-cb-label {
+    font-size: 0.88em;
+    font-weight: 600;
+    color: var(--text-primary, #F8FAFC);
+    flex: 1;
+}
+
+.mg-checkbox-item .mg-cb-tag {
+    font-size: 0.65em;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-weight: 600;
+    background: rgba(139, 92, 246, 0.15);
+    color: #A78BFA;
+    white-space: nowrap;
+}
+
+.mg-popup-actions {
+    display: flex;
+    gap: 10px;
+}
+
+.mg-popup-actions .mg-generate-btn {
+    flex: 1;
+    padding: 12px 20px;
+    border: none;
+    border-radius: 10px;
+    font-weight: 700;
+    font-size: 0.95em;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    background: linear-gradient(90deg, #F97316 0%, #ea580c 100%);
+    color: white;
+    transition: all 0.2s;
+    box-shadow: 0 4px 12px rgba(249, 115, 22, 0.3);
+}
+
+.mg-popup-actions .mg-generate-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(249, 115, 22, 0.45);
+}
+
+.mg-popup-actions .mg-cancel-btn {
+    padding: 12px 20px;
+    border: 1px solid var(--border-color, #334155);
+    border-radius: 10px;
+    font-weight: 600;
+    font-size: 0.9em;
+    cursor: pointer;
+    background: var(--bg-tertiary, #334155);
+    color: var(--text-secondary, #CBD5E1);
+    transition: all 0.2s;
+}
+
+.mg-popup-actions .mg-cancel-btn:hover {
+    background: #EF4444;
+    color: white;
+    border-color: #EF4444;
+}
+
+@media (max-width: 500px) {
+    .mg-popup-card {
+        padding: 20px 18px 18px;
+        max-width: 95%;
+    }
+
+    .mg-popup-actions {
+        flex-direction: column;
+    }
+}
+
