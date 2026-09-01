@@ -158,6 +158,12 @@ async function showMainApp(email, displayName, avatarUrl) {
             monthlyCount: usage.monthlyCount,
             baseLimit: usage.baseLimit || (usage.plan === 'premium' ? 3000 : (usage.plan === 'pro' ? 2000 : 120)),
             referralBonus: usage.referralBonus || 0,
+            shareBonus: usage.shareBonus || 0,
+            shareBonusExpiry: usage.shareBonusExpiry || '',
+            streakBonus: usage.streakBonus || 0,
+            streakBonusExpiry: usage.streakBonusExpiry || '',
+            giftBonus: usage.giftBonus || 0,
+            giftBonusExpiry: usage.giftBonusExpiry || '',
             plan: usage.plan,
             hasClaimedShareBonus: usage.hasClaimedShareBonus || false,
             trialCreditsTotal: usage.trialCreditsTotal || 0,
@@ -361,7 +367,7 @@ function updateUsageUI(count, limit, plan, monthlyLimit, monthlyCount, referralB
 
     // Handle optional data object for bulk updates (when called with object as first arg)
     const extra = (typeof count === 'object' && count !== null) ? count : {};
-    const fields = ['purchasedCredits', 'purchasedCreditsUsed', 'teamId', 'teamRole', 'trialCreditsTotal', 'trialCreditsUsed', 'trialActive', 'count', 'limit', 'plan', 'monthlyLimit', 'monthlyCount', 'referralBonus', 'baseLimit'];
+    const fields = ['purchasedCredits', 'purchasedCreditsUsed', 'teamId', 'teamRole', 'trialCreditsTotal', 'trialCreditsUsed', 'trialActive', 'count', 'limit', 'plan', 'monthlyLimit', 'monthlyCount', 'referralBonus', 'baseLimit', 'shareBonus', 'shareBonusExpiry', 'streakBonus', 'streakBonusExpiry', 'giftBonus', 'giftBonusExpiry'];
     fields.forEach(f => { if (extra[f] !== undefined) window.userUsageData[f] = extra[f]; });
 
     const u = window.userUsageData;
