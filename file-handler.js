@@ -10,6 +10,110 @@ document.addEventListener('DOMContentLoaded', function () {
     if (!window.uploadedFilesData) window.uploadedFilesData = [];
     const uploadedFilesData = window.uploadedFilesData;
 
+    // ===== METADATA GENERATION OPTIONS POPUP =====
+    window.metaGenOptions = {
+        rejection: false,
+        releaseRequirements: false,
+        savePreset: false,
+        style: false,
+        mode: false,
+        advancedInsights: false
+    };
+
+    // Create popup overlay
+    const mgPopupOverlay = document.createElement('div');
+    mgPopupOverlay.id = 'metaGenOptionsOverlay';
+    mgPopupOverlay.innerHTML = `
+        <div class="mg-popup-card">
+            <div class="mg-popup-header">
+                <h3><i class="fas fa-cogs"></i> Generation Options</h3>
+                <button class="mg-popup-close" id="mgPopupCloseBtn">&times;</button>
+            </div>
+            <p class="mg-popup-desc">Select which additional features to show in the result card. You can generate metadata without selecting any option.</p>
+            <div class="mg-checkbox-list">
+                <label class="mg-checkbox-item">
+                    <input type="checkbox" id="mgCb_rejection">
+                    <span class="mg-cb-icon">⚠️</span>
+                    <span class="mg-cb-label">Rejection Chance</span>
+                    <span class="mg-cb-tag">Pro</span>
+                </label>
+                <label class="mg-checkbox-item">
+                    <input type="checkbox" id="mgCb_release">
+                    <span class="mg-cb-icon">📋</span>
+                    <span class="mg-cb-label">Release Requirements</span>
+                    <span class="mg-cb-tag">Pro</span>
+                </label>
+                <label class="mg-checkbox-item">
+                    <input type="checkbox" id="mgCb_savePreset">
+                    <span class="mg-cb-icon">💾</span>
+                    <span class="mg-cb-label">Save Preset</span>
+                </label>
+                <label class="mg-checkbox-item">
+                    <input type="checkbox" id="mgCb_style">
+                    <span class="mg-cb-icon">🎨</span>
+                    <span class="mg-cb-label">Style</span>
+                </label>
+                <label class="mg-checkbox-item">
+                    <input type="checkbox" id="mgCb_mode">
+                    <span class="mg-cb-icon">🎭</span>
+                    <span class="mg-cb-label">Mode</span>
+                </label>
+                <label class="mg-checkbox-item">
+                    <input type="checkbox" id="mgCb_advancedInsights">
+                    <span class="mg-cb-icon">⚡</span>
+                    <span class="mg-cb-label">Advanced Insights</span>
+                    <span class="mg-cb-tag">Pro</span>
+                </label>
+            </div>
+            <div class="mg-popup-actions">
+                <button class="mg-generate-btn" id="mgPopupGenerateBtn"><i class="fas fa-bolt"></i> Generate</button>
+                <button class="mg-cancel-btn" id="mgPopupCancelBtn">Cancel</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(mgPopupOverlay);
+
+    // Popup utility functions
+    let _mgPendingCallback = null;
+
+    window.showMetaGenOptionsPopup = function (callback) {
+        _mgPendingCallback = callback;
+        mgPopupOverlay.style.display = 'flex';
+    };
+
+    window.hideMetaGenOptionsPopup = function () {
+        mgPopupOverlay.style.display = 'none';
+        _mgPendingCallback = null;
+    };
+
+    function applyPopupCheckboxState() {
+        window.metaGenOptions.rejection = document.getElementById('mgCb_rejection').checked;
+        window.metaGenOptions.releaseRequirements = document.getElementById('mgCb_release').checked;
+        window.metaGenOptions.savePreset = document.getElementById('mgCb_savePreset').checked;
+        window.metaGenOptions.style = document.getElementById('mgCb_style').checked;
+        window.metaGenOptions.mode = document.getElementById('mgCb_mode').checked;
+        window.metaGenOptions.advancedInsights = document.getElementById('mgCb_advancedInsights').checked;
+    }
+
+    // Generate button click
+    document.getElementById('mgPopupGenerateBtn').onclick = function () {
+        applyPopupCheckboxState();
+        mgPopupOverlay.style.display = 'none';
+        if (_mgPendingCallback) {
+            const cb = _mgPendingCallback;
+            _mgPendingCallback = null;
+            cb();
+        }
+    };
+
+    // Cancel / Close
+    document.getElementById('mgPopupCancelBtn').onclick = window.hideMetaGenOptionsPopup;
+    document.getElementById('mgPopupCloseBtn').onclick = window.hideMetaGenOptionsPopup;
+    mgPopupOverlay.addEventListener('click', function (e) {
+        if (e.target === mgPopupOverlay) window.hideMetaGenOptionsPopup();
+    });
+    // ===== END METADATA GENERATION OPTIONS POPUP =====
+
     const jpgPngButton = document.getElementById('jpgPngUploadButton');
     const jpgPngInput = document.getElementById('jpgPngInput');
     const svgEpsButton = document.getElementById('svgEpsUploadButton');
@@ -1551,6 +1655,22 @@ document.addEventListener('DOMContentLoaded', function () {
             return;
         }
 
+        // Show popup for options before generating
+        if (!window._mgBypassPopup) {
+            return new Promise((resolve) => {
+                window.showMetaGenOptionsPopup(async () => {
+                    window._mgBypassPopup = true;
+                    try {
+                        await window.generateMetadataForSelected();
+                    } finally {
+                        window._mgBypassPopup = false;
+                    }
+                    resolve();
+                });
+            });
+        }
+        window._mgBypassPopup = false;
+
         // Filter files based on selection from the global uploadedFilesData
         const filesToProcess = uploadedFilesData.filter(f => selectedCardIds.includes(f.id));
 
@@ -1984,11 +2104,14 @@ document.addEventListener('DOMContentLoaded', function () {
         processAllButton.onclick = async function () {
             if (this.disabled) return;
 
-            try {
-                await processSelectedFiles();
-            } catch (err) {
-                console.error('Processing failed:', err);
-            }
+            // Show popup for optional features before processing
+            window.showMetaGenOptionsPopup(async () => {
+                try {
+                    await processSelectedFiles();
+                } catch (err) {
+                    console.error('Processing failed:', err);
+                }
+            });
         };
     }
 
