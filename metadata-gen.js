@@ -1355,7 +1355,7 @@ ${isShort ? '- Since this is a SHORT/VERTICAL video, heavily prioritize keywords
                 if (descSection) descSection.style.display = 'none';
             }
 
-            if (metadata.style) {
+            if (metadata.style && (!window.metaGenOptions || window.metaGenOptions.style)) {
                 // Apply badge style
                 metaStyleContainer.innerHTML = `<span class="visual-tag style-tag">${metadata.style}</span>`;
                 if (styleSection) styleSection.style.display = 'flex'; // Changed to flex for new CSS
@@ -1363,7 +1363,7 @@ ${isShort ? '- Since this is a SHORT/VERTICAL video, heavily prioritize keywords
                 if (styleSection) styleSection.style.display = 'none';
             }
 
-            if (metadata.mood) {
+            if (metadata.mood && (!window.metaGenOptions || window.metaGenOptions.mode)) {
                 // Apply badge style
                 metaMoodContainer.innerHTML = `<span class="visual-tag mood-tag">${metadata.mood}</span>`;
                 if (moodSection) moodSection.style.display = 'flex'; // Changed to flex
@@ -1372,7 +1372,7 @@ ${isShort ? '- Since this is a SHORT/VERTICAL video, heavily prioritize keywords
             }
 
             // --- Render Advanced Insights Panel (PRO/PREMIUM Only) ---
-            if (isPaidPlan) {
+            if (isPaidPlan && (!window.metaGenOptions || window.metaGenOptions.advancedInsights)) {
                 let advancedPanel = card.querySelector('.advanced-insights-panel');
                 const hasAdvancedData = fileData.trending_score || fileData.commercial_use_cases?.length || fileData.target_audience || fileData.seo_title_variations?.length || fileData.long_tail_keywords?.length || fileData.editorial_caption || fileData.color_palette?.length;
 
@@ -1436,7 +1436,7 @@ ${isShort ? '- Since this is a SHORT/VERTICAL video, heavily prioritize keywords
 
             // Update Rejection Predictor
             const rejectionMeter = document.getElementById(`rejection-meter-${card.id}`);
-            if (rejectionMeter && metadata.rejection_prediction !== undefined) {
+            if (rejectionMeter && metadata.rejection_prediction !== undefined && (!window.metaGenOptions || window.metaGenOptions.rejection)) {
                 const rejectionScore = parseInt(metadata.rejection_prediction) || 0;
                 const rejectionBadge = document.getElementById(`rejection-badge-${card.id}`);
                 const rejectionProgress = document.getElementById(`rejection-progress-${card.id}`);
@@ -1476,7 +1476,7 @@ ${isShort ? '- Since this is a SHORT/VERTICAL video, heavily prioritize keywords
 
             // --- Update Platform Approval Chance ---
             const approvalChanceContainer = document.getElementById(`approval-chance-container-${card.id}`);
-            if (approvalChanceContainer && metadata.rejection_prediction !== undefined) {
+            if (approvalChanceContainer && metadata.rejection_prediction !== undefined && (!window.metaGenOptions || window.metaGenOptions.rejection)) {
                 const rejectionScore = parseInt(metadata.rejection_prediction) || 0;
                 const approvalBase = 100 - rejectionScore;
 
@@ -1523,7 +1523,7 @@ ${isShort ? '- Since this is a SHORT/VERTICAL video, heavily prioritize keywords
 
             // Update Release Predictor
             const releaseReqContainer = document.getElementById(`release-req-${card.id}`);
-            if (releaseReqContainer && (metadata.requires_model_release !== undefined || metadata.requires_property_release !== undefined)) {
+            if (releaseReqContainer && (metadata.requires_model_release !== undefined || metadata.requires_property_release !== undefined) && (!window.metaGenOptions || window.metaGenOptions.releaseRequirements)) {
                 releaseReqContainer.style.display = 'block';
 
                 if (!isPaidPlan) { // যদি ইউজার ফ্রি হয়
@@ -1581,7 +1581,16 @@ ${isShort ? '- Since this is a SHORT/VERTICAL video, heavily prioritize keywords
                 } else {
                     uploadContainer.style.display = 'none';
                 }
+            } else if (releaseReqContainer) {
+                releaseReqContainer.style.display = 'none';
             }
+
+            // --- Hide Save Preset if not requested ---
+            const savePresetContainer = card.querySelector('.keyword-preset-container');
+            if (savePresetContainer && window.metaGenOptions && !window.metaGenOptions.savePreset) {
+                savePresetContainer.style.display = 'none';
+            }
+
 
 
             card.classList.remove('processing');
