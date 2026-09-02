@@ -1432,6 +1432,10 @@ ${isShort ? '- Since this is a SHORT/VERTICAL video, heavily prioritize keywords
 
                     panelContent.innerHTML = contentHTML;
                 }
+            } else {
+                // Hide Advanced Insights if checkbox not selected
+                let advancedPanel = card.querySelector('.advanced-insights-panel');
+                if (advancedPanel) advancedPanel.style.display = 'none';
             }
 
             // Update Rejection Predictor
@@ -1472,6 +1476,9 @@ ${isShort ? '- Since this is a SHORT/VERTICAL video, heavily prioritize keywords
                     rejectionBadge.classList.add('rejection-high');
                     rejectionProgress.classList.add('fill-high');
                 }
+            } else if (rejectionMeter) {
+                // Explicitly hide when checkbox not selected
+                rejectionMeter.style.display = 'none';
             }
 
             // --- Update Platform Approval Chance ---
@@ -1519,6 +1526,9 @@ ${isShort ? '- Since this is a SHORT/VERTICAL video, heavily prioritize keywords
                 setChanceUI(`adobe-chance-${card.id}`, adobeChance);
                 setChanceUI(`shutter-chance-${card.id}`, shutterChance);
                 setChanceUI(`freepik-chance-${card.id}`, freepikChance);
+            } else if (approvalChanceContainer) {
+                // Explicitly hide when checkbox not selected
+                approvalChanceContainer.style.display = 'none';
             }
 
             // Update Release Predictor
