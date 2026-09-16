@@ -561,6 +561,21 @@ document.addEventListener('DOMContentLoaded', function () {
             usd: { monthly: '$49', yearly: '$390' },
             inr: { monthly: '₹4,150', yearly: '₹33,000' },
             bdt: { monthly: '৳5,800', yearly: '৳46,000' }
+        },
+        enterprise: {
+            usd: { monthly: '$149', yearly: '$1,779' },
+            inr: { monthly: '₹12,649', yearly: '₹1,51,799' },
+            bdt: { monthly: '৳17,879', yearly: '৳2,14,549' }
+        },
+        starter: {
+            usd: { daily: '$1' },
+            inr: { daily: '₹85' },
+            bdt: { daily: '৳120' }
+        },
+        power: {
+            usd: { daily: '$2' },
+            inr: { daily: '₹170' },
+            bdt: { daily: '৳240' }
         }
     };
 
