@@ -968,10 +968,13 @@ document.addEventListener('DOMContentLoaded', function () {
                                 <input type="text" class="keyword-add-input" data-i18n="placeholder_add_kw" placeholder="Add keyword..." id="keyword-input-${card.id}" onkeypress="if(event.key === 'Enter') addKeyword('${card.id}')">
                                 <button class="keyword-add-btn" style='white-space: nowrap; flex-shrink: 0;' onclick="addKeyword('${card.id}')">+ <span data-i18n="btn_add">Add</span></button>
                             </div>
-                            <div class="keyword-preset-container" style="margin-top: 8px; display: flex; gap: 8px; align-items: center;">
-                                <select class="preset-select-dropdown" data-card-id="${card.id}" onchange="window.applyPresetToCard('${card.id}', this.value)" style="flex: 1; padding: 4px 8px; border-radius: 4px; background: var(--bg-input); color: var(--text-primary); border: 1px solid var(--border-color); font-size: 0.72em; width: 80%;">
+                            <div class="keyword-preset-container" style="margin-top: 8px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                                <select class="preset-select-dropdown" data-card-id="${card.id}" onchange="window.applyPresetToCard('${card.id}', this.value)" style="flex: 1; padding: 4px 8px; border-radius: 4px; background: var(--bg-input); color: var(--text-primary); border: 1px solid var(--border-color); font-size: 0.72em; min-width: 150px;">
                                     <option value="">📁 Apply Preset/Templates...</option>
                                 </select>
+                                <button class="action-button green-button" onclick="window.sortKeywordsByVolume('${card.id}')" title="1-Click Sort by High-Volume for Algorithm" style="padding: 4px 8px; font-size: 0.72em; margin-top: 0; white-space: nowrap; flex-shrink: 0; background: #10B981; border-color: #059669;">
+                                    <i class="fas fa-sort-amount-down"></i> Auto Sort (High Vol)
+                                </button>
                                 <button class="action-button blue-button" onclick="window.savePresetFromCard('${card.id}')" title="Save current keywords as preset template" style="padding: 4px 8px; font-size: 0.72em; margin-top: 0; white-space: nowrap; flex-shrink: 0;">
                                     <i class="fas fa-save"></i> Save Preset
                                 </button>
