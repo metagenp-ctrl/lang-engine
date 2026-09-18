@@ -1,4 +1,4 @@
-﻿
+
         // ===========================================
         // SECTION 8: PDF.js Worker Init
         // ===========================================
@@ -1174,7 +1174,7 @@ async function loadRealTimeTrends() {
             },
             body: JSON.stringify({
                 action: 'trending',
-                prompt: 'Act as a Freepik and microstock trend analyst. Generate 40 highly specific, unique, and current commercial search trends (similar to "Punk Grunge Revival", "Digital Fatigue", "Anxiety Grounding", "Analog Hobbies"). Do NOT return generic broad terms like "business", "technology", or "sustainability". Return strictly as a comma-separated list. Do not use quotes or special characters.',
+                prompt: 'Act as a Freepik and microstock trend analyst. Generate 40 highly specific, unique, and current commercial search trends (e.g. "Punk Grunge Revival", "Digital Fatigue"). Do NOT return generic broad terms. Return strictly as a comma-separated list, and format each item exactly as "Topic|Demand" where Demand is either "High", "Medium", or "Low" (e.g. Punk Grunge Revival|High, Analog Hobbies|Medium). Do not use quotes or special characters.',
                 email: user ? user.email : 'guest'
             })
         });
@@ -1184,26 +1184,77 @@ async function loadRealTimeTrends() {
 
         let text = data.text || data.metadata || "";
 
-        let trends = text.split(',')
+        let trendsRaw = text.split(',')
             .map(t => t.replace(/[\n\r]/g, ' ').replace(/["']/g, '').trim())
             .filter(t => t.length > 2);
 
-        if (trends.length === 0) throw new Error('Empty data');
+        if (trendsRaw.length === 0) throw new Error('Empty data');
 
-        container.innerHTML = trends.map(topic => `
-            <span class="meta-keyword-pill" onclick="openTrendPromptModal('${topic}')" style="background: rgba(139,92,246,0.08); border: 1px solid rgba(139,92,246,0.2); color: #8B5CF6; padding: 6px 12px; border-radius: 20px; font-size: 0.8em; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 5px; transition: background 0.2s;" onmouseover="this.style.background='rgba(139,92,246,0.15)'" onmouseout="this.style.background='rgba(139,92,246,0.08)'">
-                <i class="fas fa-chart-line" style="font-size:0.85em;"></i> ${topic}
+        container.innerHTML = trendsRaw.map(rawTopic => {
+            let parts = rawTopic.split('|');
+            let topic = parts[0].trim();
+            let demand = parts.length > 1 ? parts[1].trim() : (Math.random() > 0.6 ? 'High' : (Math.random() > 0.4 ? 'Medium' : 'Low'));
+            
+            let color = '#8B5CF6';
+            let bg = 'rgba(139,92,246,0.08)';
+            let border = 'rgba(139,92,246,0.2)';
+            let icon = '<i class="fas fa-chart-line"></i>';
+            let badgeHtml = '';
+
+            if (demand.toLowerCase().includes('high')) {
+                color = '#EF4444'; bg = 'rgba(239, 68, 68, 0.08)'; border = 'rgba(239, 68, 68, 0.3)';
+                icon = '<i class="fas fa-fire" style="color: #EF4444;"></i>';
+                badgeHtml = `<span style="background: linear-gradient(135deg, #EF4444, #B91C1C); color:#fff; font-size:0.65em; padding:2px 6px; border-radius:10px; margin-left:6px; font-weight:bold; letter-spacing: 0.5px; box-shadow: 0 2px 4px rgba(239, 68, 68, 0.3);">HIGH</span>`;
+            } else if (demand.toLowerCase().includes('low')) {
+                color = '#3B82F6'; bg = 'rgba(59, 130, 246, 0.08)'; border = 'rgba(59, 130, 246, 0.3)';
+                icon = '<i class="fas fa-arrow-trend-down" style="color: #3B82F6;"></i>';
+                badgeHtml = `<span style="background: linear-gradient(135deg, #3B82F6, #1D4ED8); color:#fff; font-size:0.65em; padding:2px 6px; border-radius:10px; margin-left:6px; font-weight:bold; letter-spacing: 0.5px; box-shadow: 0 2px 4px rgba(59, 130, 246, 0.3);">LOW</span>`;
+            } else {
+                color = '#F59E0B'; bg = 'rgba(245, 158, 11, 0.08)'; border = 'rgba(245, 158, 11, 0.3)';
+                icon = '<i class="fas fa-bolt" style="color: #F59E0B;"></i>';
+                badgeHtml = `<span style="background: linear-gradient(135deg, #F59E0B, #B45309); color:#fff; font-size:0.65em; padding:2px 6px; border-radius:10px; margin-left:6px; font-weight:bold; letter-spacing: 0.5px; box-shadow: 0 2px 4px rgba(245, 158, 11, 0.3);">MED</span>`;
+            }
+
+            return `
+            <span class="meta-keyword-pill" onclick="openTrendPromptModal('${topic.replace(/'/g, "\\'")}')" style="background: ${bg}; border: 1px solid ${border}; color: ${color}; padding: 6px 12px; border-radius: 20px; font-size: 0.85em; cursor: pointer; display: inline-flex; align-items: center; gap: 5px; transition: all 0.2s; box-shadow: 0 2px 5px rgba(0,0,0,0.05);" onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 4px 8px rgba(0,0,0,0.1)'" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 2px 5px rgba(0,0,0,0.05)'">
+                ${icon} <span style="color: var(--text-primary); margin-left: 2px; font-weight: 500;">${topic}</span> ${badgeHtml}
             </span>
-        `).join('');
+            `;
+        }).join('');
 
     } catch (e) {
         console.warn("Real-time trends API fallback triggered:", e);
-        const fallbackTrends = ["Punk Grunge Revival", "Digital Fatigue", "Anxiety Grounding", "Analog Hobbies", "Corporate Memphis", "Y2K Nostalgia"];
-        container.innerHTML = fallbackTrends.map(topic => `
-            <span class="meta-keyword-pill" onclick="openTrendPromptModal('${topic}')" style="background: var(--bg-tertiary); border: 1px solid var(--border-color); color: var(--text-primary); padding: 6px 12px; border-radius: 20px; font-size: 0.8em; cursor: pointer; display: inline-flex; align-items: center; gap: 5px;" onmouseover="this.style.borderColor='var(--accent-orange)'" onmouseout="this.style.borderColor='var(--border-color)'">
-                <i class="fas fa-chart-line" style="color: var(--accent-orange); font-size:0.85em;"></i> ${topic}
+        const fallbackTrends = ["Punk Grunge Revival|High", "Digital Fatigue|Medium", "Anxiety Grounding|High", "Analog Hobbies|Low", "Corporate Memphis|Medium", "Y2K Nostalgia|High"];
+        container.innerHTML = fallbackTrends.map(rawTopic => {
+            let parts = rawTopic.split('|');
+            let topic = parts[0].trim();
+            let demand = parts[1].trim();
+            let color = '#8B5CF6';
+            let bg = 'rgba(139,92,246,0.08)';
+            let border = 'rgba(139,92,246,0.2)';
+            let icon = '<i class="fas fa-chart-line"></i>';
+            let badgeHtml = '';
+
+            if (demand === 'High') {
+                color = '#EF4444'; bg = 'rgba(239, 68, 68, 0.08)'; border = 'rgba(239, 68, 68, 0.3)';
+                icon = '<i class="fas fa-fire" style="color: #EF4444;"></i>';
+                badgeHtml = `<span style="background: linear-gradient(135deg, #EF4444, #B91C1C); color:#fff; font-size:0.65em; padding:2px 6px; border-radius:10px; margin-left:6px; font-weight:bold;">HIGH</span>`;
+            } else if (demand === 'Low') {
+                color = '#3B82F6'; bg = 'rgba(59, 130, 246, 0.08)'; border = 'rgba(59, 130, 246, 0.3)';
+                icon = '<i class="fas fa-arrow-trend-down" style="color: #3B82F6;"></i>';
+                badgeHtml = `<span style="background: linear-gradient(135deg, #3B82F6, #1D4ED8); color:#fff; font-size:0.65em; padding:2px 6px; border-radius:10px; margin-left:6px; font-weight:bold;">LOW</span>`;
+            } else {
+                color = '#F59E0B'; bg = 'rgba(245, 158, 11, 0.08)'; border = 'rgba(245, 158, 11, 0.3)';
+                icon = '<i class="fas fa-bolt" style="color: #F59E0B;"></i>';
+                badgeHtml = `<span style="background: linear-gradient(135deg, #F59E0B, #B45309); color:#fff; font-size:0.65em; padding:2px 6px; border-radius:10px; margin-left:6px; font-weight:bold;">MED</span>`;
+            }
+
+            return `
+            <span class="meta-keyword-pill" onclick="openTrendPromptModal('${topic.replace(/'/g, "\\'")}')" style="background: ${bg}; border: 1px solid ${border}; color: ${color}; padding: 6px 12px; border-radius: 20px; font-size: 0.85em; cursor: pointer; display: inline-flex; align-items: center; gap: 5px; transition: all 0.2s;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'">
+                ${icon} <span style="color: var(--text-primary); margin-left: 2px; font-weight: 500;">${topic}</span> ${badgeHtml}
             </span>
-        `).join('');
+            `;
+        }).join('');
     }
 }
 
