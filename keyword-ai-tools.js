@@ -471,6 +471,8 @@ Provide ONLY the raw JSON object, exactly like this format. Do not use markdown 
             }
 
             // 3. Return arranged structure: [Badge] [Keyword] [Score] [Close Button]
+            let pinHtml = index < 5 ? '<span title="Pinned / Top Priority" style="color:#F97316; font-size: 0.85em; margin-right: 2px;">📌</span>' : '';
+            let highlightStyle = index < 5 ? 'border: 1px solid #F97316; box-shadow: 0 0 5px rgba(249, 115, 22, 0.4); background: rgba(249, 115, 22, 0.05);' : '';
             return `<span class="meta-keyword-pill draggable" 
                                   draggable="true"
                                   data-index="${index}"
@@ -480,7 +482,8 @@ Provide ONLY the raw JSON object, exactly like this format. Do not use markdown 
                                   ondragover="handleDragOver(event)"
                                   ondrop="handleDrop(event)"
                                   onclick="handleKeywordClick(event, '${kw.replace(/'/g, "\\'")}', '${cardId}')"
-                                  style="display: inline-flex; align-items: center; gap: 2px;">
+                                  style="display: inline-flex; align-items: center; gap: 2px; ${highlightStyle}">
+                                  ${pinHtml}
                                   ${badgeHtml}
                                   <span class="keyword-text">${kw}</span>
                                   ${scoreHtml}
@@ -504,6 +507,23 @@ Provide ONLY the raw JSON object, exactly like this format. Do not use markdown 
             const score = calculateSeoScore(fileData);
             updateSeoMeter(cardId, score);
         }
+    };
+
+    window.sortKeywordsByVolume = function(cardId) {
+        const fileData = uploadedFilesData.find(f => f.id === cardId);
+        if (!fileData || !fileData.keywords) return;
+
+        let keywords = Array.isArray(fileData.keywords) ? [...fileData.keywords] : fileData.keywords.split(',').map(k => k.trim()).filter(k => k);
+        const scores = fileData.keywordScores || {};
+        
+        keywords.sort((a, b) => {
+            const scoreA = scores[a.toLowerCase()] || 0;
+            const scoreB = scores[b.toLowerCase()] || 0;
+            return scoreB - scoreA;
+        });
+
+        fileData.keywords = keywords.join(', ');
+        updateKeywordsDisplay(cardId);
     };
 
     window.removeKeyword = function (cardId, index) {
