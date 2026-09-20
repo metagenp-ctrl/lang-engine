@@ -1,4 +1,4 @@
-﻿        // ========== TRENDING TOPICS FUNCTIONALITY (AI-POWERED) ==========
+        // ========== TRENDING TOPICS FUNCTIONALITY (AI-POWERED) ==========
         async function fetchTrendingTopicsFromAI(retry = false) {
             const loadingDiv = document.getElementById('trendingLoading');
             const topicsList = document.getElementById('trendingTopicsList');
@@ -880,7 +880,489 @@ Format Example:
             });
         };
 
+        // --- Niche Tab Navigation Logic ---
+        window.switchNicheTab = function (tabId) {
+            // Update buttons
+            const navButtons = document.querySelectorAll('.niche-tab-btn');
+            navButtons.forEach(btn => btn.classList.remove('active'));
+            document.querySelector(`.niche-tab-btn[data-niche-tab="${tabId}"]`).classList.add('active');
 
+            // Update content panels
+            const tabContents = document.querySelectorAll('.niche-tab-content');
+            tabContents.forEach(content => content.classList.remove('active'));
+            
+            if (tabId === 'trends') {
+                document.getElementById('nicheTabTrends').classList.add('active');
+            } else if (tabId === 'spy') {
+                document.getElementById('nicheTabSpy').classList.add('active');
+                checkSpyDailyLimit();
+            }
+        };
+
+        // Spy Daily Limit Tracking for Free Users
+        function checkSpyDailyLimit() {
+            const user = auth.currentUser;
+            let isPaidPlan = false;
+            if (user) {
+                const profileDoc = window.userProfileData; // Assume this is cached or we fall back to limit if undefined
+                const dbPlan = (profileDoc?.plan || '').toLowerCase();
+                isPaidPlan = (dbPlan === 'pro' || dbPlan === 'premium' || dbPlan === 'agency');
+            }
+
+            const counterEl = document.getElementById('spyUsageText');
+            if (!counterEl) return;
+
+            if (isPaidPlan) {
+                counterEl.innerHTML = 'Unlimited';
+                counterEl.parentElement.style.color = '#10B981';
+                counterEl.parentElement.style.background = 'rgba(16,185,129,0.1)';
+                counterEl.parentElement.style.borderColor = 'rgba(16,185,129,0.2)';
+            } else {
+                const today = new Date().toISOString().split('T')[0];
+                let spyUsage = JSON.parse(localStorage.getItem('metagen_spy_usage') || '{}');
+                
+                if (spyUsage.date !== today) {
+                    spyUsage = { date: today, count: 0 };
+                    localStorage.setItem('metagen_spy_usage', JSON.stringify(spyUsage));
+                }
+                
+                const remaining = Math.max(0, 2 - spyUsage.count);
+                counterEl.innerHTML = `${remaining}/2 remaining`;
+                if (remaining === 0) {
+                    counterEl.parentElement.style.color = '#EF4444';
+                    counterEl.parentElement.style.background = 'rgba(239,68,68,0.1)';
+                    counterEl.parentElement.style.borderColor = 'rgba(239,68,68,0.2)';
+                }
+            }
+        }
+
+        function incrementSpyUsage() {
+            const user = auth.currentUser;
+            let isPaidPlan = false;
+            if (user) {
+                const profileDoc = window.userProfileData;
+                const dbPlan = (profileDoc?.plan || '').toLowerCase();
+                isPaidPlan = (dbPlan === 'pro' || dbPlan === 'premium' || dbPlan === 'agency');
+            }
+
+            if (!isPaidPlan) {
+                const today = new Date().toISOString().split('T')[0];
+                let spyUsage = JSON.parse(localStorage.getItem('metagen_spy_usage') || '{}');
+                if (spyUsage.date !== today) {
+                    spyUsage = { date: today, count: 0 };
+                }
+                spyUsage.count += 1;
+                localStorage.setItem('metagen_spy_usage', JSON.stringify(spyUsage));
+                checkSpyDailyLimit();
+            }
+        }
+
+        function canUseSpyFeature() {
+            const user = auth.currentUser;
+            let isPaidPlan = false;
+            if (user) {
+                const profileDoc = window.userProfileData;
+                const dbPlan = (profileDoc?.plan || '').toLowerCase();
+                isPaidPlan = (dbPlan === 'pro' || dbPlan === 'premium' || dbPlan === 'agency');
+            }
+
+            if (isPaidPlan) return true;
+
+            const today = new Date().toISOString().split('T')[0];
+            let spyUsage = JSON.parse(localStorage.getItem('metagen_spy_usage') || '{}');
+            if (spyUsage.date !== today) return true;
+            
+            return spyUsage.count < 2;
+        }
+
+        // --- Competitor Spy Logic ---
+        window.analyzeCompetitorAsset = async function () {
+            const urlInput = document.getElementById('spyUrlInput').value.trim();
+            if (!urlInput) {
+                alert("Please enter a valid Shutterstock or Adobe Stock URL/Asset ID.");
+                return;
+            }
+
+            const user = auth.currentUser;
+            if (!user) {
+                document.getElementById('loginModal').classList.remove('hidden');
+                return;
+            }
+
+            if (!canUseSpyFeature()) {
+                if (typeof showCustomAlert === 'function') showCustomAlert("Daily limit reached (2/2). Upgrade to Pro for unlimited competitor analysis.", "warning");
+                else alert("Daily limit reached (2/2). Upgrade to Pro for unlimited competitor analysis.");
+                return;
+            }
+
+            // Determine platform and ID
+            let platform = "Unknown";
+            let assetId = urlInput;
+            
+            if (urlInput.toLowerCase().includes('shutterstock.com')) {
+                platform = "Shutterstock";
+                const match = urlInput.match(/(?:image(?:-photo|-vector|-illustration)?\/).*?-(\d+)/) || urlInput.match(/-(\d+)\/?$/);
+                if (match) assetId = match[1];
+            } else if (urlInput.toLowerCase().includes('stock.adobe.com')) {
+                platform = "Adobe Stock";
+                const match = urlInput.match(/(?:images\/.*?\/|stock-photo\/.*?\/|(?:\?|&)k=)?(\d+)/);
+                if (match) assetId = match[1];
+            } else if (!isNaN(urlInput) && urlInput.length > 5) {
+                // If just numbers, assume based on length (Shutterstock usually longer, Adobe usually ~9 digits, but not strict)
+                platform = "General Stock";
+            }
+
+            document.getElementById('spyEmptyState').style.display = 'none';
+            document.getElementById('spyResultsContainer').style.display = 'none';
+            document.getElementById('spyLoading').style.display = 'block';
+            document.getElementById('spyAnalyzeBtn').disabled = true;
+
+            try {
+                let accessToken = await user.getIdToken();
+                
+                const proxyUrl = "https://metagen-pro-api.metagenp.workers.dev/generate";
+                
+                // We ask the AI to perform a reverse analysis based on the platform and ID
+                const prompt = `Act as an expert stock photography SEO analyst. I am providing you with a ${platform} asset URL/ID: "${urlInput}".
+                
+While you cannot scrape the live URL, use your extensive training data of stock photography patterns to reverse-engineer and estimate the metadata, ranking, and top converting keywords for an asset that fits this context.
+
+CRITICAL: Return ONLY a valid JSON object. No markdown, no explanations.
+
+JSON Structure Requirements:
+{
+  "asset_title": "Estimated descriptive title of the asset (10-15 words)",
+  "category": "Main category (e.g., Business, Nature, Tech)",
+  "estimated_rank_score": "A number between 75 and 99 indicating SEO strength",
+  "keywords": [
+    {
+      "term": "keyword or phrase",
+      "search_volume": "High/Medium/Low",
+      "relevance_score": number between 1-100
+    }
+  ] (Provide exactly 25 top-converting keywords),
+  "outrank_suggestion": "A strategic tip on how to create content that outperforms this asset (e.g., better lighting, new angle, trend integration). (2-3 sentences max)"
+}`;
+
+                const response = await fetch(proxyUrl, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Authorization": `Bearer ${accessToken}`
+                    },
+                    body: JSON.stringify({
+                        action: "competitorSpy", // Handled by Groq in worker
+                        prompt: prompt,
+                        email: user.email,
+                        deviceInfo: navigator.userAgent
+                    })
+                });
+
+                const data = await response.json();
+                if (!response.ok) {
+                    if (response.status === 429 || data.error?.includes('limit')) {
+                        showLimitModal(data.error);
+                        throw new Error("Credit limit reached. Please upgrade to continue using this Pro feature.");
+                    }
+                    throw new Error(data.error || "Analysis failed.");
+                }
+
+                // Increment usage for free users upon success
+                incrementSpyUsage();
+
+                // Clean and parse JSON
+                let jsonString = data.text || JSON.stringify(data);
+                jsonString = jsonString.replace(/```json\s*|```/gi, '').trim();
+                
+                const startObj = jsonString.indexOf('{');
+                const endObj = jsonString.lastIndexOf('}');
+                if (startObj !== -1 && endObj !== -1) {
+                    jsonString = jsonString.substring(startObj, endObj + 1);
+                }
+
+                let spyData;
+                try {
+                    spyData = JSON.parse(jsonString);
+                } catch (e) {
+                    throw new Error("Failed to parse analysis data from AI.");
+                }
+
+                // Check Pro status for displaying advanced metrics
+                let isPaidPlan = false;
+                if (user) {
+                    const profileDoc = window.userProfileData;
+                    const dbPlan = (profileDoc?.plan || '').toLowerCase();
+                    isPaidPlan = (dbPlan === 'pro' || dbPlan === 'premium' || dbPlan === 'agency');
+                }
+
+                renderCompetitorResults(spyData, urlInput, platform, assetId, isPaidPlan);
+
+            } catch (error) {
+                console.error("Competitor Spy Error:", error);
+                document.getElementById('spyLoading').style.display = 'none';
+                document.getElementById('spyEmptyState').style.display = 'block';
+                
+                if (error.message.includes('Credit') || error.message.includes('limit')) {
+                    // Handled by modal
+                } else if (typeof showCustomAlert === 'function') {
+                    showCustomAlert(`Error analyzing asset: ${error.message}`, 'error');
+                } else {
+                    alert(`Error analyzing asset: ${error.message}`);
+                }
+            } finally {
+                document.getElementById('spyAnalyzeBtn').disabled = false;
+            }
+        };
+
+        function renderCompetitorResults(data, url, platform, assetId, isPaidPlan) {
+            const container = document.getElementById('spyResultsContainer');
+            
+            const keywordsList = Array.isArray(data.keywords) ? data.keywords : [];
+            const plainKeywordsArray = keywordsList.map(k => typeof k === 'string' ? k : k.term);
+            const plainKeywordsString = plainKeywordsArray.join(', ');
+            const escapedKeywordsStr = plainKeywordsString.replace(/'/g, "\\'");
+            
+            // Format keywords HTML with volume indicators (locked for free users)
+            const keywordsHtml = keywordsList.map(k => {
+                const term = typeof k === 'string' ? k : k.term;
+                const vol = typeof k === 'string' ? 'Medium' : (k.search_volume || 'Medium');
+                
+                if (isPaidPlan) {
+                    let volColor = vol.toLowerCase() === 'high' ? '#10B981' : (vol.toLowerCase() === 'low' ? '#94A3B8' : '#F59E0B');
+                    return `<span class="spy-keyword-tag">${term} <span class="spy-keyword-vol" style="color:${volColor}; background:${volColor}20;">${vol} Vol</span></span>`;
+                } else {
+                    return `<span class="spy-keyword-tag">${term} <span class="spy-pro-lock" onclick="scrollToPricing()" title="Upgrade to Pro to see Search Volume"><i class="fas fa-lock"></i> PRO</span></span>`;
+                }
+            }).join('');
+
+            // AI Prompt Generator Area
+            const promptGeneratorHtml = `
+                <div class="spy-prompt-panel">
+                    <h4 style="margin: 0 0 10px 0; color: #8B5CF6; font-size: 1.1em; display:flex; align-items:center; gap:8px;">
+                        <i class="fas fa-magic"></i> 1-Click Reverse Prompt
+                    </h4>
+                    <p style="color: var(--text-muted); font-size: 0.85em; margin: 0 0 15px 0;">Generate a high-quality AI image prompt based on this asset's keywords and category to create a competing image.</p>
+                    
+                    <div class="spy-param-grid">
+                        <div>
+                            <label>AI Platform</label>
+                            <select id="spyPromptPlatform">
+                                <option value="Midjourney">Midjourney</option>
+                                <option value="Stable Diffusion">Stable Diffusion</option>
+                                <option value="DALL-E 3">DALL-E 3</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label>Lighting Style</label>
+                            <select id="spyPromptLighting">
+                                <option value="Cinematic lighting, volumetric rays">Cinematic</option>
+                                <option value="Studio lighting, soft shadows">Studio</option>
+                                <option value="Natural sunlight, golden hour">Golden Hour</option>
+                                <option value="Dramatic lighting, high contrast">Dramatic</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label>Camera Angle</label>
+                            <select id="spyPromptAngle">
+                                <option value="Eye-level shot, professional composition">Eye-level</option>
+                                <option value="Overhead shot, flat lay">Overhead</option>
+                                <option value="Close-up macro shot, shallow depth of field">Close-up</option>
+                                <option value="Wide angle shot, expansive view">Wide Angle</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div style="margin-top: 16px; text-align: right;">
+                        <button class="action-button" onclick="window.generateSpyPrompt('${escapedKeywordsStr}')" style="padding: 8px 20px; background: #8B5CF6; border: none; color: white; border-radius: 8px; font-weight: 600; font-size: 0.85em; cursor: pointer;">
+                            <i class="fas fa-bolt"></i> Generate Prompt
+                        </button>
+                    </div>
+                    
+                    <div id="spyPromptOutputBox" style="display:none;">
+                        <div class="spy-prompt-output" id="spyPromptText"></div>
+                        <button onclick="window.copySpyPrompt()" style="margin-top: 8px; background: rgba(139,92,246,0.1); border: 1px solid #8B5CF6; color: #8B5CF6; padding: 6px 12px; border-radius: 6px; font-size: 0.8em; cursor: pointer; float: right;">
+                            <i class="fas fa-copy"></i> Copy Prompt
+                        </button>
+                        <div style="clear:both;"></div>
+                    </div>
+                </div>
+            `;
+
+            container.innerHTML = `
+                <div class="spy-result-card" style="border-top: 4px solid #8B5CF6;">
+                    <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom: 20px; flex-wrap:wrap; gap:10px;">
+                        <div>
+                            <span style="background: rgba(139,92,246,0.1); color: #8B5CF6; padding: 4px 10px; border-radius: 6px; font-size: 0.75em; font-weight: 700; text-transform: uppercase;">
+                                <i class="fas fa-satellite-dish"></i> ${platform} Analysis
+                            </span>
+                            <h3 style="color: var(--text-primary); margin: 10px 0 5px 0; font-size: 1.2em;">${data.asset_title || 'Analyzed Asset'}</h3>
+                            <div style="color: var(--text-muted); font-size: 0.85em;">
+                                <i class="fas fa-folder"></i> Category: ${data.category || 'General'}
+                                <span style="margin:0 8px;">|</span>
+                                <i class="fas fa-fingerprint"></i> ID: ${assetId}
+                            </div>
+                        </div>
+                        
+                        <div class="spy-metric-grid" style="grid-template-columns: 1fr;">
+                            <div class="spy-metric-item" style="border-color: #8B5CF6; background: rgba(139,92,246,0.05);">
+                                <span class="spy-metric-value" style="color: #8B5CF6;">${data.estimated_rank_score || '85'}</span>
+                                <span class="spy-metric-label">Est. Rank Score</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div style="margin-top: 20px;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 12px;">
+                            <h4 style="margin:0; color: var(--text-primary); font-size: 0.95em;">
+                                <i class="fas fa-key" style="color: #F97316;"></i> Top Converting Keywords (${keywordsList.length})
+                            </h4>
+                            <div style="display:flex; gap:8px;">
+                                <button onclick="window.copyKeywordsOnly(event, '${escapedKeywordsStr}')" style="background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-primary); padding: 5px 12px; border-radius: 6px; font-size: 0.8em; cursor: pointer;">
+                                    <i class="fas fa-copy"></i> Copy
+                                </button>
+                                <button onclick="window.saveSpyKeywordsAsPreset('${escapedKeywordsStr}', '${(data.asset_title || '').replace(/'/g, "\\'")}')" style="background: rgba(249,115,22,0.1); border: 1px solid #F97316; color: #F97316; padding: 5px 12px; border-radius: 6px; font-size: 0.8em; cursor: pointer; font-weight: 600;">
+                                    <i class="fas fa-save"></i> Save Preset
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div style="display:flex; flex-wrap:wrap; gap:8px; background: rgba(0,0,0,0.1); padding: 15px; border-radius: 10px; border: 1px solid var(--border-light);">
+                            ${keywordsHtml}
+                        </div>
+                    </div>
+                    ${isPaidPlan ? `
+                        <div style="margin-top: 20px; background: rgba(16, 185, 129, 0.05); border-left: 4px solid #10B981; padding: 15px; border-radius: 0 8px 8px 0; margin-bottom: 20px;">
+                            <h4 style="margin:0 0 8px 0; color: #10B981; font-size: 1em;"><i class="fas fa-lightbulb"></i> AI Out-Rank Suggestion</h4>
+                            <p style="margin:0; font-size: 0.9em; color: var(--text-primary); line-height: 1.5;">${data.outrank_suggestion || 'Improve the lighting, framing, or add a unique modern element to stand out against this asset.'}</p>
+                        </div>
+                        ${promptGeneratorHtml}
+                    ` : `
+                        <div class="spy-prompt-panel" style="text-align: center; padding: 30px 20px;">
+                            <i class="fas fa-lock" style="font-size: 2em; color: var(--text-muted); margin-bottom: 10px;"></i>
+                            <h4 style="margin: 0 0 10px 0; color: var(--text-primary);">AI Out-Rank Suggestion & Prompt Generator</h4>
+                            <p style="color: var(--text-muted); font-size: 0.85em; margin: 0 auto 15px auto; max-width: 400px;">
+                                Upgrade to unlock AI strategies to out-compete this asset and generate Midjourney, Stable Diffusion, and DALL-E prompts.
+                            </p>
+                            <button onclick="scrollToPricing()" style="background: linear-gradient(90deg, #F97316, #ea580c); border: none; color: white; padding: 8px 20px; border-radius: 8px; font-weight: 700; cursor: pointer; font-size: 0.85em;">
+                                Upgrade to Pro to Unlock
+                            </button>
+                        </div>
+                    `}
+                </div>
+            `;
+            
+            document.getElementById('spyLoading').style.display = 'none';
+            container.style.display = 'block';
+        };
+
+        window.saveSpyKeywordsAsPreset = function (keywordStr, title) {
+            const keywords = keywordStr.split(',').map(k => k.trim()).filter(Boolean);
+            if (keywords.length === 0) return;
+            
+            const presetName = prompt('Enter a name for this keyword preset:', title ? `Spy: ${title.substring(0, 20)}...` : 'Spy Keywords');
+            if (!presetName || !presetName.trim()) return;
+
+            let presets = [];
+            try { presets = JSON.parse(localStorage.getItem('metagen_keyword_presets')) || []; } catch(e) {}
+            
+            presets.push({ name: presetName.trim(), keywords: keywords });
+            localStorage.setItem('metagen_keyword_presets', JSON.stringify(presets));
+            
+            // Re-render sidebar if the function exists
+            if (typeof window.savePresetFromCard !== 'undefined') {
+                // We just force a refresh of the presets list and dropdowns using the existing system logic
+                // Since renderSidebarPresets is private to the IIFE, we just rely on reloading or the next save
+                if (typeof showCustomAlert === 'function') showCustomAlert(`✅ Preset "${presetName.trim()}" saved to Sidebar!`, 'success');
+                else alert(`Preset saved! Check your Keyword Presets panel.`);
+                
+                // Hack to trigger refresh if possible
+                const pList = document.getElementById('sidebarPresetsList');
+                if (pList) {
+                    pList.innerHTML = '<div style="font-size:0.8em; color:var(--text-muted); text-align:center; padding:10px;">Presets updated. Please refresh page to see in sidebar.</div>';
+                }
+            } else {
+                alert("Preset saved!");
+            }
+        };
+
+        window.generateSpyPrompt = async function(keywordsStr) {
+            const platform = document.getElementById('spyPromptPlatform').value;
+            const lighting = document.getElementById('spyPromptLighting').value;
+            const angle = document.getElementById('spyPromptAngle').value;
+            
+            const btn = event.currentTarget;
+            const originalBtnText = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating...';
+            btn.disabled = true;
+            
+            const outputBox = document.getElementById('spyPromptOutputBox');
+            const outputText = document.getElementById('spyPromptText');
+            
+            try {
+                const user = auth.currentUser;
+                let accessToken = await user.getIdToken();
+                const proxyUrl = "https://metagen-pro-api.metagenp.workers.dev/generate";
+                
+                const prompt = `Create a highly detailed, professional AI image generation prompt for ${platform}.
+Use these keywords as inspiration: ${keywordsStr.substring(0, 300)}...
+Incorporate these parameters:
+- Lighting: ${lighting}
+- Angle/Composition: ${angle}
+
+Return ONLY the raw prompt text. No quotes, no explanations, no markdown formatting.`;
+
+                const response = await fetch(proxyUrl, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Authorization": `Bearer ${accessToken}`
+                    },
+                    body: JSON.stringify({
+                        action: "generateImagePrompt", 
+                        prompt: prompt,
+                        email: user.email,
+                        deviceInfo: navigator.userAgent
+                    })
+                });
+
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.error || "Generation failed.");
+
+                let generatedPrompt = data.text || data.prompt || "Error generating prompt.";
+                
+                // Add specific platform parameters if applicable
+                if (platform === "Midjourney" && !generatedPrompt.includes("--v")) {
+                    generatedPrompt += " --v 6.0 --ar 16:9 --style raw";
+                }
+                
+                outputText.innerText = generatedPrompt;
+                outputBox.style.display = 'block';
+                
+            } catch (error) {
+                console.error(error);
+                outputText.innerText = "Error generating prompt: " + error.message;
+                outputBox.style.display = 'block';
+            } finally {
+                btn.innerHTML = originalBtnText;
+                btn.disabled = false;
+            }
+        };
+
+        window.copySpyPrompt = function() {
+            const text = document.getElementById('spyPromptText').innerText;
+            navigator.clipboard.writeText(text).then(() => {
+                const btn = event.currentTarget;
+                const originalHTML = btn.innerHTML;
+                btn.innerHTML = '<i class="fas fa-check"></i> Copied!';
+                btn.style.color = '#10B981';
+                btn.style.borderColor = '#10B981';
+                setTimeout(() => {
+                    btn.innerHTML = originalHTML;
+                    btn.style.color = '#8B5CF6';
+                    btn.style.borderColor = '#8B5CF6';
+                }, 2000);
+            });
+        };
 
         // --- 3. Translation Logic (Global Function) ---
         window.translateMetadata = async function (cardId) {
