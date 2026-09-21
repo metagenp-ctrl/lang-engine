@@ -1078,7 +1078,9 @@ JSON Structure Requirements:
                         action: "competitorSpy", // Handled by Groq in worker
                         prompt: prompt,
                         email: user.email,
-                        deviceInfo: navigator.userAgent
+                        deviceInfo: navigator.userAgent,
+                        assetUrl: urlInput,
+                        platform: platform
                     })
                 });
 
