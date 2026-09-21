@@ -954,19 +954,36 @@ Format Example:
                 spyUsage.count += 1;
                 localStorage.setItem('metagen_spy_usage', JSON.stringify(spyUsage));
                 checkSpyDailyLimit();
+            } else {
+                if (window.userUsageData) {
+                    window.userUsageData.monthlyCount = (window.userUsageData.monthlyCount || 0) + 1;
+                    if (typeof updateUsageUI === 'function') updateUsageUI();
+                }
             }
         }
 
         function canUseSpyFeature() {
             const user = auth.currentUser;
             let isPaidPlan = false;
+            let hasCredits = false;
             if (user) {
                 const profileDoc = window.userProfileData;
                 const dbPlan = (profileDoc?.plan || '').toLowerCase();
                 isPaidPlan = (dbPlan === 'pro' || dbPlan === 'premium' || dbPlan === 'agency');
+                
+                if (isPaidPlan) {
+                    const u = window.userUsageData || {};
+                    const currentBase = u.baseLimit || (dbPlan === 'premium' ? 3000 : (dbPlan === 'pro' ? 2000 : 120));
+                    const totalMonthlyLimit = currentBase + (u.referralBonus || 0);
+                    const currentMonthlyCount = u.monthlyCount || 0;
+                    
+                    if (currentMonthlyCount < totalMonthlyLimit || (u.purchasedCredits && (u.purchasedCreditsUsed || 0) < u.purchasedCredits)) {
+                        hasCredits = true;
+                    }
+                }
             }
 
-            if (isPaidPlan) return true;
+            if (isPaidPlan) return hasCredits;
 
             const today = new Date().toISOString().split('T')[0];
             let spyUsage = JSON.parse(localStorage.getItem('metagen_spy_usage') || '{}');
@@ -990,8 +1007,15 @@ Format Example:
             }
 
             if (!canUseSpyFeature()) {
-                if (typeof showCustomAlert === 'function') showCustomAlert("Daily limit reached (2/2). Upgrade to Pro for unlimited competitor analysis.", "warning");
-                else alert("Daily limit reached (2/2). Upgrade to Pro for unlimited competitor analysis.");
+                const dbPlan = (window.userProfileData?.plan || '').toLowerCase();
+                const isPaid = (dbPlan === 'pro' || dbPlan === 'premium' || dbPlan === 'agency');
+                if (isPaid) {
+                    if (typeof showCustomAlert === 'function') showCustomAlert("Credit limit reached. Please purchase more credits or wait for monthly reset.", "warning");
+                    else alert("Credit limit reached. Please purchase more credits.");
+                } else {
+                    if (typeof showCustomAlert === 'function') showCustomAlert("Daily limit reached (2/2). Upgrade to Pro for unlimited competitor analysis.", "warning");
+                    else alert("Daily limit reached (2/2). Upgrade to Pro for unlimited competitor analysis.");
+                }
                 return;
             }
 
