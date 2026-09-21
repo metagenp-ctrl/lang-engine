@@ -904,8 +904,7 @@ Format Example:
             const user = auth.currentUser;
             let isPaidPlan = false;
             if (user) {
-                const profileDoc = window.userProfileData; // Assume this is cached or we fall back to limit if undefined
-                const dbPlan = (profileDoc?.plan || '').toLowerCase();
+                const dbPlan = (window.userUsageData?.plan || '').toLowerCase();
                 isPaidPlan = (dbPlan === 'pro' || dbPlan === 'premium' || dbPlan === 'agency');
             }
 
@@ -940,8 +939,7 @@ Format Example:
             const user = auth.currentUser;
             let isPaidPlan = false;
             if (user) {
-                const profileDoc = window.userProfileData;
-                const dbPlan = (profileDoc?.plan || '').toLowerCase();
+                const dbPlan = (window.userUsageData?.plan || '').toLowerCase();
                 isPaidPlan = (dbPlan === 'pro' || dbPlan === 'premium' || dbPlan === 'agency');
             }
 
@@ -967,8 +965,7 @@ Format Example:
             let isPaidPlan = false;
             let hasCredits = false;
             if (user) {
-                const profileDoc = window.userProfileData;
-                const dbPlan = (profileDoc?.plan || '').toLowerCase();
+                const dbPlan = (window.userUsageData?.plan || '').toLowerCase();
                 isPaidPlan = (dbPlan === 'pro' || dbPlan === 'premium' || dbPlan === 'agency');
                 
                 if (isPaidPlan) {
@@ -1007,7 +1004,7 @@ Format Example:
             }
 
             if (!canUseSpyFeature()) {
-                const dbPlan = (window.userProfileData?.plan || '').toLowerCase();
+                const dbPlan = (window.userUsageData?.plan || '').toLowerCase();
                 const isPaid = (dbPlan === 'pro' || dbPlan === 'premium' || dbPlan === 'agency');
                 if (isPaid) {
                     if (typeof showCustomAlert === 'function') showCustomAlert("Credit limit reached. Please purchase more credits or wait for monthly reset.", "warning");
@@ -1116,8 +1113,7 @@ JSON Structure Requirements:
                 // Check Pro status for displaying advanced metrics
                 let isPaidPlan = false;
                 if (user) {
-                    const profileDoc = window.userProfileData;
-                    const dbPlan = (profileDoc?.plan || '').toLowerCase();
+                    const dbPlan = (window.userUsageData?.plan || '').toLowerCase();
                     isPaidPlan = (dbPlan === 'pro' || dbPlan === 'premium' || dbPlan === 'agency');
                 }
 
