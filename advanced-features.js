@@ -1021,8 +1021,8 @@ Format Example:
                 return;
             }
 
-            // Determine platform and ID
-            let platform = "Unknown";
+            /// Platform এবং Asset ID ডিটেকশন
+            let platform = "General Stock";
             let assetId = urlInput;
             
             if (urlInput.toLowerCase().includes('shutterstock.com')) {
@@ -1031,11 +1031,12 @@ Format Example:
                 if (match) assetId = match[1];
             } else if (urlInput.toLowerCase().includes('stock.adobe.com')) {
                 platform = "Adobe Stock";
-                const match = urlInput.match(/(?:images\/.*?\/|stock-photo\/.*?\/|(?:\?|&)k=)?(\d+)/);
+                // URL থেকে ID এক্সট্রাক্ট করা (stock-photo/id/2067924530 অথবা asset_id=2067924530)
+                const match = urlInput.match(/(?:id\/|asset_id=|\/|images\/)(\d{7,12})/i);
                 if (match) assetId = match[1];
-            } else if (!isNaN(urlInput) && urlInput.length > 5) {
-                // If just numbers, assume based on length (Shutterstock usually longer, Adobe usually ~9 digits, but not strict)
-                platform = "General Stock";
+            } else if (/^\d+$/.test(urlInput)) {
+                platform = "Adobe Stock";
+                assetId = urlInput;
             }
 
             document.getElementById('spyEmptyState').style.display = 'none';
