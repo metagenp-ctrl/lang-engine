@@ -993,7 +993,12 @@ Format Example:
         window.analyzeCompetitorAsset = async function () {
             const urlInput = document.getElementById('spyUrlInput').value.trim();
             if (!urlInput) {
-                alert("Please enter a valid Shutterstock or Adobe Stock URL/Asset ID.");
+                alert("Please enter a valid Shutterstock or Adobe Stock URL.");
+                return;
+            }
+
+            if (/^\d+$/.test(urlInput)) {
+                alert("For accurate results, please paste the FULL URL of the stock photo (which contains the title) instead of just the ID. Adobe Stock blocks automated ID lookups.");
                 return;
             }
 
@@ -1044,9 +1049,9 @@ Format Example:
                 const proxyUrl = "https://metagen-pro-api.metagenp.workers.dev/generate";
                 
                 // We ask the AI to perform a reverse analysis based on the platform and ID
-                const prompt = `Act as an expert stock photography SEO analyst. I am providing you with a ${platform} asset URL/ID: "${urlInput}".
+                const prompt = `Act as an expert stock photography SEO analyst. I am providing you with a ${platform} asset URL: "${urlInput}".
                 
-While you cannot scrape the live URL, use your extensive training data of stock photography patterns to reverse-engineer and estimate the metadata, ranking, and top converting keywords for an asset that fits this context.
+While you cannot scrape the live URL, extract and use the descriptive words found in the URL slug itself, along with your extensive training data of stock photography patterns, to reverse-engineer and estimate the metadata, ranking, and top converting keywords for an asset that fits this context.
 
 CRITICAL: Return ONLY a valid JSON object. No markdown, no explanations.
 
@@ -1076,7 +1081,7 @@ JSON Structure Requirements:
                         prompt: prompt,
                         email: user.email,
                         deviceInfo: navigator.userAgent,
-                        assetUrl: urlInput,
+                        assetUrl: assetId,
                         platform: platform
                     })
                 });
