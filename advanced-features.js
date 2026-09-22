@@ -1355,21 +1355,60 @@ Return ONLY the raw prompt text. No quotes, no explanations, no markdown formatt
     }
 };
 
-window.copySpyPrompt = function () {
-    const text = document.getElementById('spyPromptText').innerText;
-    navigator.clipboard.writeText(text).then(() => {
-        const btn = event.currentTarget;
-        const originalHTML = btn.innerHTML;
-        btn.innerHTML = '<i class="fas fa-check"></i> Copied!';
-        btn.style.color = '#10B981';
-        btn.style.borderColor = '#10B981';
-        setTimeout(() => {
-            btn.innerHTML = originalHTML;
-            btn.style.color = '#8B5CF6';
-            btn.style.borderColor = '#8B5CF6';
-        }, 2000);
-    });
-};
+window.copySpyPrompt = function (btnElement) {
+            const textEl = document.getElementById('spyPromptText');
+            if (!textEl) return;
+            const text = (textEl.innerText || textEl.textContent || '').trim();
+            if (!text) return;
+
+            const btn = btnElement || document.getElementById('copySpyPromptBtn') || (typeof event !== 'undefined' ? (event.currentTarget || event.target) : null);
+
+            function showSuccess() {
+                if (btn) {
+                    const originalHTML = btn.innerHTML;
+                    btn.innerHTML = '<i class="fas fa-check"></i> Copied!';
+                    btn.style.color = '#10B981';
+                    btn.style.borderColor = '#10B981';
+                    btn.style.background = 'rgba(16, 185, 129, 0.1)';
+                    setTimeout(() => {
+                        btn.innerHTML = originalHTML;
+                        btn.style.color = '#8B5CF6';
+                        btn.style.borderColor = '#8B5CF6';
+                        btn.style.background = 'rgba(139, 92, 246, 0.1)';
+                    }, 2000);
+                } else {
+                    alert('Prompt Copied to Clipboard!');
+                }
+            }
+
+            if (navigator.clipboard && window.isSecureContext) {
+                navigator.clipboard.writeText(text).then(() => {
+                    showSuccess();
+                }).catch(() => {
+                    fallbackCopy(text);
+                });
+            } else {
+                fallbackCopy(text);
+            }
+
+            function fallbackCopy(copyText) {
+                const textArea = document.createElement("textarea");
+                textArea.value = copyText;
+                textArea.style.position = "fixed";
+                textArea.style.left = "-999999px";
+                textArea.style.top = "-999999px";
+                document.body.appendChild(textArea);
+                textArea.focus();
+                textArea.select();
+                try {
+                    document.execCommand('copy');
+                    showSuccess();
+                } catch (err) {
+                    alert("Failed to copy prompt.");
+                }
+                document.body.removeChild(textArea);
+            }
+        };
 
 // --- 3. Translation Logic (Global Function) ---
 window.translateMetadata = async function (cardId) {
