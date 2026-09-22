@@ -991,7 +991,7 @@ Format Example:
 
         // --- Competitor Spy Logic ---
         window.analyzeCompetitorAsset = async function () {
-            let urlInput = document.getElementById('spyUrlInput').value.trim();
+            const urlInput = document.getElementById('spyUrlInput').value.trim();
             if (!urlInput) {
                 alert("Please enter a stock photo URL, Asset ID, or Title.");
                 return;
@@ -1030,23 +1030,6 @@ Format Example:
                 if (match) assetId = match[1];
             }
 
-            // যদি লিঙ্কটিতে কোনো স্লাগ/টাইটেল না থাকে (যেমন: stock-photo/id/2067924530)
-            const hasNoSlug = urlInput.includes('stock-photo/id/') || /^\d+$/.test(urlInput);
-            let sendPayloadSubject = urlInput;
-
-            if (hasNoSlug && !urlInput.includes(' ')) {
-                // ইউজারকে ছবির ৩-৪ শব্দের বর্ণনা দেওয়ার সুযোগ দেওয়া
-                const quickTitle = prompt(
-                    "Adobe Stock protects ID-only URLs from bot scraping.\n\nPlease enter 2-4 words describing this image (or copy the Title from the Adobe Stock page):",
-                    "Red and green grapes with leaves on vine"
-                );
-                if (quickTitle && quickTitle.trim()) {
-                    sendPayloadSubject = quickTitle.trim();
-                } else {
-                    return; // বাতিল করলে রিকোয়েস্ট যাবে না
-                }
-            }
-
             document.getElementById('spyEmptyState').style.display = 'none';
             document.getElementById('spyResultsContainer').style.display = 'none';
             document.getElementById('spyLoading').style.display = 'block';
@@ -1066,7 +1049,7 @@ Format Example:
                         action: "competitorSpy",
                         email: user.email,
                         deviceInfo: navigator.userAgent,
-                        assetUrl: sendPayloadSubject,
+                        assetUrl: urlInput,
                         platform: platform
                     })
                 });
