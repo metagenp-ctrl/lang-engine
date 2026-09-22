@@ -991,14 +991,9 @@ Format Example:
 
         // --- Competitor Spy Logic ---
         window.analyzeCompetitorAsset = async function () {
-            const urlInput = document.getElementById('spyUrlInput').value.trim();
+            let urlInput = document.getElementById('spyUrlInput').value.trim();
             if (!urlInput) {
-                alert("Please enter a valid Shutterstock or Adobe Stock URL.");
-                return;
-            }
-
-            if (/^\d+$/.test(urlInput)) {
-                alert("For accurate results, please paste the FULL URL of the stock photo (which contains the title) instead of just the ID. Adobe Stock blocks automated ID lookups.");
+                alert("Please enter a stock photo URL, Asset ID, or Title.");
                 return;
             }
 
@@ -1012,8 +1007,8 @@ Format Example:
                 const dbPlan = (window.userUsageData?.plan || '').toLowerCase();
                 const isPaid = (dbPlan === 'pro' || dbPlan === 'premium' || dbPlan === 'agency');
                 if (isPaid) {
-                    if (typeof showCustomAlert === 'function') showCustomAlert("Credit limit reached. Please purchase more credits or wait for monthly reset.", "warning");
-                    else alert("Credit limit reached. Please purchase more credits.");
+                    if (typeof showCustomAlert === 'function') showCustomAlert("Credit limit reached.", "warning");
+                    else alert("Credit limit reached.");
                 } else {
                     if (typeof showCustomAlert === 'function') showCustomAlert("Daily limit reached (2/2). Upgrade to Pro for unlimited competitor analysis.", "warning");
                     else alert("Daily limit reached (2/2). Upgrade to Pro for unlimited competitor analysis.");
@@ -1021,8 +1016,8 @@ Format Example:
                 return;
             }
 
-            /// Platform এবং Asset ID ডিটেকশন
-            let platform = "General Stock";
+            // Platform এবং Asset ID ডিটেকশন
+            let platform = "Adobe Stock";
             let assetId = urlInput;
             
             if (urlInput.toLowerCase().includes('shutterstock.com')) {
@@ -1031,12 +1026,25 @@ Format Example:
                 if (match) assetId = match[1];
             } else if (urlInput.toLowerCase().includes('stock.adobe.com')) {
                 platform = "Adobe Stock";
-                // URL থেকে ID এক্সট্রাক্ট করা (stock-photo/id/2067924530 অথবা asset_id=2067924530)
                 const match = urlInput.match(/(?:id\/|asset_id=|\/|images\/)(\d{7,12})/i);
                 if (match) assetId = match[1];
-            } else if (/^\d+$/.test(urlInput)) {
-                platform = "Adobe Stock";
-                assetId = urlInput;
+            }
+
+            // যদি লিঙ্কটিতে কোনো স্লাগ/টাইটেল না থাকে (যেমন: stock-photo/id/2067924530)
+            const hasNoSlug = urlInput.includes('stock-photo/id/') || /^\d+$/.test(urlInput);
+            let sendPayloadSubject = urlInput;
+
+            if (hasNoSlug && !urlInput.includes(' ')) {
+                // ইউজারকে ছবির ৩-৪ শব্দের বর্ণনা দেওয়ার সুযোগ দেওয়া
+                const quickTitle = prompt(
+                    "Adobe Stock protects ID-only URLs from bot scraping.\n\nPlease enter 2-4 words describing this image (or copy the Title from the Adobe Stock page):",
+                    "Red and green grapes with leaves on vine"
+                );
+                if (quickTitle && quickTitle.trim()) {
+                    sendPayloadSubject = quickTitle.trim();
+                } else {
+                    return; // বাতিল করলে রিকোয়েস্ট যাবে না
+                }
             }
 
             document.getElementById('spyEmptyState').style.display = 'none';
@@ -1046,31 +1054,8 @@ Format Example:
 
             try {
                 let accessToken = await user.getIdToken();
-                
                 const proxyUrl = "https://metagen-pro-api.metagenp.workers.dev/generate";
                 
-                // We ask the AI to perform a reverse analysis based on the platform and ID
-                const prompt = `Act as an expert stock photography SEO analyst. I am providing you with a ${platform} asset URL: "${urlInput}".
-                
-While you cannot scrape the live URL, extract and use the descriptive words found in the URL slug itself, along with your extensive training data of stock photography patterns, to reverse-engineer and estimate the metadata, ranking, and top converting keywords for an asset that fits this context.
-
-CRITICAL: Return ONLY a valid JSON object. No markdown, no explanations.
-
-JSON Structure Requirements:
-{
-  "asset_title": "Estimated descriptive title of the asset (10-15 words)",
-  "category": "Main category (e.g., Business, Nature, Tech)",
-  "estimated_rank_score": "A number between 75 and 99 indicating SEO strength",
-  "keywords": [
-    {
-      "term": "keyword or phrase",
-      "search_volume": "High/Medium/Low",
-      "relevance_score": number between 1-100
-    }
-  ] (Provide exactly 25 top-converting keywords),
-  "outrank_suggestion": "A strategic tip on how to create content that outperforms this asset (e.g., better lighting, new angle, trend integration). (2-3 sentences max)"
-}`;
-
                 const response = await fetch(proxyUrl, {
                     method: "POST",
                     headers: {
@@ -1078,11 +1063,10 @@ JSON Structure Requirements:
                         "Authorization": `Bearer ${accessToken}`
                     },
                     body: JSON.stringify({
-                        action: "competitorSpy", // Handled by Groq in worker
-                        prompt: prompt,
+                        action: "competitorSpy",
                         email: user.email,
                         deviceInfo: navigator.userAgent,
-                        assetUrl: assetId,
+                        assetUrl: sendPayloadSubject,
                         platform: platform
                     })
                 });
@@ -1090,13 +1074,12 @@ JSON Structure Requirements:
                 const data = await response.json();
                 if (!response.ok) {
                     if (response.status === 429 || data.error?.includes('limit')) {
-                        showLimitModal(data.error);
-                        throw new Error("Credit limit reached. Please upgrade to continue using this Pro feature.");
+                        if (typeof showLimitModal === 'function') showLimitModal(data.error);
+                        throw new Error("Credit limit reached.");
                     }
                     throw new Error(data.error || "Analysis failed.");
                 }
 
-                // Increment usage for free users upon success
                 incrementSpyUsage();
 
                 // Clean and parse JSON
@@ -1109,14 +1092,8 @@ JSON Structure Requirements:
                     jsonString = jsonString.substring(startObj, endObj + 1);
                 }
 
-                let spyData;
-                try {
-                    spyData = JSON.parse(jsonString);
-                } catch (e) {
-                    throw new Error("Failed to parse analysis data from AI.");
-                }
+                let spyData = JSON.parse(jsonString);
 
-                // Check Pro status for displaying advanced metrics
                 let isPaidPlan = false;
                 if (user) {
                     const dbPlan = (window.userUsageData?.plan || '').toLowerCase();
@@ -1129,19 +1106,13 @@ JSON Structure Requirements:
                 console.error("Competitor Spy Error:", error);
                 document.getElementById('spyLoading').style.display = 'none';
                 document.getElementById('spyEmptyState').style.display = 'block';
-                
-                if (error.message.includes('Credit') || error.message.includes('limit')) {
-                    // Handled by modal
-                } else if (typeof showCustomAlert === 'function') {
-                    showCustomAlert(`Error analyzing asset: ${error.message}`, 'error');
-                } else {
-                    alert(`Error analyzing asset: ${error.message}`);
+                if (!error.message.includes('Credit')) {
+                    alert(`Error: ${error.message}`);
                 }
             } finally {
                 document.getElementById('spyAnalyzeBtn').disabled = false;
             }
         };
-
         function renderCompetitorResults(data, url, platform, assetId, isPaidPlan) {
             const container = document.getElementById('spyResultsContainer');
             
