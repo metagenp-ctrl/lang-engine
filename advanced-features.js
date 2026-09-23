@@ -1129,7 +1129,7 @@ function renderCompetitorResults(data, url, platform, assetId, isPaidPlan) {
     const plainKeywordsString = plainKeywordsArray.join(', ');
     const escapedKeywordsStr = plainKeywordsString.replace(/'/g, "\\'");
 
-    // Format keywords HTML with volume indicators (locked for free users)
+    // Format keywords HTML
     const keywordsHtml = keywordsList.map(k => {
         const term = typeof k === 'string' ? k : k.term;
         const vol = typeof k === 'string' ? 'Medium' : (k.search_volume || 'Medium');
@@ -1144,124 +1144,141 @@ function renderCompetitorResults(data, url, platform, assetId, isPaidPlan) {
 
     // AI Prompt Generator Area
     const promptGeneratorHtml = `
-                <div class="spy-prompt-panel">
-                    <h4 style="margin: 0 0 10px 0; color: #8B5CF6; font-size: 1.1em; display:flex; align-items:center; gap:8px;">
-                        <i class="fas fa-magic"></i> 1-Click Reverse Prompt
-                    </h4>
-                    <p style="color: var(--text-muted); font-size: 0.85em; margin: 0 0 15px 0;">Generate a high-quality AI image prompt based on this asset's keywords and category to create a competing image.</p>
-                    
-                    <div class="spy-param-grid">
-                        <div>
-                            <label>AI Platform</label>
-                            <select id="spyPromptPlatform">
-                                <option value="Midjourney">Midjourney</option>
-                                <option value="Stable Diffusion">Stable Diffusion</option>
-                                <option value="DALL-E 3">DALL-E 3</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label>Lighting Style</label>
-                            <select id="spyPromptLighting">
-                                <option value="Cinematic lighting, volumetric rays">Cinematic</option>
-                                <option value="Studio lighting, soft shadows">Studio</option>
-                                <option value="Natural sunlight, golden hour">Golden Hour</option>
-                                <option value="Dramatic lighting, high contrast">Dramatic</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label>Camera Angle</label>
-                            <select id="spyPromptAngle">
-                                <option value="Eye-level shot, professional composition">Eye-level</option>
-                                <option value="Overhead shot, flat lay">Overhead</option>
-                                <option value="Close-up macro shot, shallow depth of field">Close-up</option>
-                                <option value="Wide angle shot, expansive view">Wide Angle</option>
-                            </select>
-                        </div>
-                    </div>
-                    
-                    <div style="margin-top: 16px; text-align: right;">
-                        <button class="action-button" onclick="window.generateSpyPrompt('${escapedKeywordsStr}')" style="padding: 8px 20px; background: #8B5CF6; border: none; color: white; border-radius: 8px; font-weight: 600; font-size: 0.85em; cursor: pointer;">
-                            <i class="fas fa-bolt"></i> Generate Prompt
-                        </button>
-                    </div>
-                    
-                    <div id="spyPromptOutputBox" style="display:none;">
-                        <div class="spy-prompt-output" id="spyPromptText"></div>
-                        <button onclick="window.copySpyPrompt()" style="margin-top: 8px; background: rgba(139,92,246,0.1); border: 1px solid #8B5CF6; color: #8B5CF6; padding: 6px 12px; border-radius: 6px; font-size: 0.8em; cursor: pointer; float: right;">
-                            <i class="fas fa-copy"></i> Copy Prompt
-                        </button>
-                        <div style="clear:both;"></div>
-                    </div>
+        <div class="spy-prompt-panel">
+            <h4 style="margin: 0 0 10px 0; color: #8B5CF6; font-size: 1.1em; display:flex; align-items:center; gap:8px;">
+                <i class="fas fa-magic"></i> 1-Click Reverse Prompt
+            </h4>
+            <p style="color: var(--text-muted); font-size: 0.85em; margin: 0 0 15px 0;">Generate a high-quality AI image prompt based on this asset's keywords and category to create a competing image.</p>
+            
+            <div class="spy-param-grid">
+                <div>
+                    <label>AI Platform</label>
+                    <select id="spyPromptPlatform">
+                        <option value="Midjourney">Midjourney</option>
+                        <option value="Stable Diffusion">Stable Diffusion</option>
+                        <option value="DALL-E 3">DALL-E 3</option>
+                    </select>
                 </div>
-            `;
+                <div>
+                    <label>Lighting Style</label>
+                    <select id="spyPromptLighting">
+                        <option value="Cinematic lighting, volumetric rays">Cinematic</option>
+                        <option value="Studio lighting, soft shadows">Studio</option>
+                        <option value="Natural sunlight, golden hour">Golden Hour</option>
+                        <option value="Dramatic lighting, high contrast">Dramatic</option>
+                    </select>
+                </div>
+                <div>
+                    <label>Camera Angle</label>
+                    <select id="spyPromptAngle">
+                        <option value="Eye-level shot, professional composition">Eye-level</option>
+                        <option value="Overhead shot, flat lay">Overhead</option>
+                        <option value="Close-up macro shot, shallow depth of field">Close-up</option>
+                        <option value="Wide angle shot, expansive view">Wide Angle</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div style="margin-top: 16px; text-align: right;">
+                <button class="action-button" onclick="window.generateSpyPrompt('${escapedKeywordsStr}')" style="padding: 8px 20px; background: #8B5CF6; border: none; color: white; border-radius: 8px; font-weight: 600; font-size: 0.85em; cursor: pointer;">
+                    <i class="fas fa-bolt"></i> Generate Prompt
+                </button>
+            </div>
+            
+            <div id="spyPromptOutputBox" style="display:none;">
+                <div class="spy-prompt-output" id="spyPromptText"></div>
+                <button onclick="window.copySpyPrompt()" style="margin-top: 8px; background: rgba(139,92,246,0.1); border: 1px solid #8B5CF6; color: #8B5CF6; padding: 6px 12px; border-radius: 6px; font-size: 0.8em; cursor: pointer; float: right;">
+                    <i class="fas fa-copy"></i> Copy Prompt
+                </button>
+                <div style="clear:both;"></div>
+            </div>
+        </div>
+    `;
+
+    // 🖼️ Source Image Preview HTML Block
+    const sourceImageHtml = data.thumbnail_url ? `
+        <div style="flex: 0 0 140px; max-width: 140px; position: relative;">
+            <a href="${url.startsWith('http') ? url : '#'}" target="_blank" title="View Source Asset" style="display: block; position: relative; border-radius: 10px; overflow: hidden; border: 1.5px solid var(--border-color);">
+                <img src="${data.thumbnail_url}" alt="Source Asset" style="width: 100%; height: 140px; object-fit: cover; display: block; transition: transform 0.3s;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'"/>
+                <span style="position: absolute; bottom: 4px; right: 4px; background: rgba(0,0,0,0.7); color: #fff; font-size: 0.65em; padding: 2px 6px; border-radius: 4px;">
+                    <i class="fas fa-external-link-alt"></i> View
+                </span>
+            </a>
+        </div>
+    ` : '';
 
     container.innerHTML = `
-                <div class="spy-result-card" style="border-top: 4px solid #8B5CF6;">
-                    <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom: 20px; flex-wrap:wrap; gap:10px;">
-                        <div>
-                            <span style="background: rgba(139,92,246,0.1); color: #8B5CF6; padding: 4px 10px; border-radius: 6px; font-size: 0.75em; font-weight: 700; text-transform: uppercase;">
-                                <i class="fas fa-satellite-dish"></i> ${platform} Analysis
-                            </span>
-                            <h3 style="color: var(--text-primary); margin: 10px 0 5px 0; font-size: 1.2em;">${data.asset_title || 'Analyzed Asset'}</h3>
-                            <div style="color: var(--text-muted); font-size: 0.85em;">
-                                <i class="fas fa-folder"></i> Category: ${data.category || 'General'}
-                                <span style="margin:0 8px;">|</span>
-                                <i class="fas fa-fingerprint"></i> ID: ${assetId}
-                            </div>
-                        </div>
-                        
-                        <div class="spy-metric-grid" style="grid-template-columns: 1fr;">
-                            <div class="spy-metric-item" style="border-color: #8B5CF6; background: rgba(139,92,246,0.05);">
-                                <span class="spy-metric-value" style="color: #8B5CF6;">${data.estimated_rank_score || '85'}</span>
-                                <span class="spy-metric-label">Est. Rank Score</span>
-                            </div>
+        <div class="spy-result-card" style="border-top: 4px solid #8B5CF6;">
+            <!-- Header with Source Image + Meta Details -->
+            <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom: 20px; flex-wrap:wrap; gap:16px;">
+                <div style="display: flex; gap: 16px; flex: 1; min-width: 280px;">
+                    ${sourceImageHtml}
+                    <div>
+                        <span style="background: rgba(139,92,246,0.1); color: #8B5CF6; padding: 4px 10px; border-radius: 6px; font-size: 0.75em; font-weight: 700; text-transform: uppercase;">
+                            <i class="fas fa-satellite-dish"></i> ${platform} Analysis
+                        </span>
+                        <h3 style="color: var(--text-primary); margin: 10px 0 5px 0; font-size: 1.2em; line-height: 1.3;">${data.asset_title || 'Analyzed Asset'}</h3>
+                        <div style="color: var(--text-muted); font-size: 0.85em; margin-top: 6px;">
+                            <i class="fas fa-folder"></i> Category: ${data.category || 'General'}
+                            <span style="margin:0 8px;">|</span>
+                            <i class="fas fa-fingerprint"></i> ID: ${assetId}
                         </div>
                     </div>
-                    
-                    <div style="margin-top: 20px;">
-                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 12px;">
-                            <h4 style="margin:0; color: var(--text-primary); font-size: 0.95em;">
-                                <i class="fas fa-key" style="color: #F97316;"></i> Top Converting Keywords (${keywordsList.length})
-                            </h4>
-                            <div style="display:flex; gap:8px;">
-                                <button onclick="window.copyKeywordsOnly(event, '${escapedKeywordsStr}')" style="background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-primary); padding: 5px 12px; border-radius: 6px; font-size: 0.8em; cursor: pointer;">
-                                    <i class="fas fa-copy"></i> Copy
-                                </button>
-                                <button onclick="window.saveSpyKeywordsAsPreset('${escapedKeywordsStr}', '${(data.asset_title || '').replace(/'/g, "\\'")}')" style="background: rgba(249,115,22,0.1); border: 1px solid #F97316; color: #F97316; padding: 5px 12px; border-radius: 6px; font-size: 0.8em; cursor: pointer; font-weight: 600;">
-                                    <i class="fas fa-save"></i> Save Preset
-                                </button>
-                            </div>
-                        </div>
-                        
-                        <div style="display:flex; flex-wrap:wrap; gap:8px; background: rgba(0,0,0,0.1); padding: 15px; border-radius: 10px; border: 1px solid var(--border-light);">
-                            ${keywordsHtml}
-                        </div>
-                    </div>
-                    ${isPaidPlan ? `
-                        <div style="margin-top: 20px; background: rgba(16, 185, 129, 0.05); border-left: 4px solid #10B981; padding: 15px; border-radius: 0 8px 8px 0; margin-bottom: 20px;">
-                            <h4 style="margin:0 0 8px 0; color: #10B981; font-size: 1em;"><i class="fas fa-lightbulb"></i> AI Out-Rank Suggestion</h4>
-                            <p style="margin:0; font-size: 0.9em; color: var(--text-primary); line-height: 1.5;">${data.outrank_suggestion || 'Improve the lighting, framing, or add a unique modern element to stand out against this asset.'}</p>
-                        </div>
-                        ${promptGeneratorHtml}
-                    ` : `
-                        <div class="spy-prompt-panel" style="text-align: center; padding: 30px 20px;">
-                            <i class="fas fa-lock" style="font-size: 2em; color: var(--text-muted); margin-bottom: 10px;"></i>
-                            <h4 style="margin: 0 0 10px 0; color: var(--text-primary);">AI Out-Rank Suggestion & Prompt Generator</h4>
-                            <p style="color: var(--text-muted); font-size: 0.85em; margin: 0 auto 15px auto; max-width: 400px;">
-                                Upgrade to unlock AI strategies to out-compete this asset and generate Midjourney, Stable Diffusion, and DALL-E prompts.
-                            </p>
-                            <button onclick="scrollToPricing()" style="background: linear-gradient(90deg, #F97316, #ea580c); border: none; color: white; padding: 8px 20px; border-radius: 8px; font-weight: 700; cursor: pointer; font-size: 0.85em;">
-                                Upgrade to Pro to Unlock
-                            </button>
-                        </div>
-                    `}
                 </div>
-            `;
+                
+                <div class="spy-metric-grid" style="grid-template-columns: 1fr;">
+                    <div class="spy-metric-item" style="border-color: #8B5CF6; background: rgba(139,92,246,0.05); min-width: 110px;">
+                        <span class="spy-metric-value" style="color: #8B5CF6;">${data.estimated_rank_score || '85'}</span>
+                        <span class="spy-metric-label">Est. Rank Score</span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Keywords Section -->
+            <div style="margin-top: 20px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 12px;">
+                    <h4 style="margin:0; color: var(--text-primary); font-size: 0.95em;">
+                        <i class="fas fa-key" style="color: #F97316;"></i> Top Converting Keywords (${keywordsList.length})
+                    </h4>
+                    <div style="display:flex; gap:8px;">
+                        <button onclick="window.copyKeywordsOnly(event, '${escapedKeywordsStr}')" style="background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-primary); padding: 5px 12px; border-radius: 6px; font-size: 0.8em; cursor: pointer;">
+                            <i class="fas fa-copy"></i> Copy
+                        </button>
+                        <button onclick="window.saveSpyKeywordsAsPreset('${escapedKeywordsStr}', '${(data.asset_title || '').replace(/'/g, "\\'")}')" style="background: rgba(249,115,22,0.1); border: 1px solid #F97316; color: #F97316; padding: 5px 12px; border-radius: 6px; font-size: 0.8em; cursor: pointer; font-weight: 600;">
+                            <i class="fas fa-save"></i> Save Preset
+                        </button>
+                    </div>
+                </div>
+                
+                <div style="display:flex; flex-wrap:wrap; gap:8px; background: rgba(0,0,0,0.1); padding: 15px; border-radius: 10px; border: 1px solid var(--border-light);">
+                    ${keywordsHtml}
+                </div>
+            </div>
+
+            ${isPaidPlan ? `
+                <div style="margin-top: 20px; background: rgba(16, 185, 129, 0.05); border-left: 4px solid #10B981; padding: 15px; border-radius: 0 8px 8px 0; margin-bottom: 20px;">
+                    <h4 style="margin:0 0 8px 0; color: #10B981; font-size: 1em;"><i class="fas fa-lightbulb"></i> AI Out-Rank Suggestion</h4>
+                    <p style="margin:0; font-size: 0.9em; color: var(--text-primary); line-height: 1.5;">${data.outrank_suggestion || 'Improve the lighting, framing, or add a unique modern element to stand out against this asset.'}</p>
+                </div>
+                ${promptGeneratorHtml}
+            ` : `
+                <div class="spy-prompt-panel" style="text-align: center; padding: 30px 20px;">
+                    <i class="fas fa-lock" style="font-size: 2em; color: var(--text-muted); margin-bottom: 10px;"></i>
+                    <h4 style="margin: 0 0 10px 0; color: var(--text-primary);">AI Out-Rank Suggestion & Prompt Generator</h4>
+                    <p style="color: var(--text-muted); font-size: 0.85em; margin: 0 auto 15px auto; max-width: 400px;">
+                        Upgrade to unlock AI strategies to out-compete this asset and generate Midjourney, Stable Diffusion, and DALL-E prompts.
+                    </p>
+                    <button onclick="scrollToPricing()" style="background: linear-gradient(90deg, #F97316, #ea580c); border: none; color: white; padding: 8px 20px; border-radius: 8px; font-weight: 700; cursor: pointer; font-size: 0.85em;">
+                        Upgrade to Pro to Unlock
+                    </button>
+                </div>
+            `}
+        </div>
+    `;
 
     document.getElementById('spyLoading').style.display = 'none';
     container.style.display = 'block';
-};
-
+}
 window.saveSpyKeywordsAsPreset = function (keywordStr, title) {
     const keywords = keywordStr.split(',').map(k => k.trim()).filter(Boolean);
     if (keywords.length === 0) return;
