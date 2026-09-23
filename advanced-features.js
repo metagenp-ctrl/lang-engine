@@ -1197,10 +1197,10 @@ function renderCompetitorResults(data, url, platform, assetId, isPaidPlan) {
 
     // 🖼️ Source Image Preview HTML Block
     const sourceImageHtml = data.thumbnail_url ? `
-        <div style="flex: 0 0 140px; max-width: 140px; position: relative;">
-            <a href="${url.startsWith('http') ? url : '#'}" target="_blank" title="View Source Asset" style="display: block; position: relative; border-radius: 10px; overflow: hidden; border: 1.5px solid var(--border-color);">
-                <img src="${data.thumbnail_url}" alt="Source Asset" style="width: 100%; height: 140px; object-fit: cover; display: block; transition: transform 0.3s;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'"/>
-                <span style="position: absolute; bottom: 4px; right: 4px; background: rgba(0,0,0,0.7); color: #fff; font-size: 0.65em; padding: 2px 6px; border-radius: 4px;">
+        <div style="flex: 0 0 130px; max-width: 130px; position: relative;">
+            <a href="${url.startsWith('http') ? url : '#'}" target="_blank" title="Open original stock asset" style="display: block; position: relative; border-radius: 10px; overflow: hidden; border: 1.5px solid var(--border-color); box-shadow: 0 4px 10px rgba(0,0,0,0.15);">
+                <img src="${data.thumbnail_url}" alt="Source Thumbnail" style="width: 100%; height: 130px; object-fit: cover; display: block; transition: transform 0.3s;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'"/>
+                <span style="position: absolute; bottom: 5px; right: 5px; background: rgba(0,0,0,0.75); color: #fff; font-size: 0.65em; padding: 2px 6px; border-radius: 4px; font-weight: 600;">
                     <i class="fas fa-external-link-alt"></i> View
                 </span>
             </a>
