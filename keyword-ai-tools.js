@@ -63,10 +63,19 @@ document.addEventListener('DOMContentLoaded', function () {
                 }
             }
 
+            if (section === 'ai-upscale') {
+                const currentPlan = window.userUsageData?.plan || 'free';
+                if (currentPlan.toLowerCase() !== 'pro' && currentPlan.toLowerCase() !== 'premium' && currentPlan.toLowerCase() !== 'agency') {
+                    alert("Upgrade to PRO/PREMIUM plan. AI Upscale feature is for pro & premium users only.");
+                    if (typeof scrollToPricing === 'function') scrollToPricing();
+                    return;
+                }
+            }
+
             modeButtons.forEach(b => b.classList.remove('active'));
             this.classList.add('active');
 
-            document.body.classList.remove('mode-metadata', 'mode-image-prompt', 'mode-dalle', 'mode-niche', 'mode-calendar', 'mode-admin', 'mode-healing', 'mode-sales-prediction');
+            document.body.classList.remove('mode-metadata', 'mode-image-prompt', 'mode-dalle', 'mode-niche', 'mode-calendar', 'mode-admin', 'mode-healing', 'mode-sales-prediction', 'mode-ai-upscale');
 
             // Hide all sections first
             if (metaSection) metaSection.style.display = 'none';
@@ -81,6 +90,7 @@ document.addEventListener('DOMContentLoaded', function () {
             const healingSection = document.getElementById('imageHealingSection');
             const salesPredSection = document.getElementById('salesPredictionSection');
             const bgRemovalSection = document.getElementById('bgRemovalSection');
+            const aiUpscaleSection = document.getElementById('aiUpscaleSection');
 
             if (calendarSection) calendarSection.style.display = 'none';
             if (nicheSection) nicheSection.style.display = 'none';
@@ -88,6 +98,7 @@ document.addEventListener('DOMContentLoaded', function () {
             if (healingSection) healingSection.style.display = 'none';
             if (salesPredSection) salesPredSection.style.display = 'none';
             if (bgRemovalSection) bgRemovalSection.style.display = 'none';
+            if (aiUpscaleSection) aiUpscaleSection.style.display = 'none';
 
             if (section === 'meta') {
                 document.body.classList.add('mode-metadata');
@@ -118,6 +129,9 @@ document.addEventListener('DOMContentLoaded', function () {
             } else if (section === 'sales-prediction') {
                 document.body.classList.add('mode-sales-prediction');
                 if (salesPredSection) salesPredSection.style.display = 'block';
+            } else if (section === 'ai-upscale') {
+                document.body.classList.add('mode-ai-upscale');
+                if (aiUpscaleSection) aiUpscaleSection.style.display = 'block';
             } else if (section === 'admin') {
                 document.body.classList.add('mode-admin');
                 if (toolWrapper) {
