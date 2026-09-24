@@ -905,9 +905,28 @@ document.addEventListener('DOMContentLoaded', function () {
         const metaStyleContainer = card.querySelector('.meta-style-container');
         const metaMoodContainer = card.querySelector('.meta-mood-container');
 
+        const spinnerContainer = card.querySelector('.spinner-container') || card.querySelector('.image-spinner');
+        const progressTextElem = document.getElementById(`spinner-progress-${card.id}`);
+
         card.classList.add('processing');
-        spinner.style.display = 'block';
+        if (spinnerContainer) spinnerContainer.style.display = 'block';
         metaCol.style.display = 'none';
+        
+        let progressInterval = null;
+        if (progressTextElem) {
+            let currentProgress = 0;
+            progressTextElem.textContent = '0%';
+            progressInterval = setInterval(() => {
+                if (currentProgress < 95) {
+                    currentProgress += Math.floor(Math.random() * 3) + 1; // Increment by 1-3%
+                    if (currentProgress > 95) currentProgress = 95;
+                    progressTextElem.textContent = currentProgress + '%';
+                }
+            }, 300);
+            
+            // Store interval ID on the card so it can be cleared easily later
+            card.dataset.progressInterval = progressInterval;
+        }
 
         const selectedProvider = document.getElementById('aiProviderSelect')?.value || 'groq';
 
@@ -1605,8 +1624,23 @@ ${isShort ? '- Since this is a SHORT/VERTICAL video, heavily prioritize keywords
 
             card.classList.remove('processing');
             card.classList.add('metadata-generated');
-            spinner.style.display = 'none';
-            metaCol.style.display = 'flex';
+            
+            if (card.dataset.progressInterval) {
+                clearInterval(card.dataset.progressInterval);
+                delete card.dataset.progressInterval;
+                const progressTextElem = document.getElementById(`spinner-progress-${card.id}`);
+                if (progressTextElem) progressTextElem.textContent = '100%';
+            }
+
+            const spinnerContainer = card.querySelector('.spinner-container') || spinner;
+            if (spinnerContainer) {
+                setTimeout(() => {
+                    spinnerContainer.style.display = 'none';
+                    metaCol.style.display = 'flex';
+                }, 300); // Brief delay to show 100%
+            } else {
+                metaCol.style.display = 'flex';
+            }
 
             // Calculate and update SEO Score Meter
             const seoScore = calculateSeoScore(metadata);
@@ -1715,10 +1749,19 @@ ${isShort ? '- Since this is a SHORT/VERTICAL video, heavily prioritize keywords
         } catch (error) {
             console.error("Generation Error:", error);
             card.classList.remove('processing');
+            
+            if (card.dataset.progressInterval) {
+                clearInterval(card.dataset.progressInterval);
+                delete card.dataset.progressInterval;
+            }
+
             metaTitle.textContent = "Error";
             metaDescription.textContent = error.message;
             metaKeywords.innerHTML = '';
-            spinner.style.display = 'none';
+            
+            const spinnerContainer = card.querySelector('.spinner-container') || spinner;
+            if (spinnerContainer) spinnerContainer.style.display = 'none';
+            
             metaCol.style.display = 'flex';
             throw error;
         }
