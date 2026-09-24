@@ -1,4 +1,5 @@
 
+
         // ===========================================
         // SECTION 8: PDF.js Worker Init
         // ===========================================
@@ -1731,3 +1732,282 @@ Strictly NO intro text, NO markdown code blocks (\`\`\`json), NO explanatory cha
             if (stopWatcherBtn) stopWatcherBtn.addEventListener('click', stopWatcher);
         });
 
+        // =====================================================
+        // ========== AI IMAGE UPSCALE ENGINE ===================
+        // =====================================================
+        let upscaleOriginalFile = null;
+        let upscaleOriginalImage = null;
+        let upscaleSelectedMode = 'standard-2x';
+
+        function loadUpscaleImage(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            _initUpscalePreview(file);
+        }
+
+        function handleUpscaleDrop(event) {
+            event.preventDefault();
+            event.stopPropagation();
+            event.currentTarget.style.borderColor = 'var(--border-color)';
+            const file = event.dataTransfer.files[0];
+            if (file && file.type.startsWith('image/')) _initUpscalePreview(file);
+        }
+
+        function _initUpscalePreview(file) {
+            upscaleOriginalFile = file;
+            const img = new Image();
+            img.onload = function () {
+                upscaleOriginalImage = img;
+                document.getElementById('upscalePreviewImg').src = img.src;
+                document.getElementById('upscaleOrigDimBadge').textContent = img.naturalWidth + ' × ' + img.naturalHeight;
+                document.getElementById('upscaleOrigSize').textContent = img.naturalWidth + ' × ' + img.naturalHeight;
+
+                document.getElementById('upscaleUploadArea').style.display = 'none';
+                document.getElementById('upscaleWorkspace').style.display = 'block';
+                document.getElementById('upscaleResultContainer').style.display = 'none';
+                document.getElementById('upscaleDownloadBtn').style.display = 'none';
+                document.getElementById('upscaleError').style.display = 'none';
+
+                // Update output size based on selected mode
+                _updateUpscaleOutputInfo();
+            };
+            img.src = URL.createObjectURL(file);
+        }
+
+        function selectUpscaleMode(el) {
+            document.querySelectorAll('.upscale-mode-card').forEach(c => c.classList.remove('selected'));
+            el.classList.add('selected');
+            upscaleSelectedMode = el.getAttribute('data-upscale-mode');
+            _updateUpscaleOutputInfo();
+        }
+
+        function _updateUpscaleOutputInfo() {
+            if (!upscaleOriginalImage) return;
+            const w = upscaleOriginalImage.naturalWidth;
+            const h = upscaleOriginalImage.naturalHeight;
+
+            const modeNames = {
+                'standard-2x': 'Standard 2X',
+                'standard-4x': 'Standard 4X',
+                'super-2x': 'Super Resolution 2X',
+                'super-4x': 'Super Resolution 4X'
+            };
+
+            const multiplier = upscaleSelectedMode.includes('4x') ? 4 : 2;
+            let outW = w * multiplier;
+            let outH = h * multiplier;
+
+            // ClipDrop API max is 4096 per dimension
+            if (outW > 4096 || outH > 4096) {
+                const scale = 4096 / Math.max(outW, outH);
+                outW = Math.round(outW * scale);
+                outH = Math.round(outH * scale);
+            }
+
+            document.getElementById('upscaleOutputSize').textContent = outW + ' × ' + outH;
+            document.getElementById('upscaleModeName').textContent = modeNames[upscaleSelectedMode] || 'Standard 2X';
+        }
+
+        function changeUpscaleImage() {
+            document.getElementById('upscaleWorkspace').style.display = 'none';
+            document.getElementById('upscaleUploadArea').style.display = 'block';
+            document.getElementById('upscaleFileInput').value = '';
+            upscaleOriginalFile = null;
+            upscaleOriginalImage = null;
+        }
+
+        async function processUpscale() {
+            if (!upscaleOriginalFile || !upscaleOriginalImage) {
+                const el = document.getElementById('upscaleError');
+                el.textContent = 'Please upload an image first!';
+                el.style.display = 'block';
+                return;
+            }
+
+            const errEl = document.getElementById('upscaleError');
+            const loadingEl = document.getElementById('upscaleLoading');
+            const processBtn = document.getElementById('upscaleProcessBtn');
+            const downloadBtn = document.getElementById('upscaleDownloadBtn');
+            const resultContainer = document.getElementById('upscaleResultContainer');
+            const loadingText = loadingEl.querySelector('span');
+
+            errEl.style.display = 'none';
+            loadingEl.style.display = 'block';
+            processBtn.disabled = true;
+            resultContainer.style.display = 'none';
+            downloadBtn.style.display = 'none';
+
+            try {
+                const user = firebase.auth().currentUser;
+                if (!user) throw new Error('Please login first');
+                const idToken = await user.getIdToken();
+
+                const origW = upscaleOriginalImage.naturalWidth;
+                const origH = upscaleOriginalImage.naturalHeight;
+
+                const isSuper = upscaleSelectedMode.startsWith('super');
+                const is4X = upscaleSelectedMode.includes('4x');
+                const multiplier = is4X ? 4 : 2;
+
+                // Draw original image to canvas at full resolution
+                const fullImgCanvas = document.createElement('canvas');
+                fullImgCanvas.width = origW;
+                fullImgCanvas.height = origH;
+                fullImgCanvas.getContext('2d').drawImage(upscaleOriginalImage, 0, 0, origW, origH);
+
+                let resultBlob;
+
+                if (is4X) {
+                    // 4X: Two-pass approach — first 2X, then another 2X
+                    loadingText.textContent = isSuper
+                        ? 'AI Super Resolution Pass 1/2 — Enhancing details...'
+                        : 'Upscaling Pass 1/2 — Doubling resolution...';
+
+                    // First pass: 2X
+                    let targetW_1 = origW * 2;
+                    let targetH_1 = origH * 2;
+                    if (targetW_1 > 4096 || targetH_1 > 4096) {
+                        const scale = 4096 / Math.max(targetW_1, targetH_1);
+                        targetW_1 = Math.round(targetW_1 * scale);
+                        targetH_1 = Math.round(targetH_1 * scale);
+                    }
+
+                    const imageBlob1 = await new Promise(r => fullImgCanvas.toBlob(r, 'image/jpeg', 0.92));
+                    const formData1 = new FormData();
+                    formData1.append('image_file', imageBlob1, 'image.jpg');
+                    formData1.append('target_width', String(targetW_1));
+                    formData1.append('target_height', String(targetH_1));
+
+                    const response1 = await fetch('https://metagen-pro-api.metagenp.workers.dev/clipdrop/upscale', {
+                        method: 'POST',
+                        headers: { 'Authorization': 'Bearer ' + idToken },
+                        body: formData1
+                    });
+
+                    if (!response1.ok) {
+                        const errData = await response1.json().catch(() => ({}));
+                        throw new Error(errData.error || 'Upscale Pass 1 failed (' + response1.status + ')');
+                    }
+
+                    const pass1Blob = await response1.blob();
+
+                    // Second pass: another 2X on the first result
+                    loadingText.textContent = isSuper
+                        ? 'AI Super Resolution Pass 2/2 — Maximum enhancement...'
+                        : 'Upscaling Pass 2/2 — Final upscale...';
+
+                    // Load pass1 result into an image to get dimensions
+                    const pass1Img = await new Promise((resolve, reject) => {
+                        const img = new Image();
+                        img.onload = () => resolve(img);
+                        img.onerror = reject;
+                        img.src = URL.createObjectURL(pass1Blob);
+                    });
+
+                    let targetW_2 = pass1Img.naturalWidth * 2;
+                    let targetH_2 = pass1Img.naturalHeight * 2;
+                    if (targetW_2 > 4096 || targetH_2 > 4096) {
+                        const scale = 4096 / Math.max(targetW_2, targetH_2);
+                        targetW_2 = Math.round(targetW_2 * scale);
+                        targetH_2 = Math.round(targetH_2 * scale);
+                    }
+
+                    // Draw pass1 result onto canvas
+                    const pass1Canvas = document.createElement('canvas');
+                    pass1Canvas.width = pass1Img.naturalWidth;
+                    pass1Canvas.height = pass1Img.naturalHeight;
+                    pass1Canvas.getContext('2d').drawImage(pass1Img, 0, 0);
+
+                    const imageBlob2 = await new Promise(r => pass1Canvas.toBlob(r, 'image/jpeg', 0.92));
+                    const formData2 = new FormData();
+                    formData2.append('image_file', imageBlob2, 'image.jpg');
+                    formData2.append('target_width', String(targetW_2));
+                    formData2.append('target_height', String(targetH_2));
+
+                    const response2 = await fetch('https://metagen-pro-api.metagenp.workers.dev/clipdrop/upscale', {
+                        method: 'POST',
+                        headers: { 'Authorization': 'Bearer ' + idToken },
+                        body: formData2
+                    });
+
+                    if (!response2.ok) {
+                        const errData = await response2.json().catch(() => ({}));
+                        throw new Error(errData.error || 'Upscale Pass 2 failed (' + response2.status + ')');
+                    }
+
+                    resultBlob = await response2.blob();
+
+                } else {
+                    // 2X: Single pass
+                    loadingText.textContent = isSuper
+                        ? 'AI Super Resolution — Enhancing details & textures...'
+                        : 'Upscaling — Doubling resolution...';
+
+                    let targetW = origW * 2;
+                    let targetH = origH * 2;
+                    if (targetW > 4096 || targetH > 4096) {
+                        const scale = 4096 / Math.max(targetW, targetH);
+                        targetW = Math.round(targetW * scale);
+                        targetH = Math.round(targetH * scale);
+                    }
+
+                    const imageBlob = await new Promise(r => fullImgCanvas.toBlob(r, 'image/jpeg', 0.92));
+                    const formData = new FormData();
+                    formData.append('image_file', imageBlob, 'image.jpg');
+                    formData.append('target_width', String(targetW));
+                    formData.append('target_height', String(targetH));
+
+                    const response = await fetch('https://metagen-pro-api.metagenp.workers.dev/clipdrop/upscale', {
+                        method: 'POST',
+                        headers: { 'Authorization': 'Bearer ' + idToken },
+                        body: formData
+                    });
+
+                    if (!response.ok) {
+                        const errData = await response.json().catch(() => ({}));
+                        throw new Error(errData.error || 'Upscale failed (' + response.status + ')');
+                    }
+
+                    resultBlob = await response.blob();
+                }
+
+                // Show result comparison
+                const resultUrl = URL.createObjectURL(resultBlob);
+                const resultImg = document.getElementById('upscaleResultImg');
+                resultImg.src = resultUrl;
+
+                // Show original for comparison
+                document.getElementById('upscaleOrigCompareImg').src = upscaleOriginalImage.src;
+                document.getElementById('upscaleOrigCompDim').textContent = origW + ' × ' + origH;
+
+                // Get upscaled dimensions
+                const upscaledImg = await new Promise((resolve, reject) => {
+                    const img = new Image();
+                    img.onload = () => resolve(img);
+                    img.onerror = reject;
+                    img.src = resultUrl;
+                });
+                document.getElementById('upscaleResultDim').textContent = upscaledImg.naturalWidth + ' × ' + upscaledImg.naturalHeight;
+
+                resultContainer.style.display = 'block';
+                downloadBtn.style.display = 'flex';
+
+            } catch (err) {
+                errEl.textContent = err.message;
+                errEl.style.display = 'block';
+            } finally {
+                loadingEl.style.display = 'none';
+                processBtn.disabled = false;
+                loadingEl.querySelector('span').textContent = 'AI is upscaling your image...';
+            }
+        }
+
+        function downloadUpscaledImage() {
+            const img = document.getElementById('upscaleResultImg');
+            if (!img.src) return;
+            const a = document.createElement('a');
+            a.href = img.src;
+            const mode = upscaleSelectedMode.replace('-', '_');
+            a.download = mode + '_' + (upscaleOriginalFile ? upscaleOriginalFile.name : 'upscaled.png');
+            a.click();
+        }
