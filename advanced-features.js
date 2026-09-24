@@ -335,7 +335,7 @@ document.addEventListener('DOMContentLoaded', () => {
         btn.addEventListener('click', () => {
             const section = btn.getAttribute('data-section');
 
-            if (section === 'healing' || section === 'sales-prediction') {
+            if (section === 'healing' || section === 'sales-prediction' || section === 'ai-upscale') {
                 const currentPlan = window.userUsageData?.plan || 'free';
                 if (currentPlan.toLowerCase() !== 'pro' && currentPlan.toLowerCase() !== 'premium' && currentPlan.toLowerCase() !== 'agency') {
                     if (typeof openUpgradeModal === 'function') openUpgradeModal('pro');
@@ -350,10 +350,12 @@ document.addEventListener('DOMContentLoaded', () => {
             const calendarSection = document.getElementById('stockCalendarSection');
             const healingSec = document.getElementById('imageHealingSection');
             const salesPredSec = document.getElementById('salesPredictionSection');
+            const aiUpscaleSec = document.getElementById('aiUpscaleSection');
 
-            // Hide healing & sales prediction in all cases first
+            // Hide healing, sales prediction & upscale in all cases first
             if (healingSec) healingSec.style.display = 'none';
             if (salesPredSec) salesPredSec.style.display = 'none';
+            if (aiUpscaleSec) aiUpscaleSec.style.display = 'none';
 
             if (section === 'calendar') {
                 // Show Calendar, Hide others
@@ -410,6 +412,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (nicheSection) nicheSection.style.display = 'none';
                 if (healingSec) healingSec.style.display = 'none';
                 if (salesPredSec) salesPredSec.style.display = 'none';
+                if (aiUpscaleSec) aiUpscaleSec.style.display = 'none';
                 if (uploadSection) uploadSection.style.display = 'none';
                 if (processingArea) processingArea.style.display = 'none';
                 if (platformSelection) platformSelection.style.display = 'none';
@@ -417,6 +420,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 document.getElementById('bgRemovalSection').style.display = 'block';
                 document.body.className = 'mode-bg-remove';
+
+            } else if (section === 'ai-upscale') {
+                // Show AI Upscale, Hide others
+                if (calendarSection) calendarSection.style.display = 'none';
+                if (nicheSection) nicheSection.style.display = 'none';
+                if (healingSec) healingSec.style.display = 'none';
+                if (salesPredSec) salesPredSec.style.display = 'none';
+                if (aiUpscaleSec) aiUpscaleSec.style.display = 'block';
+                if (uploadSection) uploadSection.style.display = 'none';
+                if (processingArea) processingArea.style.display = 'none';
+                if (platformSelection) platformSelection.style.display = 'none';
+                if (platformUploadSection) platformUploadSection.style.display = 'none';
+
+                document.body.classList.remove('mode-metadata', 'mode-image-prompt', 'mode-niche', 'mode-calendar', 'mode-healing', 'mode-sales-prediction');
+                document.body.classList.add('mode-ai-upscale');
             } else {
                 // Hide Niche & Calendar, Show others
                 if (calendarSection) calendarSection.style.display = 'none';
@@ -431,7 +449,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (platformSelection) platformSelection.style.display = 'flex'; // Restore
 
                 // Let existing class logic work (Meta vs Prompt)
-                document.body.classList.remove('mode-niche', 'mode-healing', 'mode-sales-prediction');
+                document.body.classList.remove('mode-niche', 'mode-healing', 'mode-sales-prediction', 'mode-ai-upscale');
                 if (section === 'meta') {
                     document.body.classList.add('mode-metadata');
                     document.body.classList.remove('mode-image-prompt');
