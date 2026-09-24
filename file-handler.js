@@ -805,7 +805,11 @@ document.addEventListener('DOMContentLoaded', function () {
 
                         ${isAi ? '<div class="file-type-badge ai-badge" style="position: absolute; top: 10px; left: 10px; padding: 4px 8px; border-radius: 4px; font-size: 0.7em; font-weight: bold; background: #FF7F18; color: white;">AI</div>' : ''}
                         ${isVideo ? '<div class="file-type-badge video-badge" style="position: absolute; top: 15px; left: 46px; padding: 4px 8px; border-radius: 4px; font-size: 0.7em; font-weight: bold; background: #EF4444; color: white; z-index: 1000;">VIDEO</div>' : ''}
-                        <div class="image-spinner" style="display:block;"></div>
+                        
+                        <div class="spinner-container" id="spinner-container-${card.id}" style="display:block; position:absolute; top:45%; left:50%; transform:translate(-50%, -50%); z-index:20;">
+                            <div class="image-spinner" style="display:block; width:50px; height:50px; border-width:4px; margin:0; left:0 !important; top:0 !important; position:relative;"></div>
+                            <div class="spinner-progress-text" id="spinner-progress-${card.id}" style="position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); font-size:13px; font-weight:900; color:#0eb17c; text-shadow: 0px 2px 4px rgba(0,0,0,0.9); font-family: 'Inter', sans-serif;">0%</div>
+                        </div>
                         
                         <!-- Copyright Status -->
                         <div id="copyright-status-${card.id}" class="copyright-status-container" style="margin-top: 2px; background: var(--bg-input); border: 1px solid rgba(255, 255, 255, 0.15); box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3); padding: 4px 12px; border-radius: 14px; text-align: center;">
