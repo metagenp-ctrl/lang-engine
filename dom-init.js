@@ -134,7 +134,12 @@ document.addEventListener('DOMContentLoaded', function () {
             platformButtons.forEach(btn => btn.classList.remove('active'));
             clickedButton.classList.add('active');
 
-            const selectedPlatform = clickedButton.dataset.platform;
+            const selectedPlatform = clickedButton.dataset.platform || 'general';
+
+            // 👉 এই লাইনটি যোগ করুন (ক্লিক করার সাথে সাথে সব কার্ডের মেটাডাটা অটো ফরম্যাট হবে)
+            if (typeof window.switchGlobalPlatform === 'function') {
+                window.switchGlobalPlatform(selectedPlatform);
+            }
 
             // ২. Shutterstock Category প্যানেল কন্ট্রোল (যদি থাকে)
             const sstCatPanel = document.getElementById('shutterstockCategoryPanel');
