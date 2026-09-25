@@ -1787,35 +1787,62 @@ ${isShort ? '- Since this is a SHORT/VERTICAL video, heavily prioritize keywords
         let penalties = 0;
         let suggestions = []; // Each: { text, fixType }
 
-        // 1. Title Length Score (Max 25)
+        // প্ল্যাটফর্ম সনাক্তকরণ
+        const activePlatforms = [...document.querySelectorAll('.platform-button.active')].map(btn => btn.dataset.platform);
+        const isShutterstockMode = activePlatforms.includes('shutterstock');
+        const noDescriptionMode = activePlatforms.includes('adobe') || activePlatforms.includes('Magnific') || isShutterstockMode;
+
         const title = (metadata.title || '').trim();
         const titleLength = title.length;
-        if (titleLength >= 40 && titleLength <= 70) {
-            score += 25;
-        } else if (titleLength >= 20 && titleLength < 40) {
-            score += 20;
-            suggestions.push({ text: "💡 Title is short (" + titleLength + " chars). Aim for 40-70 characters.", fixType: null });
-        } else if (titleLength > 70 && titleLength <= 100) {
-            score += 20;
-            suggestions.push({ text: "💡 Title is too long (" + titleLength + " chars). Trim to under 70.", fixType: "trim_title" });
-        } else if (titleLength > 100) {
-            score += 10;
-            suggestions.push({ text: "⚠️ Title is way too long (" + titleLength + " chars). Trim to 40-70.", fixType: "trim_title" });
-        } else if (titleLength > 0) {
-            score += 10;
-            suggestions.push({ text: "⚠️ Title length is sub-optimal. Aim for 40-70 characters.", fixType: null });
+
+        // 1. Title Length Score (Max 25)
+        if (isShutterstockMode) {
+            // 👉 Shutterstock Mode: ডেসক্রিপশনই টাইটেল হওয়ায় ১০০-১৬০ ক্যারেক্টারকে আদর্শ (Max 25) ধরা হলো
+            if (titleLength >= 100 && titleLength <= 180) {
+                score += 25;
+            } else if (titleLength >= 60 && titleLength < 100) {
+                score += 20;
+                suggestions.push({ text: "💡 Title/Description is slightly short (" + titleLength + " chars). Aim for 100-160 chars for Shutterstock.", fixType: null });
+            } else if (titleLength > 180 && titleLength <= 200) {
+                score += 22;
+                suggestions.push({ text: "💡 Title/Description is near the 200 limit (" + titleLength + " chars).", fixType: null });
+            } else if (titleLength > 200) {
+                score += 10;
+                suggestions.push({ text: "⚠️ Exceeds Shutterstock 200 char limit (" + titleLength + " chars). Trim under 200.", fixType: "trim_title" });
+            } else if (titleLength > 0) {
+                score += 15;
+                suggestions.push({ text: "⚠️ Title is short for Shutterstock. Aim for 100-160 characters.", fixType: null });
+            } else {
+                penalties += 10;
+                suggestions.push({ text: "❌ Missing Title.", fixType: null });
+            }
         } else {
-            penalties += 10;
-            suggestions.push({ text: "❌ Missing Title.", fixType: null });
+            // 👉 Standard Mode (Adobe, General, etc.): ৪০-৭০ ক্যারেক্টার আদর্শ
+            if (titleLength >= 40 && titleLength <= 70) {
+                score += 25;
+            } else if (titleLength >= 20 && titleLength < 40) {
+                score += 20;
+                suggestions.push({ text: "💡 Title is short (" + titleLength + " chars). Aim for 40-70 characters.", fixType: null });
+            } else if (titleLength > 70 && titleLength <= 100) {
+                score += 20;
+                suggestions.push({ text: "💡 Title is too long (" + titleLength + " chars). Trim to under 70.", fixType: "trim_title" });
+            } else if (titleLength > 100) {
+                score += 10;
+                suggestions.push({ text: "⚠️ Title is way too long (" + titleLength + " chars). Trim to 40-70.", fixType: "trim_title" });
+            } else if (titleLength > 0) {
+                score += 10;
+                suggestions.push({ text: "⚠️ Title length is sub-optimal. Aim for 40-70 characters.", fixType: null });
+            } else {
+                penalties += 10;
+                suggestions.push({ text: "❌ Missing Title.", fixType: null });
+            }
         }
 
         // 2. Description Length Score (Max 25)
-        const activePlatforms = [...document.querySelectorAll('.platform-button.active')].map(btn => btn.dataset.platform);
-        const noDescriptionMode = activePlatforms.includes('adobe') || activePlatforms.includes('Magnific') || activePlatforms.includes('shutterstock');
         const desc = (metadata.description || '').trim();
         const descLength = desc.length;
         if (noDescriptionMode) {
-            score += 25; // Full score since it's intentionally omitted
+            score += 25; // Adobe, Shutterstock বা Magnific মোডে ফুল মার্কস
         } else if (descLength >= 100 && descLength <= 160) {
             score += 25;
         } else if (descLength >= 70 && descLength < 100) {
@@ -1881,12 +1908,8 @@ ${isShort ? '- Since this is a SHORT/VERTICAL video, heavily prioritize keywords
             suggestions.push({ text: "❌ " + duplicatesCount + " duplicate keyword(s) found.", fixType: "remove_duplicates" });
         }
 
+        // সাধারণ মোডে টাইটেল ও ডেসক্রিপশন হুবহু একই হলে পেনাল্টি (Adobe/Shutterstock বাদে)
         if (!noDescriptionMode && titleLength > 0 && title.toLowerCase() === desc.toLowerCase()) {
-            penalties += 20;
-            suggestions.push({ text: "❌ Title and description are identical.", fixType: null });
-        }
-
-        if (titleLength > 0 && title.toLowerCase() === desc.toLowerCase()) {
             penalties += 20;
             suggestions.push({ text: "❌ Title and description are identical.", fixType: null });
         }
@@ -1904,7 +1927,7 @@ ${isShort ? '- Since this is a SHORT/VERTICAL video, heavily prioritize keywords
             score: Math.max(0, Math.min(100, finalScore)),
             suggestions: suggestions
         };
-    }
+    };
 
     // SEO Score Meter Update Function
     window.updateSeoMeter = function (cardId, seoData) {
