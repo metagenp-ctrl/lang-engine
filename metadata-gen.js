@@ -1661,7 +1661,7 @@ ${isShort ? '- Since this is a SHORT/VERTICAL video, heavily prioritize keywords
 
             // Sort Keywords based on User Preference (High/Med/Low Weight)
             if (metadata.keywords) {
-                metadata.keywords = reorderKeywords(metadata.keywords);
+                metadata.keywords = reorderKeywords(metadata.keywords, metadata.title || fileData.title, fileData.keywordScores || {});
             }
 
             const isAiGeneratedToggle = document.getElementById('toggleAiGenerated')?.checked || false;
@@ -1975,41 +1975,63 @@ ${isShort ? '- Since this is a SHORT/VERTICAL video, heavily prioritize keywords
         meterContainer.style.display = 'block';
     }
 
-    window.reorderKeywords = function (keywordsStr) {
+    // ==========================================
+    // 1. ADVANCED ANCHOR KEYWORDS RANKING ENGINE
+    // ==========================================
+    window.reorderKeywords = function (keywordsStr, titleText = '', scoresMap = {}) {
         if (!keywordsStr) return "";
-        const keywords = keywordsStr.split(',').map(k => k.trim()).filter(Boolean);
-        const uniqueKeywords = [...new Set(keywords)]; // Remove exact duplicates
 
-        const singles = [];
-        const doubles = [];
-        const multis = [];
+        const rawList = (typeof keywordsStr === 'string' ? keywordsStr.split(',') : keywordsStr)
+           .map(k => k.trim().toLowerCase())
+           .filter(Boolean);
+        const uniqueKeywords = [...new Set(rawList)].filter(k => k.length > 1);
 
-        uniqueKeywords.forEach(k => {
-            const wordCount = k.split(/\s+/).length;
-            if (wordCount === 1) singles.push(k);
-            else if (wordCount === 2) doubles.push(k);
-            else multis.push(k);
-        });
+        const stopWords = new Set(["a", "an", "the", "and", "or", "in", "on", "at", "to", "for", "with", "by", "of", "from", "is", "isolated", "background", "white"]);
+        const titleKeywords = titleText
+            ? titleText.toLowerCase().replace(/[^a-z0-9\s]/g, '').split(/\s+/).filter(w => w.length > 2 && !stopWords.has(w))
+            : [];
 
-        // Strategy: Top 10 Single, Top 10 Double, Top 10 Multi, then leftovers
-        const sorted = [];
+        const primaryAnchors = [];     // ছবির মূল সাবজেক্ট ও টাইটেল সংশ্লিষ্ট ট্যাগ (১ম অগ্রাধিকার)
+        const highIntentPhrases = [];   // ২ শব্দের হাই-কনভার্টিং ট্যাগ (২য় অগ্রাধিকার)
+        const technicalAndStyles = [];  // স্টাইল, লাইটিং, ভেক্টর বা টেকনিক্যাল ট্যাগ
+        const singleGeneralTags = [];   // ১ শব্দের সাধারণ ট্যাগ
+        const broadConceptualTags = []; // কনসেপচুয়াল বা ৩+ শব্দের লং-টেইল ট্যাগ
 
-        // 1. First 10 High Weight (Single)
-        sorted.push(...singles.slice(0, 10));
+        const styleTerms = new Set(["vector", "illustration", "cinematic", "realistic", "minimalist", "3d", "render", "macro", "flat", "vintage", "retro", "aerial", "drone", "close-up", "copy space", "generative ai", "ai generated"]);
 
-        // 2. Next 10 Medium Weight (Double)
-        sorted.push(...doubles.slice(0, 10));
+        uniqueKeywords.forEach(kw => {
+           const wordCount = kw.split(/\s+/).length;
+           const score = scoresMap[kw] || 0;
+  
+                             // টাইটেলের সাথে মিলে গেলে অথবা AI স্কোর ৯০+ হলে তা "Anchor Tag"
+           const matchesTitle = titleKeywords.some(tw => kw.includes(tw));
+        
+           if (score >= 90 || matchesTitle) {
+               primaryAnchors.push(kw);
+           } else if (styleTerms.has(kw) || styleTerms.has(kw.replace(/\s+/g, ''))) {
+               technicalAndStyles.push(kw);
+           } else if (wordCount === 2) {
+               highIntentPhrases.push(kw);
+           } else if (wordCount === 1) {
+               singleGeneralTags.push(kw);
+           } else {
+               broadConceptualTags.push(kw);
+           }
+       });
 
-        // 3. Next 10 Low Weight (Multi)
-        sorted.push(...multis.slice(0, 10));
+       const finalSortedList = [
+           ...primaryAnchors.slice(0, 6),
+           ...highIntentPhrases.slice(0, 8),
+           ...technicalAndStyles.slice(0, 4),
+           ...primaryAnchors.slice(6),
+           ...singleGeneralTags.slice(0, 15),
+           ...highIntentPhrases.slice(8),
+           ...broadConceptualTags,
+           ...singleGeneralTags.slice(15)
+       ];
 
-        // 4. Leftovers (prioritizing Single -> Double -> Multi)
-        sorted.push(...singles.slice(10));
-        sorted.push(...doubles.slice(10));
-        sorted.push(...multis.slice(10));
-
-        return sorted.join(', ');
-    }
+       return [...new Set(finalSortedList)].join(', ');
+    };
 
     window.copyToClipboard = function (button, type) {
         const card = button.closest('.file-preview-card');
@@ -2067,5 +2089,105 @@ ${isShort ? '- Since this is a SHORT/VERTICAL video, heavily prioritize keywords
             card.remove();
             updateAllButtonStates();
         }
+    };
+ 
+    window.formatMetadataForPlatform = function (fileData, platform = 'general') {
+        if (!fileData || !fileData.title || fileData.title === 'Error') return;
+
+        // ব্যাকআপ রাখা যেন প্ল্যাটফর্ম পরিবর্তন করলে আগের অরিজিনাল ডেটা নষ্ট না হয়
+        if (!fileData.originalTitle) fileData.originalTitle = fileData.title;
+        if (!fileData.originalKeywords) fileData.originalKeywords = fileData.keywords;
+        if (!fileData.originalDescription) fileData.originalDescription = fileData.description || '';
+
+        let formattedTitle = fileData.originalTitle;
+        let formattedDesc = fileData.originalDescription;
+        let formattedKeywords = fileData.originalKeywords.split(',').map(k => k.trim()).filter(Boolean);
+
+        const isAiArt = fileData.isAiGenerated || 
+                        (fileData.name && /ai generated|midjourney/i.test(fileData.name)) || 
+                        document.getElementById('toggleAiGenerated')?.checked;
+
+        switch (platform.toLowerCase()) {
+            case 'adobe':
+                // 👉 Adobe Stock গাইডলাইন: কোলন বর্জন ও AI ডিসক্লোজার
+                formattedTitle = formattedTitle.replace(/[:"']/g, '').trim();
+                if (isAiArt && !formattedTitle.toLowerCase().includes('generative ai')) {
+                    formattedTitle += " - Generative AI";
+                }
+                if (isAiArt && !formattedKeywords.some(k => k.toLowerCase() === 'generative ai')) {
+                    formattedKeywords.unshift('generative ai', 'ai generated');
+                }
+                formattedKeywords = formattedKeywords.slice(0, 49); // ম্যাক্স ৪৯ কি-ওয়ার্ড
+                break;
+
+            case 'shutterstock':
+                // 👉 Shutterstock গাইডলাইন: টাইটেল ম্যাক্স ২০০ অক্ষর ও ডেসক্রিপশন সিঙ্ক
+                if (formattedTitle.length > 200) {
+                    formattedTitle = formattedTitle.substring(0, 197) + '...';
+                }
+                formattedDesc = formattedTitle;
+                formattedKeywords = formattedKeywords.slice(0, 50);
+                break;
+
+            case 'vecteezy':
+                // 👉 Vecteezy গাইডলাইন: ভেক্টর ট্যাগ অগ্রাধিকার
+                if (fileData.name && /\.(svg|eps)$/i.test(fileData.name)) {
+                    const vectorTags = ["vector", "illustration", "vector illustration", "eps", "svg"];
+                    formattedKeywords = [...new Set([...vectorTags, ...formattedKeywords])];
+                }
+                formattedKeywords = formattedKeywords.slice(0, 50);
+                break;
+
+            case 'freepik':
+            case 'magnific':
+                // 👉 Freepik/Magnific: ৩০-৪৫টি হাই-কনভার্টিং ট্যাগ
+                formattedKeywords = formattedKeywords.slice(0, 45);
+                break;
+
+            default:
+                formattedKeywords = formattedKeywords.slice(0, 50);
+                break;
+        }
+
+        // ডেটা আপডেট করা
+        fileData.title = formattedTitle;
+        fileData.description = formattedDesc;
+        fileData.keywords = formattedKeywords.join(', ');
+
+        // কার্ড UI লাইভ আপডেট
+        const card = document.getElementById(fileData.id);
+        if (card) {
+            const titleEl = card.querySelector('.meta-title');
+            const descEl = card.querySelector('.meta-description');
+            const descSection = document.getElementById(`desc-section-${card.id}`);
+            const adobeSection = card.querySelector('.adobe-only-section');
+
+            if (titleEl) titleEl.textContent = fileData.title;
+            if (descEl) descEl.textContent = fileData.description;
+
+            // Adobe Stock মোডে ডেসক্রিপশন লুকিয়ে ক্যাটাগরি দেখানো
+            if (platform.toLowerCase() === 'adobe') {
+                if (descSection) descSection.style.display = 'none';
+                if (adobeSection) adobeSection.style.display = 'block';
+            } else {
+                if (descSection && fileData.description) descSection.style.display = 'block';
+                if (adobeSection) adobeSection.style.display = 'none';
+            }
+
+            // কি-ওয়ার্ড পিলস আপডেট
+            if (typeof window.updateKeywordsDisplay === 'function') {
+                window.updateKeywordsDisplay(card.id);
+            }
+        }
+    };
+
+    // সব কার্ড একসাথে প্ল্যাটফর্ম অনুযায়ী সুইচ করার গ্লোবাল ফাংশন
+    window.switchGlobalPlatform = function (platformName) {
+        if (!window.uploadedFilesData || window.uploadedFilesData.length === 0) return;
+        window.uploadedFilesData.forEach(fileData => {
+            if (fileData.title && fileData.title !== 'Error') {
+                window.formatMetadataForPlatform(fileData, platformName);
+            }
+        });
     };
 });
