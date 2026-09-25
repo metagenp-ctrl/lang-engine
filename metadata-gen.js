@@ -905,26 +905,36 @@ document.addEventListener('DOMContentLoaded', function () {
         const metaStyleContainer = card.querySelector('.meta-style-container');
         const metaMoodContainer = card.querySelector('.meta-mood-container');
 
-        const spinnerContainer = card.querySelector('.spinner-container') || card.querySelector('.image-spinner');
         const progressTextElem = document.getElementById(`spinner-progress-${card.id}`);
+        const circleSpinnerElem = document.getElementById(`circle-spinner-${card.id}`);
+        const spinnerContainer = document.getElementById(`spinner-container-${card.id}`);
 
         card.classList.add('processing');
         if (spinnerContainer) spinnerContainer.style.display = 'block';
-        metaCol.style.display = 'none';
-        
+        if (metaCol) metaCol.style.display = 'none';
+
         let progressInterval = null;
         if (progressTextElem) {
             let currentProgress = 0;
             progressTextElem.textContent = '0%';
+    
+            const updateProgressUI = (val) => {
+                if (progressTextElem) progressTextElem.textContent = `${val}%`;
+                if (circleSpinnerElem) {
+                    circleSpinnerElem.style.background = `conic-gradient(#FFA726 0% ${val}%, #cbd5e1 ${val}% 100%)`;
+                }
+            };
+
+            updateProgressUI(0);
+
             progressInterval = setInterval(() => {
                 if (currentProgress < 95) {
-                    currentProgress += Math.floor(Math.random() * 3) + 1; // Increment by 1-3%
+                    currentProgress += Math.floor(Math.random() * 3) + 1; // ১-৩% করে বাড়বে
                     if (currentProgress > 95) currentProgress = 95;
-                    progressTextElem.textContent = currentProgress + '%';
+                    updateProgressUI(currentProgress);
                 }
-            }, 300);
-            
-            // Store interval ID on the card so it can be cleared easily later
+            }, 250);
+    
             card.dataset.progressInterval = progressInterval;
         }
 
@@ -1628,17 +1638,20 @@ ${isShort ? '- Since this is a SHORT/VERTICAL video, heavily prioritize keywords
             if (card.dataset.progressInterval) {
                 clearInterval(card.dataset.progressInterval);
                 delete card.dataset.progressInterval;
+    
                 const progressTextElem = document.getElementById(`spinner-progress-${card.id}`);
+                const circleSpinnerElem = document.getElementById(`circle-spinner-${card.id}`);
                 if (progressTextElem) progressTextElem.textContent = '100%';
+                if (circleSpinnerElem) circleSpinnerElem.style.background = 'conic-gradient(#10B981 0% 100%, #10B981 100%)';
             }
 
-            const spinnerContainer = card.querySelector('.spinner-container') || spinner;
+            const spinnerContainer = document.getElementById(`spinner-container-${card.id}`);
             if (spinnerContainer) {
                 setTimeout(() => {
                     spinnerContainer.style.display = 'none';
-                    metaCol.style.display = 'flex';
-                }, 300); // Brief delay to show 100%
-            } else {
+                    if (metaCol) metaCol.style.display = 'flex';
+                }, 400);
+            } else if (metaCol) {
                 metaCol.style.display = 'flex';
             }
 
@@ -1759,10 +1772,10 @@ ${isShort ? '- Since this is a SHORT/VERTICAL video, heavily prioritize keywords
             metaDescription.textContent = error.message;
             metaKeywords.innerHTML = '';
             
-            const spinnerContainer = card.querySelector('.spinner-container') || spinner;
+            const spinnerContainer = document.getElementById(`spinner-container-${card.id}`);
             if (spinnerContainer) spinnerContainer.style.display = 'none';
             
-            metaCol.style.display = 'flex';
+            if (metaCol) metaCol.style.display = 'flex';
             throw error;
         }
     }
