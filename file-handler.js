@@ -806,9 +806,41 @@ document.addEventListener('DOMContentLoaded', function () {
                         ${isAi ? '<div class="file-type-badge ai-badge" style="position: absolute; top: 10px; left: 10px; padding: 4px 8px; border-radius: 4px; font-size: 0.7em; font-weight: bold; background: #FF7F18; color: white;">AI</div>' : ''}
                         ${isVideo ? '<div class="file-type-badge video-badge" style="position: absolute; top: 15px; left: 46px; padding: 4px 8px; border-radius: 4px; font-size: 0.7em; font-weight: bold; background: #EF4444; color: white; z-index: 1000;">VIDEO</div>' : ''}
                         
-                        <div class="spinner-container" id="spinner-container-${card.id}" style="display:block; position:absolute; top:45%; left:50%; transform:translate(-50%, -50%); z-index:20;">
-                            <div class="image-spinner" style="display:block; width:50px; height:50px; border-width:4px; margin:0; left:0 !important; top:0 !important; position:relative;"></div>
-                            <div class="spinner-progress-text" id="spinner-progress-${card.id}" style="position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); font-size:13px; font-weight:900; color:#0eb17c; text-shadow: 0px 2px 4px rgba(0,0,0,0.9); font-family: 'Inter', sans-serif;">0%</div>
+                        <!-- Circular Donut Loader with Center % (Matching Provided Design) -->
+                        <div class="spinner-container" id="spinner-container-${card.id}" style="display:none; position:absolute; top:45%; left:50%; transform:translate(-50%, -50%); z-index:25; width:74px; height:74px;">
+                        <!-- Rotating Donut Ring -->
+                        <div class="custom-circle-spinner" id="circle-spinner-${card.id}" style="
+                            width: 100%;
+                            height: 100%;
+                            border-radius: 50%;
+                            background: conic-gradient(#FFA726 0%, #FFA726 0%, #cbd5e1 0%, #cbd5e1 100%);
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                            box-shadow: 0 4px 15px rgba(0,0,0,0.35);
+                            animation: spinRing 2s linear infinite;
+                        ">
+                            <!-- Inner White Circle for Donut Effect -->
+                            <div style="
+                                width: 52px;
+                                height: 52px;
+                                background: #ffffff;
+                                border-radius: 50%;
+                                display: flex;
+                                align-items: center;
+                                justify-content: center;
+                            ">
+                                <!-- Percentage Text (Counter-rotated so text stays upright) -->
+                                <span class="spinner-progress-text" id="spinner-progress-${card.id}" style="
+                                    font-size: 15px;
+                                    font-weight: 900;
+                                    color: #111827;
+                                    font-family: 'Inter', -apple-system, sans-serif;
+                                    letter-spacing: -0.5px;
+                                    animation: counterSpin 2s linear infinite;
+                                ">0%</span>
+                              </div>
+                           </div>
                         </div>
                         
                         <!-- Copyright Status -->
