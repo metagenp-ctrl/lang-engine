@@ -1811,7 +1811,7 @@ ${isShort ? '- Since this is a SHORT/VERTICAL video, heavily prioritize keywords
 
         // 2. Description Length Score (Max 25)
         const activePlatforms = [...document.querySelectorAll('.platform-button.active')].map(btn => btn.dataset.platform);
-        const noDescriptionMode = activePlatforms.includes('adobe') || activePlatforms.includes('Magnific');
+        const noDescriptionMode = activePlatforms.includes('adobe') || activePlatforms.includes('Magnific') || activePlatforms.includes('shutterstock');
         const desc = (metadata.description || '').trim();
         const descLength = desc.length;
         if (noDescriptionMode) {
@@ -1879,6 +1879,11 @@ ${isShort ? '- Since this is a SHORT/VERTICAL video, heavily prioritize keywords
             const duplicatesCount = totalKeywords - uniqueKeywords.size;
             penalties += duplicatesCount * 2;
             suggestions.push({ text: "❌ " + duplicatesCount + " duplicate keyword(s) found.", fixType: "remove_duplicates" });
+        }
+
+        if (!noDescriptionMode && titleLength > 0 && title.toLowerCase() === desc.toLowerCase()) {
+            penalties += 20;
+            suggestions.push({ text: "❌ Title and description are identical.", fixType: null });
         }
 
         if (titleLength > 0 && title.toLowerCase() === desc.toLowerCase()) {
@@ -2178,8 +2183,12 @@ ${isShort ? '- Since this is a SHORT/VERTICAL video, heavily prioritize keywords
             if (typeof window.updateKeywordsDisplay === 'function') {
                 window.updateKeywordsDisplay(card.id);
             }
+            if (typeof window.calculateSeoScore === 'function' && typeof window.updateSeoMeter === 'function') {
+            const newSeo = window.calculateSeoScore(fileData);
+            window.updateSeoMeter(card.id, newSeo);
         }
-    };
+      }
+   };
 
     // সব কার্ড একসাথে প্ল্যাটফর্ম অনুযায়ী সুইচ করার গ্লোবাল ফাংশন
     window.switchGlobalPlatform = function (platformName) {
