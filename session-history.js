@@ -125,11 +125,11 @@ window.scheduleSessionSave = function () {
     }, 1000);
 };
 
-window.addEventListener('load', async () => {
-    // Restore from IndexedDB
+window.restorePreviousSession = async function(autoPrompt = true) {
     const savedData = await window.SessionDB.loadSession();
     if (savedData && savedData.length > 0) {
-        if (confirm(`We found ${savedData.length} images and metadata from the previous session. Do you want to restore the previous files and metadata?`)) {
+        const msg = `We found ${savedData.length} images and metadata from a saved workspace. Do you want to restore them?`;
+        if (!autoPrompt || confirm(msg)) {
             // Start restoration
             const fileList = savedData.map(d => d.fileObject).filter(f => f != null && typeof f === 'object');
             if (fileList.length > 0) {
@@ -227,7 +227,14 @@ window.addEventListener('load', async () => {
         } else {
             window.SessionDB.clearSession();
         }
+    } else if (!autoPrompt) {
+        alert("No saved workspace draft found.");
     }
+};
+
+window.addEventListener('load', async () => {
+    // Restore from IndexedDB
+    await window.restorePreviousSession(true);
 
     // Setup MutationObserver to save on changes dynamically
     setTimeout(() => {
