@@ -1,6 +1,9 @@
 // MetaGen Pro - DOM Init Module
 document.addEventListener('DOMContentLoaded', function () {
     if (typeof showLoadingState === 'function') showLoadingState();
+    if (typeof window.togglePostMetadataActions === 'function') {
+        window.togglePostMetadataActions(false);
+    }
     // --- NEW: Sidebar Toggle Logic ---
     const sidebarToggleBtn = document.getElementById('sidebarToggleBtn');
     const sidebar = document.getElementById('appSidebar');
