@@ -880,6 +880,10 @@ document.addEventListener('DOMContentLoaded', function () {
                 alert(`Successfully mapped and applied metadata to ${appliedCount} image(s)!`);
                 // Update UI buttons because we now have metadata
                 if (typeof updateAllButtonStates === 'function') updateAllButtonStates();
+
+                if (appliedCount > 0 && typeof window.togglePostMetadataActions === 'function') {
+                    window.togglePostMetadataActions(true);
+                }
             } catch (error) {
                 console.error('Error parsing CSV file:', error);
                 alert("Error parsing CSV. Please ensure it's a valid CSV/Excel file.");
@@ -1713,6 +1717,10 @@ ${isShort ? '- Since this is a SHORT/VERTICAL video, heavily prioritize keywords
                 window.scheduleSessionSave();
             }
 
+            if (typeof window.togglePostMetadataActions === 'function') {
+                window.togglePostMetadataActions(true);
+            }
+
             // 📊 Update Usage Display (Instant local update)
             if (window.userUsageData) {
                 window.userUsageData.count = (window.userUsageData.count || 0) + 1;
@@ -2116,6 +2124,12 @@ ${isShort ? '- Since this is a SHORT/VERTICAL video, heavily prioritize keywords
             if (idx !== -1) uploadedFilesData.splice(idx, 1);
             card.remove();
             updateAllButtonStates();
+
+            // যদি কোনো ফাইলে আর তৈরি করা মেটাডাটা না থাকে, বাটনগুলো আবার হাইড করা
+            const hasGeneratedData = uploadedFilesData.some(f => f.title && f.title !== 'Error');
+            if (!hasGeneratedData && typeof window.togglePostMetadataActions === 'function') {
+                window.togglePostMetadataActions(false);
+            }
         }
     };
  
