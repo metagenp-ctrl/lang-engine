@@ -1,4 +1,4 @@
-﻿
+
         // Loading State Management
         function showLoadingState() {
             // Show initial loading overlay (independent of login modal)
@@ -88,3 +88,22 @@
             });
         })();
 
+        // --- Post Metadata Action Buttons Visibility Controller ---
+    window.togglePostMetadataActions = function(show = true) {
+    const actionElements = [
+        document.getElementById('embedMetadataButton'),    // Embed & Download
+        document.querySelector('.export-dropdown'),       // Download CSV
+        document.getElementById('translateAllBtn'),        // Translate All (Pro)
+        document.getElementById('saveToFolderButton'),     // Save to Folder
+        document.getElementById('ftpUploadButton'),        // FTP Upload
+        document.getElementById('shareFilesButton'),       // Share Files
+        document.getElementById('uploadToDriveButton'),    // Upload to Drive
+        document.getElementById('batchTranslateButton')    // Batch Translate (free)
+    ];
+
+    actionElements.forEach(el => {
+        if (el) {
+            el.style.display = show ? 'inline-flex' : 'none';
+        }
+    });
+};
