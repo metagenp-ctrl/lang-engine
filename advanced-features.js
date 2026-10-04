@@ -432,9 +432,21 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (processingArea) processingArea.style.display = 'none';
                 if (platformSelection) platformSelection.style.display = 'none';
                 if (platformUploadSection) platformUploadSection.style.display = 'none';
+                const bgRemovalSec = document.getElementById('bgRemovalSection');
+                if (bgRemovalSec) bgRemovalSec.style.display = 'none';
 
-                document.body.classList.remove('mode-metadata', 'mode-image-prompt', 'mode-niche', 'mode-calendar', 'mode-healing', 'mode-sales-prediction');
+                document.body.classList.remove('mode-metadata', 'mode-image-prompt', 'mode-niche', 'mode-calendar', 'mode-healing', 'mode-sales-prediction', 'mode-bg-remove');
                 document.body.classList.add('mode-ai-upscale');
+            } else if (section === 'market-analytics' || section === 'content-ideas' || section === 'platform-optimizer') {
+                if (calendarSection) calendarSection.style.display = 'none';
+                if (nicheSection) nicheSection.style.display = 'none';
+                if (healingSec) healingSec.style.display = 'none';
+                if (salesPredSec) salesPredSec.style.display = 'none';
+                if (aiUpscaleSec) aiUpscaleSec.style.display = 'none';
+                if (uploadSection) uploadSection.style.display = 'none';
+                if (processingArea) processingArea.style.display = 'none';
+                if (platformSelection) platformSelection.style.display = 'none';
+                if (platformUploadSection) platformUploadSection.style.display = 'none';
             } else {
                 // Hide Niche & Calendar, Show others
                 if (calendarSection) calendarSection.style.display = 'none';
