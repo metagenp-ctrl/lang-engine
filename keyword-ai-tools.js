@@ -75,7 +75,7 @@ document.addEventListener('DOMContentLoaded', function () {
             modeButtons.forEach(b => b.classList.remove('active'));
             this.classList.add('active');
 
-            document.body.classList.remove('mode-metadata', 'mode-image-prompt', 'mode-dalle', 'mode-niche', 'mode-calendar', 'mode-admin', 'mode-healing', 'mode-sales-prediction', 'mode-ai-upscale');
+            document.body.classList.remove('mode-metadata', 'mode-image-prompt', 'mode-dalle', 'mode-niche', 'mode-calendar', 'mode-admin', 'mode-healing', 'mode-sales-prediction', 'mode-ai-upscale', 'mode-market-analytics', 'mode-content-ideas', 'mode-platform-optimizer');
 
             // Hide all sections first
             if (metaSection) metaSection.style.display = 'none';
@@ -91,6 +91,9 @@ document.addEventListener('DOMContentLoaded', function () {
             const salesPredSection = document.getElementById('salesPredictionSection');
             const bgRemovalSection = document.getElementById('bgRemovalSection');
             const aiUpscaleSection = document.getElementById('aiUpscaleSection');
+            const marketAnalyticsSection = document.getElementById('marketAnalyticsSection');
+            const contentIdeasSection = document.getElementById('contentIdeasSection');
+            const platformOptimizerSection = document.getElementById('platformOptimizerSection');
 
             if (calendarSection) calendarSection.style.display = 'none';
             if (nicheSection) nicheSection.style.display = 'none';
@@ -99,6 +102,9 @@ document.addEventListener('DOMContentLoaded', function () {
             if (salesPredSection) salesPredSection.style.display = 'none';
             if (bgRemovalSection) bgRemovalSection.style.display = 'none';
             if (aiUpscaleSection) aiUpscaleSection.style.display = 'none';
+            if (marketAnalyticsSection) marketAnalyticsSection.style.display = 'none';
+            if (contentIdeasSection) contentIdeasSection.style.display = 'none';
+            if (platformOptimizerSection) platformOptimizerSection.style.display = 'none';
 
             if (section === 'meta') {
                 document.body.classList.add('mode-metadata');
@@ -132,6 +138,15 @@ document.addEventListener('DOMContentLoaded', function () {
             } else if (section === 'ai-upscale') {
                 document.body.classList.add('mode-ai-upscale');
                 if (aiUpscaleSection) aiUpscaleSection.style.display = 'block';
+            } else if (section === 'market-analytics') {
+                document.body.classList.add('mode-market-analytics');
+                if (marketAnalyticsSection) marketAnalyticsSection.style.display = 'block';
+            } else if (section === 'content-ideas') {
+                document.body.classList.add('mode-content-ideas');
+                if (contentIdeasSection) contentIdeasSection.style.display = 'block';
+            } else if (section === 'platform-optimizer') {
+                document.body.classList.add('mode-platform-optimizer');
+                if (platformOptimizerSection) platformOptimizerSection.style.display = 'block';
             } else if (section === 'admin') {
                 document.body.classList.add('mode-admin');
                 if (toolWrapper) {
@@ -153,7 +168,7 @@ document.addEventListener('DOMContentLoaded', function () {
             }
 
             // Manage hero section visibility
-            if (section !== 'meta' && section !== 'prompt' && section !== 'dalle' && section !== 'niche' && section !== 'calendar' && section !== 'admin') {
+            if (section !== 'meta' && section !== 'prompt' && section !== 'dalle' && section !== 'niche' && section !== 'calendar' && section !== 'admin' && section !== 'healing' && section !== 'sales-prediction' && section !== 'bg-remove' && section !== 'ai-upscale' && section !== 'market-analytics' && section !== 'content-ideas' && section !== 'platform-optimizer') {
                 // Probably landing page
             } else {
                 const heroSection = document.getElementById('heroLandingSection');
