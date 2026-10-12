@@ -904,37 +904,57 @@ window.closeLoginModal = function () {
 
 function scrollToPricing() {
     const sidebar = document.getElementById('appSidebar');
-    if (window.innerWidth <= 700) {
+    if (window.innerWidth <= 700 && sidebar) {
         sidebar.classList.remove('visible');
     }
 
+    const landingWrapper = document.getElementById('landingContentWrapper');
     const pricingSection = document.getElementById('pricing');
-    const toolWrapper = document.getElementById('toolSectionWrapper');
 
-    if (toolWrapper && toolWrapper.classList.contains('active')) {
-        pricingSection.style.display = 'block';
+    // If currently in tool mode, switch to landing mode so pricing is visible
+    if (document.body.classList.contains('tool-mode') || (landingWrapper && landingWrapper.style.display === 'none')) {
+        document.body.classList.remove('tool-mode');
+        document.body.classList.add('landing-mode');
+        if (landingWrapper) landingWrapper.style.display = 'block';
     }
 
-    pricingSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (pricingSection) {
+        pricingSection.style.display = 'block';
+        pricingSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
 }
+window.scrollToPricing = scrollToPricing;
 
 // ========== HERO LANDING PAGE LOGIC ==========
 function showToolSection() {
     const heroSection = document.getElementById('heroLandingSection');
+    const landingWrapper = document.getElementById('landingContentWrapper');
     const toolWrapper = document.getElementById('toolSectionWrapper');
+
     if (heroSection) {
         heroSection.style.display = 'none';
-        if (typeof heroVanta !== 'undefined' && heroVanta) {
+        if (heroVanta) {
             heroVanta.destroy();
             heroVanta = null;
         }
     }
+    if (landingWrapper) {
+        landingWrapper.style.display = 'none';
+    }
     if (toolWrapper) {
         toolWrapper.classList.add('active');
-        toolWrapper.style.display = 'block'; 
+        toolWrapper.style.display = 'block';
     }
-    // Show sidebar and restore main-panel margin
+
+    // Switch body mode to tool-mode (clean workspace)
     document.body.classList.remove('landing-mode');
+    document.body.classList.add('tool-mode');
+    sessionStorage.setItem('metagen_active_view', 'tool');
+
+    // Show header back-to-landing button
+    const backBtn = document.getElementById('headerBackToLandingBtn');
+    if (backBtn) backBtn.style.display = 'inline-flex';
+
     // Scroll to top smoothly
     window.scrollTo({ top: 0, behavior: 'smooth' });
 
@@ -948,6 +968,36 @@ function showToolSection() {
         }, 1000);
     }
 }
+window.showToolSection = showToolSection;
+
+function showLandingSection() {
+    const heroSection = document.getElementById('heroLandingSection');
+    const landingWrapper = document.getElementById('landingContentWrapper');
+    const toolWrapper = document.getElementById('toolSectionWrapper');
+
+    if (landingWrapper) {
+        landingWrapper.style.display = 'block';
+    }
+    if (heroSection) {
+        heroSection.style.display = 'block';
+    }
+    if (toolWrapper) {
+        toolWrapper.classList.remove('active');
+    }
+
+    // Switch body mode to landing-mode
+    document.body.classList.remove('tool-mode');
+    document.body.classList.add('landing-mode');
+    sessionStorage.removeItem('metagen_active_view');
+
+    // Hide header back-to-landing button
+    const backBtn = document.getElementById('headerBackToLandingBtn');
+    if (backBtn) backBtn.style.display = 'none';
+
+    // Scroll to top smoothly
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+window.showLandingSection = showLandingSection;
 
 // Hero Drop Zone Logic
 document.addEventListener('DOMContentLoaded', function () {
@@ -1018,20 +1068,10 @@ document.addEventListener('DOMContentLoaded', function () {
 });
 // ========== END HERO LANDING PAGE LOGIC ==========
 
-window.returnToLandingPage = function() {
-    document.body.classList.remove('tool-active-mode');
-    document.body.classList.add('landing-mode');
-    const heroSection = document.getElementById('heroLandingSection');
-    const toolWrapper = document.getElementById('toolSectionWrapper');
-    if (heroSection) heroSection.style.display = '';
-    if (toolWrapper) {
-        toolWrapper.classList.remove('active');
-        toolWrapper.style.display = 'none';
-    }
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-};
-
 // Initialize when page loads
 window.addEventListener('load', function () {
     checkAuthState();
+    if (sessionStorage.getItem('metagen_active_view') === 'tool') {
+        showToolSection();
+    }
 });
