@@ -924,13 +924,14 @@ function showToolSection() {
     const toolWrapper = document.getElementById('toolSectionWrapper');
     if (heroSection) {
         heroSection.style.display = 'none';
-        if (heroVanta) {
+        if (typeof heroVanta !== 'undefined' && heroVanta) {
             heroVanta.destroy();
             heroVanta = null;
         }
     }
     if (toolWrapper) {
         toolWrapper.classList.add('active');
+        toolWrapper.style.display = 'block'; 
     }
     // Show sidebar and restore main-panel margin
     document.body.classList.remove('landing-mode');
@@ -1016,6 +1017,19 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 });
 // ========== END HERO LANDING PAGE LOGIC ==========
+
+window.returnToLandingPage = function() {
+    document.body.classList.remove('tool-active-mode');
+    document.body.classList.add('landing-mode');
+    const heroSection = document.getElementById('heroLandingSection');
+    const toolWrapper = document.getElementById('toolSectionWrapper');
+    if (heroSection) heroSection.style.display = '';
+    if (toolWrapper) {
+        toolWrapper.classList.remove('active');
+        toolWrapper.style.display = 'none';
+    }
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+};
 
 // Initialize when page loads
 window.addEventListener('load', function () {
