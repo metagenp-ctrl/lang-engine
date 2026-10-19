@@ -256,173 +256,118 @@ function openConvertApiModal() {
 
 // 3. Save Logic for ConvertAPI (Manually binding onClick)
 document.addEventListener('DOMContentLoaded', function () {
-    const saveConvertBtn = document.getElementById('saveConvertapiKeyButton');
-    if (saveConvertBtn) {
-        saveConvertBtn.onclick = function () {
-            const input = document.getElementById('convertapiKeyInput');
-            if (input && input.value.trim()) {
-                localStorage.setItem('convertApiKey', input.value.trim());
-                alert('ConvertAPI Key saved successfully!');
-                document.getElementById('convertapi-key-modal').style.display = 'none';
-            } else {
-                alert('Please enter a valid API key.');
-            }
-        };
-    }
-});
+    const checkSimBtn = document.getElementById('checkSimilarityButton');
+    if (!checkSimBtn) return; // বাটন না থাকলে যাতে এরর না দেয়
 
-// --- VIEW TOGGLE LOGIC ---
-
-const previewContainer = document.getElementById('filePreviewContainer');
-const gridViewBtn = document.getElementById('gridViewBtn');
-const listViewBtn = document.getElementById('listViewBtn');
-
-// 1. Switch to Grid View
-function setGridView() {
-    if (!previewContainer) return;
-    previewContainer.classList.remove('list-view');
-
-    gridViewBtn.classList.add('active');
-    listViewBtn.classList.remove('active');
-
-    localStorage.setItem('metagen_view_pref', 'grid');
-}
-
-// 2. Switch to List View
-function setListView() {
-    if (!previewContainer) return;
-    previewContainer.classList.add('list-view');
-
-
-    listViewBtn.classList.add('active');
-    gridViewBtn.classList.remove('active');
-
-    localStorage.setItem('metagen_view_pref', 'list');
-}
-
-document.addEventListener('DOMContentLoaded', () => {
-    const savedView = localStorage.getItem('metagen_view_pref');
-
-    if (savedView === 'list') {
-        setListView();
-    } else {
-        setGridView();
-    }
-});
-
-// --- SIMILARITY CHECKER LOGIC (PREMIUM) ---
-
-document.getElementById('checkSimilarityButton').onclick = async function () {
-    if (window.uploadedFilesData.length < 2) {
-        alert("Upload at least 2 images to check similarity.");
-        return;
-    }
-
-    const btn = this;
-    const originalHTML = btn.innerHTML;
-    btn.disabled = true;
-    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Analyzing...';
-
-    // ১. প্রতিটি ইমেজের ২৫৬-বিট dHash জেনারেট করা
-    const fileHashes = [];
-    for (const fileData of window.uploadedFilesData) {
-        try {
-            const hash = await getImageFingerprint(fileData.id);
-            if (hash) {
-                fileHashes.push({ id: fileData.id, name: fileData.name, hash: hash });
-            }
-        } catch (e) {
-            console.error("Hash failed for", fileData.name, e);
+    checkSimBtn.onclick = async function () {
+        if (!window.uploadedFilesData || window.uploadedFilesData.length < 2) {
+            alert("Upload at least 2 images to check similarity.");
+            return;
         }
-    }
 
-    // ২. পূর্বের সিমিলারিটি ওয়ার্নিং ব্যাজগুলো রিমুভ করা
-    document.querySelectorAll('.similarity-warning, .similarity-badge').forEach(el => el.remove());
+        const btn = this;
+        const originalHTML = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Analyzing...';
 
-    // ৩. ওয়েব ওয়ার্কার দিয়ে হাই-স্পিড Hamming Distance ও Match % বের করা
-    const workerCode = `
-                function calculateHammingDistance(hash1, hash2) {
-                    let distance = 0;
-                    for (let i = 0; i < hash1.length; i++) {
-                        if (hash1[i] !== hash2[i]) distance++;
-                    }
-                    return distance;
+        // ১. প্রতিটি ইমেজের ২৫৬-বিট dHash জেনারেট করা
+        const fileHashes = [];
+        for (const fileData of window.uploadedFilesData) {
+            try {
+                const hash = await getImageFingerprint(fileData.id);
+                if (hash) {
+                    fileHashes.push({ id: fileData.id, name: fileData.name, hash: hash });
                 }
-                
-                self.onmessage = function(e) {
-                    const fileHashes = e.data;
-                    const similarities = [];
-                    for (let i = 0; i < fileHashes.length; i++) {
-                        for (let j = i + 1; j < fileHashes.length; j++) {
-                            const hash1 = fileHashes[i].hash;
-                            const hash2 = fileHashes[j].hash;
-                            
-                            if (!hash1 || !hash2 || hash1.length !== hash2.length) continue;
-                            
-                            const distance = calculateHammingDistance(hash1, hash2);
-                            // ২৫৬-বিট ডিফারেন্স থেকে পার্সেন্টেজ হিসাব
-                            const matchPercent = Math.round((1 - (distance / 256)) * 100);
-                            
-                            // ৭০% বা তার বেশি মিল থাকলে সেটিকে ওয়ার্নিং হিসেবে ধরা হবে
-                            if (matchPercent >= 70) {
-                                similarities.push({
-                                    targetId: fileHashes[j].id,
-                                    sourceName: fileHashes[i].name,
-                                    targetName: fileHashes[j].name,
-                                    matchPercent: matchPercent
-                                });
-                            }
+            } catch (e) {
+                console.error("Hash failed for", fileData.name, e);
+            }
+        }
+
+        // ২. পূর্বের সিমিলারিটি ওয়ার্নিং ব্যাজগুলো রিমুভ করা
+        document.querySelectorAll('.similarity-warning, .similarity-badge').forEach(el => el.remove());
+
+        // ৩. ওয়েব ওয়ার্কার দিয়ে হাই-স্পিড Hamming Distance ও Match % বের করা
+        const workerCode = `
+            function calculateHammingDistance(hash1, hash2) {
+                let distance = 0;
+                for (let i = 0; i < hash1.length; i++) {
+                    if (hash1[i] !== hash2[i]) distance++;
+                }
+                return distance;
+            }
+            
+            self.onmessage = function(e) {
+                const fileHashes = e.data;
+                const similarities = [];
+                for (let i = 0; i < fileHashes.length; i++) {
+                    for (let j = i + 1; j < fileHashes.length; j++) {
+                        const hash1 = fileHashes[i].hash;
+                        const hash2 = fileHashes[j].hash;
+                        
+                        if (!hash1 || !hash2 || hash1.length !== hash2.length) continue;
+                        
+                        const distance = calculateHammingDistance(hash1, hash2);
+                        const matchPercent = Math.round((1 - (distance / 256)) * 100);
+                        
+                        if (matchPercent >= 70) {
+                            similarities.push({
+                                targetId: fileHashes[j].id,
+                                sourceName: fileHashes[i].name,
+                                targetName: fileHashes[j].name,
+                                matchPercent: matchPercent
+                            });
                         }
                     }
-                    self.postMessage(similarities);
-                };
-            `;
+                }
+                self.postMessage(similarities);
+            };
+        `;
 
-    const workerBlob = new Blob([workerCode], { type: 'application/javascript' });
-    const workerUrl = URL.createObjectURL(workerBlob);
-    const worker = new Worker(workerUrl);
+        const workerBlob = new Blob([workerCode], { type: 'application/javascript' });
+        const workerUrl = URL.createObjectURL(workerBlob);
+        const worker = new Worker(workerUrl);
 
-    worker.onmessage = (e) => {
-        const similarities = e.data;
-        let similarFound = 0;
+        worker.onmessage = (e) => {
+            const similarities = e.data;
+            let similarFound = 0;
 
-        // একই ইমেজের একাধিক ম্যাচ থাকলে সর্বোচ্চ ম্যাচ পার্সেন্টেজটি ফিল্টার করা
-        const bestMatches = {};
-        similarities.forEach(sim => {
-            if (!bestMatches[sim.targetId] || bestMatches[sim.targetId].matchPercent < sim.matchPercent) {
-                bestMatches[sim.targetId] = sim;
+            const bestMatches = {};
+            similarities.forEach(sim => {
+                if (!bestMatches[sim.targetId] || bestMatches[sim.targetId].matchPercent < sim.matchPercent) {
+                    bestMatches[sim.targetId] = sim;
+                }
+            });
+
+            Object.values(bestMatches).forEach(sim => {
+                markAsSimilar(sim.targetId, sim.sourceName, sim.matchPercent);
+                similarFound++;
+            });
+
+            btn.disabled = false;
+            btn.innerHTML = originalHTML;
+
+            if (similarFound > 0) {
+                alert("Found " + similarFound + " highly similar images or templates! Highlighted images might be rejected as spam/duplicates by stock agencies.");
+            } else {
+                alert("Excellent! No significant structural similarity or template duplication detected in your batch.");
             }
-        });
 
-        Object.values(bestMatches).forEach(sim => {
-            markAsSimilar(sim.targetId, sim.sourceName, sim.matchPercent);
-            similarFound++;
-        });
+            worker.terminate();
+            URL.revokeObjectURL(workerUrl);
+        };
 
-        btn.disabled = false;
-        btn.innerHTML = originalHTML;
+        worker.onerror = (err) => {
+            console.error("Similarity Checker Worker Error:", err);
+            btn.disabled = false;
+            btn.innerHTML = originalHTML;
+            alert("An error occurred during similarity checking.");
+            worker.terminate();
+            URL.revokeObjectURL(workerUrl);
+        };
 
-        if (similarFound > 0) {
-            alert("Found " + similarFound + " highly similar images or templates! Highlighted images might be rejected as spam/duplicates by stock agencies.");
-        } else {
-            alert("Excellent! No significant structural similarity or template duplication detected in your batch.");
-        }
-
-        worker.terminate();
-        URL.revokeObjectURL(workerUrl);
+        worker.postMessage(fileHashes);
     };
-
-    worker.onerror = (err) => {
-        console.error("Similarity Checker Worker Error:", err);
-        btn.disabled = false;
-        btn.innerHTML = originalHTML;
-        alert("An error occurred during similarity checking.");
-        worker.terminate();
-        URL.revokeObjectURL(workerUrl);
-    };
-
-    worker.postMessage(fileHashes);
-};
+});
 
 // ২৫৬-বিট ডিফারেন্স হ্যাশ (dHash) জেনারেটর (SVG ও ট্রান্সপারেন্সি সাপোর্টেড)
 async function getImageFingerprint(cardId) {
@@ -818,18 +763,22 @@ window.addEventListener('scroll', function () {
     const chatInput = document.getElementById('aiChatInput');
     const chatSend = document.getElementById('aiChatSend');
 
-    // Toggle chat window
+    // বাটন বা উইন্ডো না থাকলে কোড রান হবে না
+    if (!chatToggle || !chatWindow) return;
+
     chatToggle.addEventListener('click', () => {
         chatWindow.classList.toggle('active');
         if (chatWindow.classList.contains('active')) {
-            chatInput.focus();
-            checkPremiumForWhatsapp(); // Check if premium user
+            if (chatInput) chatInput.focus();
+            checkPremiumForWhatsapp();
         }
     });
 
-    chatClose.addEventListener('click', () => {
-        chatWindow.classList.remove('active');
-    });
+    if (chatClose) {
+        chatClose.addEventListener('click', () => {
+            chatWindow.classList.remove('active');
+        });
+    }
 
     // Function to verify premium status and display WhatsApp button
     async function checkPremiumForWhatsapp() {
