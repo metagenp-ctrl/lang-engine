@@ -9,25 +9,30 @@ document.addEventListener('DOMContentLoaded', function () {
     const sidebar = document.getElementById('appSidebar');
     const body = document.body;
 
-    sidebarToggleBtn.addEventListener('click', () => {
-        // For larger screens, toggle a class on the body
-        // For larger screens, toggle a class on the body
-        if (window.innerWidth > 768) {
-            body.classList.toggle('sidebar-hidden');
-        } else {
-            // For smaller screens, toggle a 'visible' class on the sidebar for overlay effect
-            sidebar.classList.toggle('visible');
-        }
-    });
-
-    // Hide sidebar on click outside on mobile
-    document.addEventListener('click', (e) => {
-        if (window.innerWidth <= 768) {
-            if (sidebar.classList.contains('visible') && !sidebar.contains(e.target) && !sidebarToggleBtn.contains(e.target) && !e.target.closest('.sidebar-toggle-btn')) {
-                sidebar.classList.remove('visible');
+    // সাইডবার এবং বাটন উভয়ই পেজে উপস্থিত থাকলে কেবল তখন ইভেন্টগুলো যুক্ত হবে
+    if (sidebarToggleBtn && sidebar) {
+        sidebarToggleBtn.addEventListener('click', () => {
+            // For larger screens, toggle a class on the body
+            if (window.innerWidth > 768) {
+                body.classList.toggle('sidebar-hidden');
+            } else {
+                // For smaller screens, toggle a 'visible' class on the sidebar for overlay effect
+                sidebar.classList.toggle('visible');
             }
-        }
-    });
+        });
+
+        // Hide sidebar on click outside on mobile
+        document.addEventListener('click', (e) => {
+            if (window.innerWidth <= 768 && sidebar) {
+                if (sidebar.classList.contains('visible') && 
+                    !sidebar.contains(e.target) && 
+                    !sidebarToggleBtn.contains(e.target) && 
+                    !e.target.closest('.sidebar-toggle-btn')) {
+                    sidebar.classList.remove('visible');
+                }
+            }
+        });
+    }
 
 
     // Initialize collapsible sections
